@@ -29,6 +29,13 @@ fi
 datadir=$1
 featdir=$2
 
+if [ -f $datadir/raw.scp ]; then
+    cp $datadir/raw.scp $datadir/feats.scp # make sure feats.scp store paths of the raw mfcc ark.
+else
+    cp $datadir/feats.scp $datadir/raw.scp # store the script file of the raw mfcc before CMVN;
+fi
+
+
 sdata=$datadir/split$nj;
 cmvn_opts="";#`cat $gmmdir/cmvn_opts 2>/dev/null`
 
