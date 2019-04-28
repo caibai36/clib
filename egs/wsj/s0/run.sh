@@ -11,7 +11,7 @@ sh local/kaldi_conf.sh
 . path.sh
 
 # general configuration
-stage=1  # start from 0 if you need to start from data preparation
+stage=2  # start from 0 if you need to start from data preparation
 mfcc_config=conf/mfcc_hires.conf  # use the high-resolution mfcc for training the neurnal network;
                              # 40 dimensional mfcc feature used by Google and kaldi wsj network training.
 
@@ -48,15 +48,28 @@ if [ $stage -le 1 ]; then
 	# (See discussion at https://groups.google.com/forum/#!msg/kaldi-help/2Cw_6mZlquQ/HeTJPcv5CAAJ)
 	steps/compute_cmvn_stats.sh data/$x exp/make_mfcc/$x $mfcc_dir/$x || exit 1;
 	# Fixing data format.
-	utils/fix_data_dir.sh data/$x || exit 1 # remove segments with problems  
+	utils/fix_data_dir.sh data/$x || exit 1 # remove segments with problems
     done
-    
+
     utils/subset_data_dir.sh --first data/train_si284 7138 data/train_si84 || exit 1
 
     # Now make subset with the shortest 2k utterances from si-84.
     utils/subset_data_dir.sh --shortest data/train_si84 2000 data/train_si84_2kshort || exit 1;
+    date
+fi
 
-    # Now make subset with half of the data from si-84.
-    utils/subset_data_dir.sh data/train_si84 3500 data/train_si84_half || exit 1;
+if [ $stage -le 2 ]; then
+    date
+    echo "Dump Features after CMVN"
+    for x in test_eval92 test_eval93 test_dev93 train_si284 train_si84 train_si84_2kshort; do
+	if [ -f data/$x/raw.scp ]; then
+	    cp data/$x/raw.scp data/$x/feats.scp # make sure feats.scp store paths of the raw mfcc ark.
+	else
+	    cp data/$x/feats.scp data/$x/raw.scp # store the script file of the raw mfcc before CMVN;
+	fi
+
+	# Dump the features after CMVN.
+	cutils/make_cmvn.sh data/$x mfcc/$x
+    done
     date
 fi
