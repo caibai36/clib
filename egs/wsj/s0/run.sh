@@ -43,9 +43,10 @@ if [ $stage -le 1 ]; then
 	# We use the 40-dim mfcc by kaldi neural network training default.
 	steps/make_mfcc.sh --cmd "$train_cmd" --nj 20 \
 			   --mfcc-config $mfcc_config --write_utt2num_frames true \
-			   data/$x exp/make_mfcc/$x $mfcc_dir || exit 1
-	# Compute Cepstral mean and variance normalization (cmvn) of data.
-	steps/compute_cmvn_stats.sh data/$x exp/make_mfcc/$x $mfcc_dir || exit 1;
+			   data/$x exp/make_mfcc/$x $mfcc_dir/$x || exit 1
+	# Compute Cepstral mean and variance normalization (cmvn) per speaker instead of globally.
+	# (See discussion at https://groups.google.com/forum/#!msg/kaldi-help/2Cw_6mZlquQ/HeTJPcv5CAAJ)
+	steps/compute_cmvn_stats.sh data/$x exp/make_mfcc/$x $mfcc_dir/$x || exit 1;
 	# Fixing data format.
 	utils/fix_data_dir.sh data/$x || exit 1 # remove segments with problems  
     done
