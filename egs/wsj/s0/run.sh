@@ -11,7 +11,7 @@ sh local/kaldi_conf.sh
 . path.sh
 
 # general configuration
-stage=2  # start from 0 if you need to start from data preparation
+stage=3  # start from 0 if you need to start from data preparation
 mfcc_config=conf/mfcc_hires.conf  # use the high-resolution mfcc for training the neurnal network;
                              # 40 dimensional mfcc feature used by Google and kaldi wsj network training.
 
@@ -58,4 +58,25 @@ if [ $stage -le 2 ]; then
 	cutils/make_cmvn.sh data/$x mfcc/$x
     done
     date
+fi
+
+train_set=train_si284
+dict=data/lang_1char/${train_set}_units.txt
+non_lang_syms=data/lang_1char/${train_set}_non_lang_syms.txt
+if [ ${stage} -le 3 ]; then
+    echo "Stage 3: Dictionary Preparation"
+    # Task dependent. You have to check non-linguistic symbols used in the corpus.
+
+    echo "dictionary: ${dict}"
+    mkdir -p data/lang_1char/
+
+    echo "make a non-linguistic symbol list"
+    cut -f 2- data/${train_set}/text | tr " " "\n" | sort | uniq | grep "<" > ${non_lang_syms}
+    cat ${non_lang_syms}
+
+    echo "make a dictionary"
+    echo "<unk> 1" > ${dict} # <unk> be 1
+    cutils/text2token.py -s 1 -n 1 -l ${non_lang_syms} data/${train_set}/text | cut -f 2- -d" " | tr " " "\n" \
+    | sort | uniq | grep -v -e '^\s*$' | awk '{print $0 " " NR+1}' >> ${dict}
+    wc -l ${dict}
 fi
