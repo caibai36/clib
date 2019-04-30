@@ -21,6 +21,17 @@ Example:
     (base) [bin-wu@ahccsclm03 s0]$ cutils/text2token.py -n 2 -s 2 -l $non_ling_sym $text
     4k0c0201 THE SE VE N<space> UN IT S<space> TO <space>B E<space> OF FE RE D<space> FO R<space> SA LE <space>H AV E<space> A<space> WO RK <space>F OR CE <space>O F<space> ABOUT<space> TW EN TY <space>T HO US AND
     4k0c0202 AND AL LI ED <space>S IG NA L<space> EM PL OY S<space> A<space> TO TA L<space> OF <space>ABOUT <space>O NE <space>H UN DR ED <space>AND <space>F OR TY <space>T HO US AND<space> WO RK ER S
+    (base) [bin-wu@ahccsclm03 s0]$ chars_del=cutils/tests/data/char_del.txt;chars_rep=cutils/tests/data/char_rep.txt
+    (base) [bin-wu@ahccsclm03 s0]$ cat $chars_del
+    V
+    T
+    (base) [bin-wu@ahccsclm03 s0]$ cat $chars_rep
+    T t
+    O o
+    ABOUT <UNK>
+    (base) [bin-wu@ahccsclm03 s0]$ cutils/text2token.py -n 2 -s 2 -l $non_ling_sym -d $chars_del -r $chars_rep $text 
+4k0c0201 THE SE EN <space>U NI S<space> o<space> BE <space>o FF ER ED <space>F oR <space>S AL E<space> HA E<space> A<space> Wo RK <space>F oR CE <space>o F<space> <UNK><space> WE NY <space>H oU SAND
+4k0c0202 AND AL LI ED <space>S IG NA L<space> EM PL oY S<space> A<space> oA L<space> oF <space><UNK> <space>o NE <space>H UN DR ED <space>AND <space>F oR Y<space> Ho US AND<space> Wo RK ER S
 '''
 
 
@@ -51,6 +62,13 @@ def main():
     parser.add_argument('--nchar', '-n', default=1, type=int,
                         help='number of characters to split, i.e., \
                         aabb -> a a b b with -n 1 and aa bb with -n 2')
+    parser.add_argument('--chars-delete', '-d', default="", type=str,
+                        help="file contains characters to be deleted at text. eg. ' or <")
+    parser.add_argument('--chars-replace', '-r', default="", type=str,
+                        help="file contains character pairs to be replaced at text. eg. O o or <*IN*> <UNK>")
+    parser.add_argument('--chars-replace-sep', default=" ", type=str,
+                        help="separator of the character pairs in the chars-replace file")
+    
     args = parser.parse_args()
 
     if args.text:
@@ -58,6 +76,14 @@ def main():
     else:
         # f = sys.stdin
         f = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8') # read utf8 stdin
+
+    if args.chars_delete:
+        with open(args.chars_delete, 'r', encoding='utf-8') as df:
+            chars_del = {char.strip() for char in df}
+
+    if args.chars_replace:
+        with open(args.chars_replace, 'r', encoding='utf-8') as rf:
+            chars_rep = {re.split(args.chars_replace_sep, pair.strip())[0]:re.split(args.chars_replace_sep, pair.strip())[1] for pair in rf}
 
     # Create patterns of the non_lang_syms.
     patterns: List = []
@@ -109,6 +135,11 @@ def main():
                 start_pos += 1
         # replace the whitespace chars with <space>
         chars = [char.replace(" ", "<space>") for char in chars]
+        # delete and replace chars
+        if args.chars_delete:
+            chars = [char for char in chars if char not in chars_del]
+        if args.chars_replace:
+            chars = list(map(lambda char: char if char not in chars_rep else chars_rep[char], chars))
         # concatenate the chars as char strings
         char_strings = ["".join(chars[i:i+args.nchar])
                         for i in range(0, len(chars), args.nchar)]
