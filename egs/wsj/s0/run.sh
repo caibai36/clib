@@ -91,6 +91,7 @@ if [ ${stage} -le 3 ]; then
 	tr [A-Z] [a-z] | \
 	python cutils/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
 	cutils/text2token.py -s 1 -n 1 -l ${non_lang_syms} --chars-delete=conf/chars_del.txt --chars-replace=conf/chars_rep.txt | \
+	tr [A-Z] [a-z] | \
 	cut -f 2- -d" " | tr " " "\n" | sort | uniq | grep -v -e '^\s*$' | grep -v "<unk>" | awk '{print $0 " " NR + 3}' >> ${dict}
     wc -l ${dict}
 fi
