@@ -66,6 +66,7 @@ non_lang_syms=data/lang_1char/${train_set}_non_lang_syms.txt
 if [ ${stage} -le 3 ]; then
     echo "Stage 3: Dictionary Preparation"
     # Task dependent. You have to check non-linguistic symbols used in the corpus.
+    # These operations have priorities. First replacing string, then deleting characters and then replacing characters.
     [ -f conf/str_rep.txt ] || touch conf/str_rep.txt      # replace the special strings in original text
     [ -f conf/chars_del.txt ] || touch conf/chars_del.txt  # the characters (including non_lang_syms} to be deleted
     [ -f conf/chars_rep.txt ] || touch conf/chars_rep.txt  # the characters (including non_lang_syms} to be replaced
