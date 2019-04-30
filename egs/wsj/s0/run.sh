@@ -81,10 +81,15 @@ if [ ${stage} -le 3 ]; then
     cat ${non_lang_syms}
 
     echo "make a dictionary"
+    # We follow the index convention of torchtext.
+    echo "<unk> 0" > ${dict}
+    echo "<pad> 1" >> ${dict}
+    echo "<sos> 2" >> ${dict}
+    echo "<eos> 3" >> ${dict}
     cat data/${train_set}/text | \
 	tr [A-Z] [a-z] | \
 	python cutils/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
 	cutils/text2token.py -s 1 -n 1 -l ${non_lang_syms} --chars-delete=conf/chars_del.txt --chars-replace=conf/chars_rep.txt | \
-	cut -f 2- -d" " | tr " " "\n" | sort | uniq | grep -v -e '^\s*$' | awk '{print $0 " " NR}' > ${dict}
+	cut -f 2- -d" " | tr " " "\n" | sort | uniq | grep -v -e '^\s*$' | grep -v "<unk>" | awk '{print $0 " " NR + 3}' >> ${dict}
     wc -l ${dict}
 fi
