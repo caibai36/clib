@@ -66,17 +66,25 @@ non_lang_syms=data/lang_1char/${train_set}_non_lang_syms.txt
 if [ ${stage} -le 3 ]; then
     echo "Stage 3: Dictionary Preparation"
     # Task dependent. You have to check non-linguistic symbols used in the corpus.
+    [ -f conf/str_rep.txt ] || touch conf/str_rep.txt      # replace the special strings in original text
+    [ -f conf/chars_del.txt ] || touch conf/chars_del.txt  # the characters (including non_lang_syms} to be deleted
+    [ -f conf/chars_rep.txt ] || touch conf/chars_rep.txt  # the characters (including non_lang_syms} to be replaced
 
     echo "dictionary: ${dict}"
     mkdir -p data/lang_1char/
 
     echo "make a non-linguistic symbol list"
-    cut -f 2- data/${train_set}/text | tr " " "\n" | sort | uniq | grep "<" > ${non_lang_syms}
+    cat data/${train_set}/text | \
+	tr [A-Z] [a-z] | \
+	python cutils/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
+	cut -f 2-  | tr " " "\n" | sort | uniq | grep "<" > ${non_lang_syms}
     cat ${non_lang_syms}
 
     echo "make a dictionary"
-    echo "<unk> 1" > ${dict} # <unk> be 1
-    cutils/text2token.py -s 1 -n 1 -l ${non_lang_syms} data/${train_set}/text | cut -f 2- -d" " | tr " " "\n" \
-    | sort | uniq | grep -v -e '^\s*$' | awk '{print $0 " " NR+1}' >> ${dict}
+    cat data/${train_set}/text | \
+	tr [A-Z] [a-z] | \
+	python cutils/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
+	cutils/text2token.py -s 1 -n 1 -l ${non_lang_syms} --chars-delete=conf/chars_del.txt --chars-replace=conf/chars_rep.txt | \
+	cut -f 2- -d" " | tr " " "\n" | sort | uniq | grep -v -e '^\s*$' | awk '{print $0 " " NR}' > ${dict}
     wc -l ${dict}
 fi
