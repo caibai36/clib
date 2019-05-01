@@ -11,7 +11,8 @@ sh local/kaldi_conf.sh
 . path.sh
 
 # general configuration
-stage=3  # start from 0 if you need to start from data preparation
+stage=4  # start from 0 if you need to start from data preparation
+mfcc_dir=mfcc # Directory contains mfcc features and cmvn statistics.
 mfcc_config=conf/mfcc_hires.conf  # use the high-resolution mfcc for training the neurnal network;
                              # 40 dimensional mfcc feature used by Google and kaldi wsj network training.
 
@@ -33,8 +34,6 @@ if [ $stage -le 0 ]; then
     date
 fi
 
-# Directory contains mfcc features and cmvn statistics.
-mfcc_dir=mfcc
 if [ $stage -le 1 ]; then
     date
     echo "Stage 1: Feature Extraction"
@@ -75,6 +74,7 @@ if [ ${stage} -le 3 ]; then
     mkdir -p data/lang_1char/
 
     echo "make a non-linguistic symbol list"
+    # assume speakers not confused between upper and lower case
     cat data/${train_set}/text | \
 	tr [A-Z] [a-z] | \
 	python cutils/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
@@ -94,4 +94,19 @@ if [ ${stage} -le 3 ]; then
 	tr [A-Z] [a-z] | \
 	cut -f 2- -d" " | tr " " "\n" | sort | uniq | grep -v -e '^\s*$' | grep -v "<unk>" | awk '{print $0 " " NR + 3}' >> ${dict}
     wc -l ${dict}
+fi
+
+if [ ${stage} -le 4 ]; then
+    echo "make json files"
+    # scps: the directory contains indenpendent scp and json files of difference attrbutes of utterances
+    #       such as feat, num_frames, feat_dim, text, token, token_id, num_tokens, vocab_size and utt2spk.
+    # utts.json: a json dictionary mapping utterance-id to attributes
+
+    for x in test_eval92 test_eval93 test_dev93 train_si284 train_si84 train_si84_2kshort; do
+	cutils/data2json.sh --feat data/$x/feats.scp \
+    		     --nlsyms ${non_lang_syms} \
+    	             --output-utts-json data/$x/utts.json \
+    		     --output-dir-of-scps data/$x/scps \
+    		     data/$x ${dict}
+    done
 fi

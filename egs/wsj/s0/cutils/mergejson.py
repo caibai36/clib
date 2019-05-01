@@ -13,37 +13,23 @@ example_string = '''
 A json file is a collection of values of a certain attribute indexed by the utterance id.
 We merge all attributes of different json files and divide them into input attributes, output attributes and others.
 example format of mergedjson:
-{
-    "utts": {
-        "011c0201": {
-            "input": [
-                {
-                    "feat": "espnet/egs/wsj/asr1/dump/train_si284/deltafalse/feats.1.ark:9",
-                    "name": "input1",
-                    "shape": [
-                        652,
-                        83
-                    ]
-                }
-            ],
-            "output": [
-                {
-                    "name": "target1",
-                    "shape": [
-                        5,
-                        52
-                    ],
-                    "text": "THE S",
-                    "token": "T H E <space> S",
-                    "tokenid": "39 27 24 18 38"
-                }
-            ],
-            "utt2spk": "011"
-        }
+    "440c0401": {
+        "feat": "mfcc/test_eval92/feats_cmvn.1.ark:9",
+        "feat_dim": "40",
+        "num_frames": "1135",
+        "num_tokens": "145",
+        "text": "DRA"
+        "token": "<sos> d r a <eos>",
+        "tokenid": "2 11 25 3",
+        "utt2spk": "440",
+        "uttid": "440c0401",
+        "vocab_size": "34"
+    },
 }
 example:
-$ mergejson.py tests/data/dump/*json
-$ mergejson.py tests/data/dump/*json --output-json tests/data/data.json
+$ cutils/mergejson.py <json-files-to-merge> [--output-utts-json <merged-json-file>]
+$ cutils/mergejson.py cutils/tests/data/dump/*json
+$ cutils/mergejson.py cutils/tests/data/dump/*json --output-utts-json cutils/tests/data/utts.json
 '''
 
 
@@ -57,7 +43,7 @@ def main():
     parser.add_argument("--verbose", type=int, default=0,
                         help="verbose option")
     parser.add_argument("--output-json", type=str, default="",
-                        help="output json file")
+                        help="output json file in espnet format (deprecated)")
     parser.add_argument("--output-utts-json", type=str, default="",
                         help="output json file of utterances with their attributes")
     args = parser.parse_args()
@@ -118,232 +104,12 @@ def main():
     if args.output_utts_json:
         with open(args.output_utts_json, 'w', encoding='utf-8') as fuo:
             json.dump(all_attrs_json['utts'], fp=fuo, indent=4, sort_keys=True, ensure_ascii=False)
+    else:
+        json.dump(all_attrs_json['utts'], fp=io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8'), indent=4, sort_keys=True, ensure_ascii=False)
     
     if args.output_json:
         with open(args.output_json, 'w', encoding='utf-8') as fo:
             json.dump(merged_json, fp=fo, indent=4, sort_keys=True, ensure_ascii=False)
-    else:
-        json.dump(merged_json, fp=io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8'), indent=4, sort_keys=True, ensure_ascii=False)
 
 if __name__ == "__main__":
     main()
-
-# Detail tests:
-# (mlp) [bin-wu@ahcgpc02 asr0]$(asr *) head tmp/ilen.json tmp/token.json
-# ==> tmp/ilen.json <==
-# {
-#     "utts": {
-#         "011c0201": {
-#             "ilen": "652"
-#         },
-#         "011c0202": {
-#             "ilen": "693"
-#         },
-#         "011c0203": {
-#             "ilen": "1069"
-
-# ==> tmp/token.json <==
-# {
-#     "utts": {
-#         "011c0201": {
-#             "token": "T H E <space> S A L E"
-#         },
-#         "011c0202": {
-#             "token": "T H E <space> H O T E L <space> O P E"
-#         }
-#     }
-# }
-#
-# # Get all_attrs_json dict.
-# (mlp) [bin-wu@ahcgpc02 asr0]$(asr *) python tmp/mergejson.py tmp/ilen.json tmp/token.json
-# {
-#     "utts": {
-#         "011c0201": {
-#             "ilen": "652",
-#             "token": "T H E <space> S A L E"
-#         },
-#         "011c0202": {
-#             "ilen": "693",
-#             "token": "T H E <space> H O T E L <space> O P E"
-#         }
-#     }
-# }
-
-# (mlp) [bin-wu@ahcgpc02 asr0]$(asr *) for file in data/train_si284/tmp-mT75s/*json;do head -8 $file | sed '$ s/,//' >tmp/$(basename $file); echo -e '    }\n}' >>tmp/$(basename $file); done
-# (mlp) [bin-wu@ahcgpc02 asr0]$(asr *) ls tmp/*json
-# tmp/feat.json  tmp/ilen.json  tmp/olen.json  tmp/token.json    tmp/utt2spk.json
-# tmp/idim.json  tmp/odim.json  tmp/text.json  tmp/tokenid.json
-# (mlp) [bin-wu@ahcgpc02 asr0]$(asr *) python tmp/mergejson.py --verbose 1 tmp/*json
-# 2018-12-26 21:38:25,048 (mergejson:45) INFO: tmp/feat.json has 2 utterances
-# 2018-12-26 21:38:25,048 (mergejson:45) INFO: tmp/idim.json has 2 utterances
-# 2018-12-26 21:38:25,049 (mergejson:45) INFO: tmp/ilen.json has 2 utterances
-# 2018-12-26 21:38:25,049 (mergejson:45) INFO: tmp/odim.json has 2 utterances
-# 2018-12-26 21:38:25,050 (mergejson:45) INFO: tmp/olen.json has 2 utterances
-# 2018-12-26 21:38:25,050 (mergejson:45) INFO: tmp/text.json has 2 utterances
-# 2018-12-26 21:38:25,051 (mergejson:45) INFO: tmp/token.json has 2 utterances
-# 2018-12-26 21:38:25,051 (mergejson:45) INFO: tmp/tokenid.json has 2 utterances
-# 2018-12-26 21:38:25,052 (mergejson:45) INFO: tmp/utt2spk.json has 2 utterances
-# 2018-12-26 21:38:25,052 (mergejson:50) INFO: new json has 2 utterances
-# {
-#     "utts": {
-#         "011c0201": {
-#             "input": [
-#                 {
-#                     "feat": "/project/nakamura-lab08/Work/bin-wu/workspace/sandbox/asrs/espnet/egs/wsj/asr1/dump/train_si284/deltafalse/feats.1.ark:9",
-#                     "name": "input1",
-#                     "shape": [
-#                         652,
-#                         83
-#                     ]
-#                 }
-#             ],
-#             "output": [
-#                 {
-#                     "name": "target1",
-#                     "shape": [
-#                         110,
-#                         52
-#                     ],
-#                     "text": "THE SALE OF THE HOTELS IS PART OF HOLIDAY'S STRATEGY TO SELL OFF ASSETS AND CONCENTRATE ON PROPERTY MANAGEMENT",
-#                     "token": "T H E <space> S A L E <space> O F <space> T H E <space> H O T E L S <space> I S <space> P A R T <space> O F <space> H O L I D A Y ' S <space> S T R A T E G Y <space> T O <space> S E L L <space> O F F <space> A S S E T S <space> A N D <space> C O N C E N T R A T E <space> O N <space> P R O P E R T Y <space> M A N A G E M E N T",
-#                     "tokenid": "39 27 24 18 38 20 31 24 18 34 25 18 39 27 24 18 27 34 39 24 31 38 18 28 38 18 35 20 37 39 18 34 25 18 27 34 31 28 23 20 44 5 38 18 38 39 37 20 39 24 26 44 18 39 34 18 38 24 31 31 18 34 25 25 18 20 38 38 24 39 38 18 20 33 23 18 22 34 33 22 24 33 39 37 20 39 24 18 34 33 18 35 37 34 35 24 37 39 44 18 32 20 33 20 26 24 32 24 33 39"
-#                 }
-#             ],
-#             "utt2spk": "011"
-#         },
-#         "011c0202": {
-#             "input": [
-#                 {
-#                     "feat": "/project/nakamura-lab08/Work/bin-wu/workspace/sandbox/asrs/espnet/egs/wsj/asr1/dump/train_si284/deltafalse/feats.1.ark:54819",
-#                     "name": "input1",
-#                     "shape": [
-#                         693,
-#                         83
-#                     ]
-#                 }
-#             ],
-#             "output": [
-#                 {
-#                     "name": "target1",
-#                     "shape": [
-#                         105,
-#                         52
-#                     ],
-#                     "text": "THE HOTEL OPERATOR'S EMBASSY SUITES HOTELS INCORPORATED SUBSIDIARY WILL CONTINUE TO MANAGE THE PROPERTIES",
-#                     "token": "T H E <space> H O T E L <space> O P E R A T O R ' S <space> E M B A S S Y <space> S U I T E S <space> H O T E L S <space> I N C O R P O R A T E D <space> S U B S I D I A R Y <space> W I L L <space> C O N T I N U E <space> T O <space> M A N A G E <space> T H E <space> P R O P E R T I E S",
-#                     "tokenid": "39 27 24 18 27 34 39 24 31 18 34 35 24 37 20 39 34 37 5 38 18 24 32 21 20 38 38 44 18 38 40 28 39 24 38 18 27 34 39 24 31 38 18 28 33 22 34 37 35 34 37 20 39 24 23 18 38 40 21 38 28 23 28 20 37 44 18 42 28 31 31 18 22 34 33 39 28 33 40 24 18 39 34 18 32 20 33 20 26 24 18 39 27 24 18 35 37 34 35 24 37 39 28 24 38"
-#                 }
-#             ],
-#             "utt2spk": "011"
-#         }
-#     }
-# }
-
-# (mlp) [bin-wu@ahcgpc02 asr0]$(asr *)head tmp/*json
-# ==> tmp/feat.json <==
-# {
-#     "utts": {
-#         "011c0201": {
-#             "feat": "/project/nakamura-lab08/Work/bin-wu/workspace/sandbox/asrs/espnet/egs/wsj/asr1/dump/train_si284/deltafalse/feats.1.ark:9"
-#         },
-#         "011c0202": {
-#             "feat": "/project/nakamura-lab08/Work/bin-wu/workspace/sandbox/asrs/espnet/egs/wsj/asr1/dump/train_si284/deltafalse/feats.1.ark:54819"
-#         }
-#     }
-# }
-
-# ==> tmp/idim.json <==
-# {
-#     "utts": {
-#         "011c0201": {
-#             "idim": "83"
-#         },
-#         "011c0202": {
-#             "idim": "83"
-#         }
-#     }
-# }
-
-# ==> tmp/ilen.json <==
-# {
-#     "utts": {
-#         "011c0201": {
-#             "ilen": "652"
-#         },
-#         "011c0202": {
-#             "ilen": "693"
-#         }
-#     }
-# }
-
-# ==> tmp/odim.json <==
-# {
-#     "utts": {
-#         "011c0201": {
-#             "odim": "52"
-#         },
-#         "011c0202": {
-#             "odim": "52"
-#         }
-#     }
-# }
-
-# ==> tmp/olen.json <==
-# {
-#     "utts": {
-#         "011c0201": {
-#             "olen": "110"
-#         },
-#         "011c0202": {
-#             "olen": "105"
-#         }
-#     }
-# }
-
-# ==> tmp/text.json <==
-# {
-#     "utts": {
-#         "011c0201": {
-#             "text": "THE SALE OF THE HOTELS IS PART OF HOLIDAY'S STRATEGY TO SELL OFF ASSETS AND CONCENTRATE ON PROPERTY MANAGEMENT"
-#         },
-#         "011c0202": {
-#             "text": "THE HOTEL OPERATOR'S EMBASSY SUITES HOTELS INCORPORATED SUBSIDIARY WILL CONTINUE TO MANAGE THE PROPERTIES"
-#         }
-#     }
-# }
-
-# ==> tmp/token.json <==
-# {
-#     "utts": {
-#         "011c0201": {
-#             "token": "T H E <space> S A L E <space> O F <space> T H E <space> H O T E L S <space> I S <space> P A R T <space> O F <space> H O L I D A Y ' S <space> S T R A T E G Y <space> T O <space> S E L L <space> O F F <space> A S S E T S <space> A N D <space> C O N C E N T R A T E <space> O N <space> P R O P E R T Y <space> M A N A G E M E N T"
-#         },
-#         "011c0202": {
-#             "token": "T H E <space> H O T E L <space> O P E R A T O R ' S <space> E M B A S S Y <space> S U I T E S <space> H O T E L S <space> I N C O R P O R A T E D <space> S U B S I D I A R Y <space> W I L L <space> C O N T I N U E <space> T O <space> M A N A G E <space> T H E <space> P R O P E R T I E S"
-#         }
-#     }
-# }
-
-# ==> tmp/tokenid.json <==
-# {
-#     "utts": {
-#         "011c0201": {
-#             "tokenid": "39 27 24 18 38 20 31 24 18 34 25 18 39 27 24 18 27 34 39 24 31 38 18 28 38 18 35 20 37 39 18 34 25 18 27 34 31 28 23 20 44 5 38 18 38 39 37 20 39 24 26 44 18 39 34 18 38 24 31 31 18 34 25 25 18 20 38 38 24 39 38 18 20 33 23 18 22 34 33 22 24 33 39 37 20 39 24 18 34 33 18 35 37 34 35 24 37 39 44 18 32 20 33 20 26 24 32 24 33 39"
-#         },
-#         "011c0202": {
-#             "tokenid": "39 27 24 18 27 34 39 24 31 18 34 35 24 37 20 39 34 37 5 38 18 24 32 21 20 38 38 44 18 38 40 28 39 24 38 18 27 34 39 24 31 38 18 28 33 22 34 37 35 34 37 20 39 24 23 18 38 40 21 38 28 23 28 20 37 44 18 42 28 31 31 18 22 34 33 39 28 33 40 24 18 39 34 18 32 20 33 20 26 24 18 39 27 24 18 35 37 34 35 24 37 39 28 24 38"
-#         }
-#     }
-# }
-
-# ==> tmp/utt2spk.json <==
-# {
-#     "utts": {
-#         "011c0201": {
-#             "utt2spk": "011"
-#         },
-#         "011c0202": {
-#             "utt2spk": "011"
-#         }
-#     }
-# }
