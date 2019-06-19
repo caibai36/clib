@@ -1,3 +1,8 @@
+# Add clib package at current directory to the binary searching path.
+import sys
+import os
+sys.path.append(os.getcwd())
+
 import json
 import pprint
 import argparse
@@ -7,7 +12,8 @@ from clib.kaldi.kaldi_data import KaldiDataLoader, KaldiDataset
 file = 'clib/tests/data/test_utts.json'
 parser = argparse.ArgumentParser()
 parser.add_argument('--json-file', type=str, default=file, help="the test utterance json file")
-parser.add_argument('--padding_tokenid', type=int, default=file, help="the id of padding token")
+# We follow the index convention of torchtext by setting padding id as 1.
+parser.add_argument('--padding_tokenid', type=int, default=1, help="the id of padding token")
 
 args = parser.parse_args()
 
