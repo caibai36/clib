@@ -75,6 +75,8 @@ if [ ${stage} -le 3 ]; then
 
     echo "make a non-linguistic symbol list"
     # assume speakers not confused between upper and lower case
+    # cut off the first column --- the utt_id --- of the text file
+    # all non_lang_syms with <...> format
     cat data/${train_set}/text | \
 	tr [A-Z] [a-z] | \
 	python cutils/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
@@ -87,6 +89,8 @@ if [ ${stage} -le 3 ]; then
     echo "<pad> 1" >> ${dict}
     echo "<sos> 2" >> ${dict}
     echo "<eos> 3" >> ${dict}
+    # text2token will skip the first uttid column, split every token as one character and delete or replace some configuration.
+    # use the grep to remove the empty lines.
     cat data/${train_set}/text | \
 	tr [A-Z] [a-z] | \
 	python cutils/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
