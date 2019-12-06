@@ -94,7 +94,7 @@ if [ ${stage} -le 4 ]; then
 
     for x in test_eval92 test_eval93 test_dev93 train_si284 train_si84 train_si84_2kshort; do
 	local/script/data2json.sh --feat data/$x/feats.scp \
-    		     --nlsyms ${non_ling_syms} \
+    		     --non-ling-syms ${non_ling_syms} \
     	             --output-utts-json data/$x/utts.json \
     		     --output-dir-of-scps data/$x/scps \
     		     data/$x ${dict}
