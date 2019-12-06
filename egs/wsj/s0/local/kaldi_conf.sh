@@ -23,6 +23,11 @@ ln -sf $KALDI_ROOT/egs/wsj/s5/utils/ utils
 # configuration files for mfcc and etc.
 [ -d conf ] || mkdir conf
 cp $KALDI_ROOT/egs/wsj/s5/conf/* conf/
+# Task dependent. You have to check non-linguistic symbols used in the corpus.
+# These operations have priorities. First replacing string, then deleting characters and then replacing characters.
+[ -f conf/str_rep.txt ] || touch conf/str_rep.txt      # replace the special strings in original text
+[ -f conf/chars_del.txt ] || touch conf/chars_del.txt  # the characters (including non_lang_syms} to be deleted
+[ -f conf/chars_rep.txt ] || touch conf/chars_rep.txt  # the characters (including non_lang_syms} to be replaced
 
 # Get some scripts for data preparation.
 cp $KALDI_ROOT/egs/wsj/s5/local/cstr_wsj_data_prep.sh local
@@ -33,6 +38,9 @@ cp $KALDI_ROOT/egs/wsj/s5/local/flist2scp.pl local
 cp $KALDI_ROOT/egs/wsj/s5/local/find_transcripts.pl local
 # remove the langauge model part of formatting the data
 sed -i -e '/# Next, for each type/, /done/ d' -e'/tmp/ d' -e '/lm/ d' local/wsj_format_data.sh 
+
+# make local directories for private scripts
+mkdir -p local/{script,src,bin}
 
 ##################################################################################
 # Other options
