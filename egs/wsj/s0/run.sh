@@ -54,7 +54,7 @@ if [ $stage -le 2 ]; then
     date
     echo "Stage 2: Dump Features after CMVN"
     for x in test_eval92 test_eval93 test_dev93 train_si284 train_si84 train_si84_2kshort; do
-	cutils/make_cmvn.sh data/$x mfcc/$x
+	local/script/make_cmvn.sh data/$x mfcc/$x
     done
     date
 fi
@@ -73,7 +73,7 @@ if [ ${stage} -le 3 ]; then
     # cut off the first column --- the utt_id --- of the text file
     # all non_lang_syms with <...> format
     cat data/${train_set}/text | tr [A-Z] [a-z] | \
-	python cutils/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
+	python local/script/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
 	cut -f 2-  | tr " " "\n" | sort | uniq | grep "<" > ${non_lang_syms}
     cat ${non_lang_syms}
 
@@ -88,8 +88,8 @@ if [ ${stage} -le 3 ]; then
     # and split every sentence as a sequence of characters (-n 1) (preserving non linguistic symbols),
     # while deleting, replacing some configurations and removing the empty lines (with grep).
     cat data/${train_set}/text | tr [A-Z] [a-z] | \
-	python cutils/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
-	cutils/text2token.py -s 1 -n 1 -l ${non_lang_syms} --chars-delete=conf/chars_del.txt --chars-replace=conf/chars_rep.txt | \
+	python local/script/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
+	local/script/text2token.py -s 1 -n 1 -l ${non_lang_syms} --chars-delete=conf/chars_del.txt --chars-replace=conf/chars_rep.txt | \
 	tr [A-Z] [a-z] | cut -f 2- -d" " | tr " " "\n" | sort | uniq | grep -v -e '^\s*$' | grep -v "<unk>" | awk '{print $0 " " NR + 3}' >> ${dict}
     wc -l ${dict}
 fi
@@ -102,7 +102,7 @@ if [ ${stage} -le 4 ]; then
     # If you want to add more information, just create more scp files in data2json.sh
 
     for x in test_eval92 test_eval93 test_dev93 train_si284 train_si84 train_si84_2kshort; do
-	cutils/data2json.sh --feat data/$x/feats.scp \
+	local/script/data2json.sh --feat data/$x/feats.scp \
     		     --nlsyms ${non_lang_syms} \
     	             --output-utts-json data/$x/utts.json \
     		     --output-dir-of-scps data/$x/scps \
