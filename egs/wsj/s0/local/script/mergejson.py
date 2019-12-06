@@ -40,7 +40,7 @@ def main():
         epilog=example_string)
     parser.add_argument("jsons", type=str, nargs="+",
                         help="json files")
-    parser.add_argument("--verbose", type=int, default=0,
+    parser.add_argument("--verbose", type=int, default=1,
                         help="verbose option")
     parser.add_argument("--output-json", type=str, default="",
                         help="output json file in espnet format (deprecated)")
