@@ -11,7 +11,7 @@ sh local/kaldi_conf.sh
 . path.sh
 
 # general configuration
-stage=4  # start from 0 if you need to start from data preparation
+stage=3  # start from 0 if you need to start from data preparation
 mfcc_dir=mfcc # Directory contains mfcc features and cmvn statistics.
 mfcc_config=conf/mfcc_hires.conf  # use the high-resolution mfcc for training the neurnal network;
                              # 40 dimensional mfcc feature used by Google and kaldi wsj network training.
@@ -69,36 +69,27 @@ if [ ${stage} -le 3 ]; then
     mkdir -p data/lang_1char/
 
     echo "make a non-linguistic symbol list"
-    # assume speakers not confused between upper and lower case
-    # cut off the first column --- the utt_id --- of the text file
-    # all non_ling_syms with <...> format
+    # Note that the first column of text is the uttid.
+    # assume that speakers not confused between upper and lower case; all non_ling_syms with <...> format
     cat data/${train_set}/text | tr [A-Z] [a-z] | \
 	python local/script/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
 	tr [A-Z] [a-z] | cut -f 2-  | tr " " "\n" | sort | uniq | grep "<" > ${non_ling_syms}
     cat ${non_ling_syms}
 
     echo "make a dictionary"
-    # We follow the index convention of torchtext.
-    echo "<unk> 0" > ${dict}
-    echo "<pad> 1" >> ${dict}
-    echo "<sos> 2" >> ${dict}
-    echo "<eos> 3" >> ${dict}
-    # We will skip the first uttid column (-s 1) of text
-    # (later uttid will be removed by cut -f 2-),
-    # and split every sentence as a sequence of characters (-n 1) (preserving non linguistic symbols),
-    # while deleting, replacing some configurations and removing the empty lines (with grep).
+    echo -ne "<unk> 0\n<pad> 1\n<sos> 2\n<eos> 3\n" > ${dict} # index convention of torchtext
+    # text2token.py converts every sentence of the text as a sequence of characters.
     cat data/${train_set}/text | tr [A-Z] [a-z] | \
 	python local/script/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
-	local/script/text2token.py --skip-ncols=1 --non-ling-syms ${non_ling_syms} --chars-delete=conf/chars_del.txt --chars-replace=conf/chars_rep.txt | \
-	tr [A-Z] [a-z] | cut -f 2- -d" " | tr " " "\n" | sort | uniq | grep -v -e '^\s*$' | grep -v "<unk>" | awk '{print $0 " " NR + 3}' >> ${dict}
+	local/script/text2token.py --skip-ncols=1 --non-ling-syms=${non_ling_syms} --chars-delete=conf/chars_del.txt --chars-replace=conf/chars_rep.txt | \
+	tr [A-Z] [a-z] | cut -f 2- -d" " | tr " " "\n" | sort | uniq | grep -v -e '^\s*$' | grep -vE "<unk>|<pad>|<sos>|<eos>" | awk '{print $0 " " NR + 3}' >> ${dict}
     wc -l ${dict}
 fi
 
 if [ ${stage} -le 4 ]; then
     echo "make json files"
-    # get scp files (each line as 'uttid scp_content'):
-    #     num_frames.scp, feat_dim.scp, num_tokens.scp, tokenid.scp, vocab_size.scp, feat.scp, token.scp and etc.
-    # then merge them into utts.json
+    # get scp files (each line as 'uttid scp_content'), then merge them into utts.json.
+    #     (eg. num_frames.scp, feat_dim.scp, num_tokens.scp, tokenid.scp, vocab_size.scp, feat.scp, token.scp and etc.)
     # If you want to add more information, just create more scp files in data2json.sh
 
     for x in test_eval92 test_eval93 test_dev93 train_si284 train_si84 train_si84_2kshort; do
