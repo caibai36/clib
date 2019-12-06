@@ -5,6 +5,10 @@
 
 . ./path.sh
 
+# Get the num_frames.scp, feat_dim.scp, num_tokens.scp, tokenid.scp, vocab_size.scp, feat.scp, token.scp and etc.
+# then merge them into a json file indexed by the utterance id.
+# If you want to add more information, just create more scp files.
+
 nlsyms=""
 lang=""
 feat="" # feat.scp
@@ -35,6 +39,7 @@ mkdir -p conf
 [ -f conf/chars_del.txt ] || touch conf/chars_del.txt  # the characters (including non_lang_syms} to be deleted
 [ -f conf/chars_rep.txt ] || touch conf/chars_rep.txt  # the characters (including non_lang_syms} to be replaced
 
+# Get num_frames.scp, feat_dim.scp
 # input, which is not necessary for decoding mode, and make it as an option
 if [ ! -z ${feat} ]; then
     if [ ${verbose} -eq 0 ]; then
@@ -49,7 +54,10 @@ if [ ! -z ${feat} ]; then
     fi
 fi
 
-# output
+# Get token.scp
+# We will remove the uttid (-s 1), and split every sentence as a sequence of characters (-n 1),
+# preserving the non-linguistic symbols if exist;
+# add <sos> and <eos> at the beginning and the ending of each sentence,
 if [ ! -z ${bpecode} ]; then
     paste -d " " <(awk '{print $1}' ${dir}/text) <(cut -f 2- -d" " ${dir}/text | spm_encode --model=${bpecode} --output_format=piece) > ${tmpdir}/token.scp
 elif [ ! -z ${nlsyms} ]; then
@@ -68,9 +76,16 @@ else
 	tr [A-Z] [a-z] > ${tmpdir}/token.scp
 fi
 
-
+# Get tokenid.scp, num_tokens.scp
+# Count how many tokens for each sentence (num_tokens.scp)
+# Convert token sequence to tokenid sequence (tokenid.scp)
+# Get the size of vocabulary (vocab_size.scp):
+#     $ wc -l data/lang_1char/train_si284_units.txt 
+#     34 data/lang_1char/train_si284_units.txt             # the size of the vocabulary: 34
+#     $ tail -n 1 data/lang_1char/train_si284_units.txt
+#     z 33                                                 # output dimension = the size of the vocabulary: 33 + 1 
 cat ${tmpdir}/token.scp | utils/sym2int.pl --map-oov ${oov} -f 2- ${dic} > ${tmpdir}/tokenid.scp
-cat ${tmpdir}/tokenid.scp | awk '{print $1 " " NF-1}' > ${tmpdir}/num_tokens.scp 
+cat ${tmpdir}/tokenid.scp | awk '{print $1 " " NF-1}' > ${tmpdir}/num_tokens.scp # -1 for uncounting first field: the uttid
 vocsize=`tail -n 1 ${dic} | awk '{print $2}'`
 odim=`echo "$vocsize + 1" | bc`
 awk -v odim=${odim} '{print $1 " " odim}' ${dir}/text > ${tmpdir}/vocab_size.scp
