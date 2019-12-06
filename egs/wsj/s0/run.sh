@@ -77,8 +77,7 @@ if [ ${stage} -le 3 ]; then
     # assume speakers not confused between upper and lower case
     # cut off the first column --- the utt_id --- of the text file
     # all non_lang_syms with <...> format
-    cat data/${train_set}/text | \
-	tr [A-Z] [a-z] | \
+    cat data/${train_set}/text | tr [A-Z] [a-z] | \
 	python cutils/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
 	cut -f 2-  | tr " " "\n" | sort | uniq | grep "<" > ${non_lang_syms}
     cat ${non_lang_syms}
@@ -89,22 +88,23 @@ if [ ${stage} -le 3 ]; then
     echo "<pad> 1" >> ${dict}
     echo "<sos> 2" >> ${dict}
     echo "<eos> 3" >> ${dict}
-    # text2token will skip the first uttid column, split every token as one character and delete or replace some configuration.
-    # use the grep to remove the empty lines.
-    cat data/${train_set}/text | \
-	tr [A-Z] [a-z] | \
+    # We will skip the first uttid column (-s 1) of text
+    # (later uttid will be removed by cut -f 2-),
+    # and split every sentence as a sequence of characters (-n 1) (preserving non linguistic symbols),
+    # while deleting, replacing some configurations and removing the empty lines (with grep).
+    cat data/${train_set}/text | tr [A-Z] [a-z] | \
 	python cutils/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
 	cutils/text2token.py -s 1 -n 1 -l ${non_lang_syms} --chars-delete=conf/chars_del.txt --chars-replace=conf/chars_rep.txt | \
-	tr [A-Z] [a-z] | \
-	cut -f 2- -d" " | tr " " "\n" | sort | uniq | grep -v -e '^\s*$' | grep -v "<unk>" | awk '{print $0 " " NR + 3}' >> ${dict}
+	tr [A-Z] [a-z] | cut -f 2- -d" " | tr " " "\n" | sort | uniq | grep -v -e '^\s*$' | grep -v "<unk>" | awk '{print $0 " " NR + 3}' >> ${dict}
     wc -l ${dict}
 fi
 
 if [ ${stage} -le 4 ]; then
     echo "make json files"
-    # scps: the directory contains indenpendent scp and json files of difference attrbutes of utterances
-    #       such as feat, num_frames, feat_dim, text, token, token_id, num_tokens, vocab_size and utt2spk.
-    # utts.json: a json dictionary mapping utterance-id to attributes
+    # get scp files (each line as 'uttid scp_content'):
+    #     num_frames.scp, feat_dim.scp, num_tokens.scp, tokenid.scp, vocab_size.scp, feat.scp, token.scp and etc.
+    # then merge them into utts.json
+    # If you want to add more information, just create more scp files in data2json.sh
 
     for x in test_eval92 test_eval93 test_dev93 train_si284 train_si84 train_si84_2kshort; do
 	cutils/data2json.sh --feat data/$x/feats.scp \
