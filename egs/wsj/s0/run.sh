@@ -61,7 +61,7 @@ fi
 
 train_set=train_si284
 dict=data/lang_1char/${train_set}_units.txt
-non_lang_syms=data/lang_1char/${train_set}_non_lang_syms.txt
+non_ling_syms=data/lang_1char/${train_set}_non_ling_syms.txt
 if [ ${stage} -le 3 ]; then
     echo "Stage 3: Dictionary Preparation"
 
@@ -71,11 +71,11 @@ if [ ${stage} -le 3 ]; then
     echo "make a non-linguistic symbol list"
     # assume speakers not confused between upper and lower case
     # cut off the first column --- the utt_id --- of the text file
-    # all non_lang_syms with <...> format
+    # all non_ling_syms with <...> format
     cat data/${train_set}/text | tr [A-Z] [a-z] | \
 	python local/script/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
-	cut -f 2-  | tr " " "\n" | sort | uniq | grep "<" > ${non_lang_syms}
-    cat ${non_lang_syms}
+	tr [A-Z] [a-z] | cut -f 2-  | tr " " "\n" | sort | uniq | grep "<" > ${non_ling_syms}
+    cat ${non_ling_syms}
 
     echo "make a dictionary"
     # We follow the index convention of torchtext.
@@ -89,7 +89,7 @@ if [ ${stage} -le 3 ]; then
     # while deleting, replacing some configurations and removing the empty lines (with grep).
     cat data/${train_set}/text | tr [A-Z] [a-z] | \
 	python local/script/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
-	local/script/text2token.py -s 1 -n 1 -l ${non_lang_syms} --chars-delete=conf/chars_del.txt --chars-replace=conf/chars_rep.txt | \
+	local/script/text2token.py --skip-ncols=1 --non-ling-syms ${non_ling_syms} --chars-delete=conf/chars_del.txt --chars-replace=conf/chars_rep.txt | \
 	tr [A-Z] [a-z] | cut -f 2- -d" " | tr " " "\n" | sort | uniq | grep -v -e '^\s*$' | grep -v "<unk>" | awk '{print $0 " " NR + 3}' >> ${dict}
     wc -l ${dict}
 fi
@@ -103,7 +103,7 @@ if [ ${stage} -le 4 ]; then
 
     for x in test_eval92 test_eval93 test_dev93 train_si284 train_si84 train_si84_2kshort; do
 	local/script/data2json.sh --feat data/$x/feats.scp \
-    		     --nlsyms ${non_lang_syms} \
+    		     --nlsyms ${non_ling_syms} \
     	             --output-utts-json data/$x/utts.json \
     		     --output-dir-of-scps data/$x/scps \
     		     data/$x ${dict}

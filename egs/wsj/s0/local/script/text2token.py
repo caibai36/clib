@@ -41,11 +41,11 @@ class Pos(NamedTuple):
     end: int
 
 
-def is_non_lang_syms_index(matched_pos: List[Pos], cur_pos: int) -> Optional[Pos]:
+def is_non_ling_syms_index(matched_pos: List[Pos], cur_pos: int) -> Optional[Pos]:
     for pos in matched_pos:
         if pos.start <= cur_pos and cur_pos < pos.end:
             return pos
-    return None  # if NOT in non_lang_syms_index
+    return None  # if NOT in non_ling_syms_index
 
 
 def main():
@@ -53,13 +53,13 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter, epilog=example_string)
     parser.add_argument('text', type=str, default=False, nargs='?',
                         help='input text')
-    parser.add_argument('--non-lang-syms', '-l', default=None, type=str,
+    parser.add_argument('--non-ling-syms', '-l', default=None, type=str,
                         help='list of non-linguistic symbols with format <XXX>, e.g., <NOISE> etc.')
     parser.add_argument('--skip-ncols', '-s', default=0, type=int,
                         help='skip first n columns')
     parser.add_argument('--space', default='<space>', type=str,
                         help='space symbol')
-    parser.add_argument('--nchar', '-n', default=1, type=int,
+    parser.add_argument('--nchars-as-token', '-n', default=1, type=int,
                         help='number of characters to split, i.e., \
                         aabb -> a a b b with -n 1 and aa bb with -n 2')
     parser.add_argument('--chars-delete', '-d', default="", type=str,
@@ -85,10 +85,10 @@ def main():
         with open(args.chars_replace, 'r', encoding='utf-8') as rf:
             chars_rep = {re.split(args.chars_replace_sep, pair.strip())[0]:re.split(args.chars_replace_sep, pair.strip())[1] for pair in rf}
 
-    # Create patterns of the non_lang_syms.
+    # Create patterns of the non_ling_syms.
     patterns: List = []
-    if args.non_lang_syms:
-        with open(args.non_lang_syms, 'r', encoding='utf-8') as nf:
+    if args.non_ling_syms:
+        with open(args.non_ling_syms, 'r', encoding='utf-8') as nf:
             for symbol in nf:
                 pattern = re.compile(re.escape(symbol.strip()))
                 patterns.append(pattern)
@@ -103,11 +103,11 @@ def main():
         # print(skipped_str, end=" ")
         sys.stdout.buffer.write((skipped_str + " ").encode('utf8')) # print utf8 string
 
-        # First find the matched positions of the non_lang_syms
+        # First find the matched positions of the non_ling_syms
         matched_pos: List[Pos] = []
 
-        # Note: the non_lang_syms should be in some special format like <...>, or there will be bugs:
-        #       eg. THOUSAND is a substring of the remained_str; AND is in non_lang_syms
+        # Note: the non_ling_syms should be in some special format like <...>, or there will be bugs:
+        #       eg. THOUSAND is a substring of the remained_str; AND is in non_ling_syms
         for pattern in patterns:
             start_pos: int = 0
             while True:
@@ -121,13 +121,13 @@ def main():
                     break
 
         # Split the line into list of character strings.
-        # We will treat the non_lang_syms as a character;
+        # We will treat the non_ling_syms as a character;
         # white space is also treated as a character.
         start_pos: int = 0
         chars: List[str] = []
         while start_pos < len(remained_str):
-            p: Optional[Pos] = is_non_lang_syms_index(matched_pos, start_pos)
-            if p:  # is non_lang_syms_index
+            p: Optional[Pos] = is_non_ling_syms_index(matched_pos, start_pos)
+            if p:  # is non_ling_syms_index
                 chars.append(remained_str[p.start:p.end])
                 start_pos = start_pos + p.end - p.start
             else:
@@ -141,8 +141,8 @@ def main():
         if args.chars_replace:
             chars = list(map(lambda char: char if char not in chars_rep else chars_rep[char], chars))
         # concatenate the chars as char strings
-        char_strings = ["".join(chars[i:i+args.nchar])
-                        for i in range(0, len(chars), args.nchar)]
+        char_strings = ["".join(chars[i:i+args.nchars_as_token])
+                        for i in range(0, len(chars), args.nchars_as_token)]
 
         # print(" ".join(char_strings))
         sys.stdout.buffer.write((" ".join(char_strings)+'\n').encode('utf-8')) # print utf8 string
