@@ -13,11 +13,13 @@ from clib.kaldi.kaldi_data import KaldiDataLoader, KaldiDataset
 json_file = 'data/test_small/utts.json'
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--json-file', type=str, default=json_file, help="the test utterance json file")
+parser.add_argument('--json_file', type=str, default=json_file, help="the test utterance json file")
 # We follow the index convention of torchtext by setting padding id as 1.
 parser.add_argument('--padding_tokenid', type=int, default=1, help="the id of padding token")
 
-args = parser.parse_args()
+# Temporarily disable passing parameters to interactive shell (for emacs to run python (or rlipython)).
+# remove [] when passing parameters to python scripts (eg. python test_ars.py --padding_tokenid=-5)
+args = parser.parse_args([])
 
 with open(args.json_file, encoding='utf8') as f:
     # utts_json is a dictionary mapping utt_id to fields of each utterance
@@ -39,4 +41,3 @@ with open(args.json_file, encoding='utf8') as f:
 
     for batch in batches:
         pprint.pprint(batch)
-    
