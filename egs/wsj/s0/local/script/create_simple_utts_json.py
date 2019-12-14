@@ -35,7 +35,7 @@ def main():
             "tokenid": "2 5 6 3",
             "utt2spk": "spk1",
             "uttid": "spk1_u1",
-            "vocab_size": "7"
+            "vocab_size": "8"
         },
         "spk1_u2": {
             "feat": args.output_dir + "/feats2.ark",
@@ -47,7 +47,7 @@ def main():
             "tokenid": "2 5 4 6 3",
             "utt2spk": "spk1",
             "uttid": "spk1_u2",
-            "vocab_size": "7"
+            "vocab_size": "8"
         },
         "spk1_u3": {
             "feat": args.output_dir + "/feats3.ark",
@@ -59,7 +59,7 @@ def main():
             "tokenid": "2 5 7 4 6 3",
             "utt2spk": "spk1",
             "uttid": "spk1_u3",
-            "vocab_size": "7"
+            "vocab_size": "8"
         },
         "spk2_u4": {
             "feat": args.output_dir + "/feats4.ark",
@@ -71,7 +71,7 @@ def main():
             "tokenid": "2 5 7 4 5 3",
             "utt2spk": "spk2",
             "uttid": "spk2_u4",
-            "vocab_size": "7"
+            "vocab_size": "8"
         }
     }
 
