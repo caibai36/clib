@@ -1,3 +1,8 @@
+# Add clib package at current directory to the binary searching path.
+import sys
+import os
+sys.path.append(os.getcwd())
+
 from clib.kaldi import kaldi_io
 import argparse
 import json
