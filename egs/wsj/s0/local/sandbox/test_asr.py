@@ -1,17 +1,17 @@
-# Add clib package at current directory to the binary searching path.
-from typing import Union
+from typing import List, Dict, Tuple, Union
 
 import sys
 import os
 import re
 from pprint import pprint
+# Add clib package at current directory to the binary searching path.
 sys.path.append(os.getcwd())
 
 import json
 import pprint
 import argparse
 import torch
-from clib.kaldi.kaldi_data import KaldiDataLoader, KaldiDataset 
+from clib.kaldi.kaldi_data import KaldiDataLoader, KaldiDataset
 
 import torch
 from torch import nn
@@ -109,127 +109,178 @@ def length2mask(sequence_lengths: torch.tensor, max_length: Union[int, None] = N
 
     return (cumsum_ones <= sequence_lengths.unsqueeze(-1)).long()
 
+class SpeechEncoder(nn.Module):
+    """
+    The speech encoder accepts the feature (batch_size x max_seq_length x in_size),
+    passes the feature to several layers of feedforward neural network (fnn)
+    and then to several layers of RNN (rnn) with subsampling
+    (by concatenating every pair of frames with type 'pair_concat'
+    or dropping one of frame every frame pair with the type 'pair_take_second').
+    We can pass the parameters by one copied by each layer or by specifying a list of values for each layer.
+    """
+
+    def __init__(self,
+                 enc_input_size: int,
+                 enc_fnn_sizes: List[int] = [4, 9],
+                 enc_fnn_act: Union[str, List[str]] = 'ReLU',
+                 enc_fnn_dropout: Union[float, List[float]] = 0.25,
+                 enc_rnn_sizes: List[int] = [5, 5, 5],
+                 enc_rnn_config: Union[Dict, List[Dict]] = {'type': 'lstm', 'bi': True},
+                 enc_rnn_dropout: Union[float, List[float]] = 0.25,
+                 enc_rnn_subsampling: Union[bool, List[bool]] = [False, True, True],
+                 enc_rnn_subsampling_type: Union[str, List[str]] = 'pair_concat', # 'pair_concat' or 'pair_take_second'
+                 enc_input_padding_value: float = 0.0
+    ) -> None:
+        super().__init__()
+
+        # make copy of the configuration for each layer.
+        num_enc_fnn_layers = len(enc_fnn_sizes)
+        if not isinstance(enc_fnn_act, list): enc_fnn_act = [enc_fnn_act] * num_enc_fnn_layers
+        if not isinstance(enc_fnn_dropout, list): enc_fnn_dropout = [enc_fnn_dropout] * num_enc_fnn_layers
+
+        num_enc_rnn_layers = len(enc_rnn_sizes)
+        if not isinstance(enc_rnn_config, list): enc_rnn_config = [enc_rnn_config] * num_enc_rnn_layers
+        if not isinstance(enc_rnn_dropout, list): enc_rnn_dropout = [enc_rnn_dropout] * num_enc_rnn_layers
+        if not isinstance(enc_rnn_subsampling, list): enc_rnn_subsampling = [enc_rnn_subsampling] * num_enc_rnn_layers
+        if not isinstance(enc_rnn_subsampling_type, list): enc_rnn_subsampling_type = [enc_rnn_subsampling_type] * num_enc_rnn_layers
+
+        assert num_enc_fnn_layers == len(enc_fnn_act) == len(enc_fnn_dropout), "Number of list does not match the lengths of specified configuration lists."
+        assert num_enc_rnn_layers == len(enc_rnn_config) == len(enc_rnn_dropout) == len(enc_rnn_subsampling) == len(enc_rnn_subsampling_type), \
+            "Number of rnn layers does not matches the lengths of specificed configuration lists."
+        for t in enc_rnn_subsampling_type:
+            assert t in {'pair_concat', 'pair_take_second'}, \
+                "The subsampling type '{}' is not implemented yet.\n".format(t) + \
+                "Only support the type 'pair_concat' and 'pair_take_second':\n" + \
+                "the type 'pair_take_second' preserves the last frame every two frames;\n" + \
+                "the type 'pair_concat' concatenates the frames every two frames.\n"
+
+        self.enc_input_size = enc_input_size
+        self.enc_fnn_sizes = enc_fnn_sizes
+        self.enc_fnn_act = enc_fnn_act
+        self.enc_fnn_dropout = enc_fnn_dropout
+        self.enc_rnn_sizes = enc_rnn_sizes
+        self.enc_rnn_config = enc_rnn_config
+        self.enc_rnn_dropout = enc_rnn_dropout
+        self.enc_rnn_subsampling = enc_rnn_subsampling
+        self.enc_rnn_subsampling_type = enc_rnn_subsampling_type
+        self.enc_input_padding_value = enc_input_padding_value
+
+        pre_size = self.enc_input_size
+        self.enc_fnn_layers = nn.ModuleList()
+        for i in range(num_enc_fnn_layers):
+            self.enc_fnn_layers.append(nn.Linear(pre_size, enc_fnn_sizes[i]))
+            self.enc_fnn_layers.append(get_act(enc_fnn_act[i])())
+            self.enc_fnn_layers.append(nn.Dropout(p=enc_fnn_dropout[i]))
+            pre_size = enc_fnn_sizes[i]
+
+        self.enc_rnn_layers = nn.ModuleList()
+        for i in range(num_enc_rnn_layers):
+            rnn_layer = get_rnn(enc_rnn_config[i]['type'])
+            self.enc_rnn_layers.append(rnn_layer(pre_size, enc_rnn_sizes[i], batch_first=True, bidirectional=enc_rnn_config[i]['bi']))
+            pre_size = enc_rnn_sizes[i] * (2 if enc_rnn_config[i]['bi'] else 1) # for bidirectional rnn
+            if (enc_rnn_subsampling[i] and enc_rnn_subsampling_type[i] == 'pair_concat'): pre_size = pre_size * 2 # for pair_concat subsampling
+
+        self.enc_final_size = pre_size
+
+    def get_config(self):
+        return { 'class': str(self.__class__),
+                 'enc_input_size': self.enc_input_size,
+                 'enc_fnn_sizes': self.enc_fnn_sizes,
+                 'enc_fnn_act': self.enc_fnn_act,
+                 'enc_fnn_dropout': self.enc_fnn_dropout,
+                 'enc_rnn_sizes': self.enc_rnn_sizes,
+                 'enc_rnn_config': self.enc_rnn_config,
+                 'enc_rnn_dropout': self.enc_rnn_dropout,
+                 'enc_rnn_subsampling': self.enc_rnn_subsampling,
+                 'enc_rnn_subsampling_type': self.enc_rnn_subsampling_type,
+                 'enc_fnn_layers': self.enc_fnn_layers,
+                 'enc_rnn_layers': self.enc_rnn_layers,
+                 'enc_final_size': self.enc_final_size,
+                 'enc_input_padding_value': self.enc_input_padding_value}
+
+    def encode(self,
+               input: torch.Tensor,
+               input_lengths: Union[List[int], None] = None)->(torch.FloatTensor, torch.Tensor):
+        """ Encode the feature (batch_size x max_seq_length x in_size),
+        and output the context vector (batch_size x max_seq_length' x context_size)
+        and its mask (batch_size x max_seq_length').
+
+        Note: the context_size influenced by 'bidirectional' and 'subsampling (pair_concat)' options of RNN.
+              the max_seq_length' influenced by 'subsampling' options of RNN, also by the problem that duration too short for subsampling.
+        """
+        print(input.shape)
+
+        if (input_lengths is None):
+            cur_batch_size = input.shape[0]
+            max_seq_length = input.shape[1]
+            input_lengths = [max_seq_length] * cur_batch_size
+
+        output = input
+        for layer in self.enc_fnn_layers:
+            output = layer(output)
+
+        output_lengths = input_lengths
+
+        too_short_for_subsampling = False # set the flag to true when speech feature is too short for subsampling.
+        for i in range(len(self.enc_rnn_layers)):
+            layer = self.enc_rnn_layers[i]
+            packed_sequence = pack(output, output_lengths, batch_first=True)
+            output, _ = layer(packed_sequence) # LSTM returns '(output, [hn ,cn])'
+            output, _ = unpack(output, batch_first=True, padding_value=self.enc_input_padding_value) # unpack returns (data, length)
+            # dropout of lstm module behaves randomly even with same torch seed, so we'll append dropout layer.
+            output = F.dropout(output, p=self.enc_rnn_dropout[i], training=self.training)
+
+            # Deal with the problem when the length is too short for subsampling
+            if (output.shape[1] == 1 and self.enc_rnn_subsampling[i]):
+                too_short_for_subsampling = True
+            if (too_short_for_subsampling and self.enc_rnn_subsampling[i] and self.enc_rnn_subsampling_type[i] == 'pair_concat'):
+                output = torch.cat([output] * 2, dim=-1) # Double the dimension by copying the batch for the layer i outputed features.
+
+            # Subsampling by taking the second frame or concatenating frames for every two frames.
+            if (self.enc_rnn_subsampling[i] and not too_short_for_subsampling):
+                if (self.enc_rnn_subsampling_type[i] == 'pair_take_second'):
+                    output = output[:, (2 - 1)::2] # Sample the second frame every two frames
+                    output_lengths = torch.LongTensor([(length // 2 if length // 2 > 0 else 1) for length in output_lengths]) # at least left 1 frame after subsampling
+                elif (self.enc_rnn_subsampling_type[i] == 'pair_concat'): # apply concatenation for each outputed features
+                    output = output[:, :output.shape[1] // 2 * 2].contiguous() # Drop the last frame if the length is odd.
+                    # without contiguous => RuntimeError: view size is not compatible...(at least one dimension spans across two contiguous subspaces).
+                    output = output.view(output.shape[0], output.shape[1] // 2, output.shape[2] * 2)
+                    output_lengths = torch.LongTensor([(length // 2 if length // 2 > 0 else 1) for length in output_lengths])
+                else:
+                    raise NotImplementedError("The subsampling type {} is not implemented yet.\n".format(self.enc_rnn_subsampling_type[i]) +
+                                              "Only support the type 'pair_concat' and 'pair_take_second':\n" +
+                                              "The type 'pair_take_second' only preserves the last frame every two frames.\n" +
+                                              "The type 'pair_concat' concatenates the frames every two frames.\n")
+
+            print("After layer '{}' applying the subsampling '{}' with type '{}': shape is {}, lengths is {} ".format(
+                i, self.enc_rnn_subsampling[i], self.enc_rnn_subsampling_type[i], output.shape, output_lengths))
+
+            # Print the warning if the length is too short for subsampling.
+            if (too_short_for_subsampling and self.enc_rnn_subsampling[i] and self.enc_rnn_subsampling_type[i] == 'pair_take_second'):
+                print("Warning: Input speech too short (seq_len = 1) for 'pair_take_second' subsampling. Subsampling shuts down for the layer {} outputed features for current batch.".format(i), file=sys.stderr)
+            if (too_short_for_subsampling and self.enc_rnn_subsampling[i] and self.enc_rnn_subsampling_type[i] == 'pair_concat'):
+                print("Warning: Input speech too short (seq_len = 1) for 'pair_concat' subsampling. Double the dimension by copying the batch for the layer {} outputed features.".format(i), file=sys.stderr)
+
+            print("mask of lengths is\n{}".format(length2mask(output_lengths)))
+
+        context, context_mask = output, length2mask(output_lengths)
+        return context, context_mask
+
 input = next(iter(dataloader))['feat']
 input_lengths = next(iter(dataloader))['num_frames'] # or None
-# input = batches[1]['feat']
-# input_lengths = batches[1]['num_frames']
-training = False
-
-input_padding_value = 0.0
+input_lengths = torch.LongTensor([7, 2, 1])
 in_size = input.shape[-1]
 
-enc_fnn_sizes = [4, 9]
-enc_fnn_act = 'ReLU'
-enc_fnn_dropout = 0.25
+speech_encoder = SpeechEncoder(in_size,
+                               enc_fnn_sizes = [4, 9],
+                               enc_fnn_act = 'ReLU',
+                               enc_fnn_dropout = 0.25,
+                               enc_rnn_sizes = [5, 5, 5],
+                               enc_rnn_config = {'type': 'lstm', 'bi': True},
+                               enc_rnn_dropout = 0.25,
+                               enc_rnn_subsampling = [False, True, True],
+                               enc_rnn_subsampling_type = 'pair_concat')
 
-enc_rnn_sizes = [5, 5, 5]
-enc_rnn_config = {'type': 'lstm', 'bi': True}
-enc_rnn_dropout = 0.25
-
-enc_rnn_subsampling = [False, True, True]
-enc_rnn_subsampling_type = 'pair_concat' # or 'pair_take_second'
-
-enc_fnn_layers = nn.ModuleList()
-# make copy of the configuration for each layer.
-num_enc_fnn_layers = len(enc_fnn_sizes)
-if not isinstance(enc_fnn_act, list): enc_fnn_act = [enc_fnn_act] * num_enc_fnn_layers
-if not isinstance(enc_fnn_dropout, list): enc_fnn_dropout = [enc_fnn_dropout] * num_enc_fnn_layers
-assert num_enc_fnn_layers == len(enc_fnn_act) == len(enc_fnn_dropout), "Number of list mismatches the lengths of specified configuration lists."
-
-if (input_lengths is None):
-    cur_batch_size = input.shape[0]
-    max_seq_length = input.shape[1]
-    input_lengths = [max_seq_length] * cur_batch_size
-
-pre_size = in_size
-for i in range(num_enc_fnn_layers):
-    enc_fnn_layers.append(nn.Linear(pre_size, enc_fnn_sizes[i]))
-    enc_fnn_layers.append(get_act(enc_fnn_act[i])())
-    enc_fnn_layers.append(nn.Dropout(p=enc_fnn_dropout[i]))
-    pre_size = enc_fnn_sizes[i]
-
-print(enc_fnn_layers)
-
-print("Before passing to the feedforward network")
-print(input.shape)
-
-# # nn.ModuleList is list without forward method, but nn.Sequential has.
-# # f(*args) where args is a list
-# output = nn.Sequential(*enc_fnn_layers)(input)
-# print(output.shape)
-output=input
-for layer in enc_fnn_layers:
-    output = layer(output)
-
-print("After passing to the feedforward network")
-print(output.shape)
-print()
-
-enc_rnn_layers = nn.ModuleList()
-# make copy of the configuration for each layer.
-num_enc_rnn_layers = len(enc_rnn_sizes)
-if not isinstance(enc_rnn_config, list): enc_rnn_config = [enc_rnn_config] * num_enc_rnn_layers
-if not isinstance(enc_rnn_dropout, list): enc_rnn_dropout = [enc_rnn_dropout] * num_enc_rnn_layers
-if not isinstance(enc_rnn_subsampling, list): enc_rnn_subsampling = [enc_rnn_subsampling] * num_enc_rnn_layers
-if not isinstance(enc_rnn_subsampling_type, list): enc_rnn_subsampling_type = [enc_rnn_subsampling_type] * num_enc_rnn_layers
-assert num_enc_rnn_layers == len(enc_rnn_config) == len(enc_rnn_dropout) == len(enc_rnn_subsampling) == len(enc_rnn_subsampling_type), \
-    "Number of rnn layers mismatches the lengths of specificed configuration lists"
-
-input = output # pipeline
-pre_size = input.shape[-1]
-for i in range(num_enc_rnn_layers):
-    rnn_layer = get_rnn(enc_rnn_config[i]['type'])
-    enc_rnn_layers.append(rnn_layer(pre_size, enc_rnn_sizes[i], batch_first=True, bidirectional=enc_rnn_config[i]['bi']))
-    pre_size = enc_rnn_sizes[i] * (2 if enc_rnn_config[i]['bi'] else 1)
-    if (enc_rnn_subsampling[i] and enc_rnn_subsampling_type[i] == 'pair_concat'): pre_size = pre_size * 2
-
-print(enc_rnn_layers)
-
-print("Before passing to the rnn")
-print(input.shape)
-print("lengths: {}".format(input_lengths))
-print()
-
-output = input
-output_lengths = input_lengths
-
-too_short_for_subsampling = False # set the flag to true when speech feature is too short for subsampling.
-for i in range(len(enc_rnn_layers)):
-    layer = enc_rnn_layers[i]
-    packed_sequence = pack(output, output_lengths, batch_first=True)
-    output, _ = layer(packed_sequence) # LSTM returns '(output, [hn ,cn])'
-    output, _ = unpack(output, batch_first=True, padding_value=input_padding_value) # unpack returns (data, length)
-    # dropout of lstm module behaves randomly even with same torch seed, so we'll append dropout layer.
-    output = F.dropout(output, p=enc_rnn_dropout[i], training=training)
-
-    # Deal with the problem that the length is too short for subsampling
-    if (output.shape[1] == 1 and enc_rnn_subsampling[i]):
-        too_short_for_subsampling = True
-    if (too_short_for_subsampling and enc_rnn_subsampling[i] and enc_rnn_subsampling_type[i] == 'pair_concat'):
-        output = torch.cat([output] * 2, dim=-1) # Double the dimension by copying the batch for the layer i outputed features.
-
-    # Subsampling by taking the second frame or concatenating frames for every two frames as a unit.
-    if (enc_rnn_subsampling[i] and not too_short_for_subsampling):
-        if (enc_rnn_subsampling_type[i] == 'pair_take_second'):
-            output = output[:, (2 - 1)::2] # Sample the second frame every two frames
-            output_lengths = torch.LongTensor([length // 2 for length in output_lengths])
-        elif (enc_rnn_subsampling_type[i] == 'pair_concat'): # apply concatenation for each outputed features
-            output = output[:, :output.shape[1] // 2 * 2].contiguous() # Drop the last frame if the length is odd.
-            # without contiguous => RuntimeError: view size is not compatible...(at least one dimension spans across two contiguous subspaces).
-            output = output.view(output.shape[0], output.shape[1] // 2, output.shape[2] * 2)
-            output_lengths = torch.LongTensor([length // 2 for length in output_lengths])
-        else:
-            raise NotImplementedError("The subsampling type {} is not implemented yet.\n".format(enc_rnn_subsampling_type[i]) +
-                                      "The type 'pair_take_second' only preserves the last frame every two frames.\n" +
-                                      "The type 'pair_concat' concatenates the frames every two frames.\n")
-
-    print("After layer '{}' applying the subsampling '{}' with type '{}': shape is {}, lengths is {} ".format(
-        i, enc_rnn_subsampling[i], enc_rnn_subsampling_type[i], output.shape, output_lengths))
-
-    # Print the warning if the lenghth is too short for subsampling.
-    if (too_short_for_subsampling and enc_rnn_subsampling[i] and enc_rnn_subsampling_type[i] == 'pair_take_second'):
-        print("Warning: Input speech too short (seq_len = 1) for 'pair_take_second' subsampling. Subsampling shuts down for the layer {} outputed features for current batch.".format(i), file=sys.stderr)
-    if (too_short_for_subsampling and enc_rnn_subsampling[i] and enc_rnn_subsampling_type[i] == 'pair_concat'):
-        print("Warning: Input speech too short (seq_len = 1) for 'pair_concat' subsampling. Double the dimension by copying the batch for the layer {} outputed features.".format(i), file=sys.stderr)
-
-    # print("mask of lengths is\n{}".format(length2mask(output_lengths)))
+speech_encoder.get_config()
+context, context_mask = speech_encoder.encode(input, input_lengths)
+# print(context.shape, context_mask)
