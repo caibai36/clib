@@ -115,8 +115,11 @@ class SpeechEncoder(nn.Module):
     passes the feature to several layers of feedforward neural network (fnn)
     and then to several layers of RNN (rnn) with subsampling
     (by concatenating every pair of frames with type 'pair_concat'
-    or dropping one of frame every frame pair with the type 'pair_take_second').
-    We can pass the parameters by one copied by each layer or by specifying a list of values for each layer.
+    or by taking the first frame every frame pair with the type 'pair_take_first').
+
+    ps: We can pass the parameters by copying the same configuration to each layer
+        or by specifying a list of configurations for each layer.
+        We do padding at the end of sequence whenever subsampling needs more frames to concatenate.
     """
 
     def __init__(self,
@@ -128,7 +131,7 @@ class SpeechEncoder(nn.Module):
                  enc_rnn_config: Union[Dict, List[Dict]] = {'type': 'lstm', 'bi': True},
                  enc_rnn_dropout: Union[float, List[float]] = 0.25,
                  enc_rnn_subsampling: Union[bool, List[bool]] = [False, True, True],
-                 enc_rnn_subsampling_type: Union[str, List[str]] = 'pair_concat', # 'pair_concat' or 'pair_take_second'
+                 enc_rnn_subsampling_type: Union[str, List[str]] = 'pair_concat', # 'pair_concat' or 'pair_take_first'
                  enc_input_padding_value: float = 0.0
     ) -> None:
         super().__init__()
@@ -148,11 +151,11 @@ class SpeechEncoder(nn.Module):
         assert num_enc_rnn_layers == len(enc_rnn_config) == len(enc_rnn_dropout) == len(enc_rnn_subsampling) == len(enc_rnn_subsampling_type), \
             "Number of rnn layers does not matches the lengths of specificed configuration lists."
         for t in enc_rnn_subsampling_type:
-            assert t in {'pair_concat', 'pair_take_second'}, \
+            assert t in {'pair_concat', 'pair_take_first'}, \
                 "The subsampling type '{}' is not implemented yet.\n".format(t) + \
-                "Only support the type 'pair_concat' and 'pair_take_second':\n" + \
-                "the type 'pair_take_second' preserves the last frame every two frames;\n" + \
-                "the type 'pair_concat' concatenates the frames every two frames.\n"
+                "Only support the type 'pair_concat' and 'pair_take_first':\n" + \
+                "the type 'pair_take_first' preserves the first frame every two frames;\n" + \
+                "the type 'pair_concat' concatenates the frame pair every two frames.\n"
 
         self.enc_input_size = enc_input_size
         self.enc_fnn_sizes = enc_fnn_sizes
@@ -205,14 +208,13 @@ class SpeechEncoder(nn.Module):
         and output the context vector (batch_size x max_seq_length' x context_size)
         and its mask (batch_size x max_seq_length').
 
-        Note: the context_size influenced by 'bidirectional' and 'subsampling (pair_concat)' options of RNN.
-              the max_seq_length' influenced by 'subsampling' options of RNN, also by the problem that duration too short for subsampling.
+        Note: the dimension of context vector is influenced by 'bidirectional' and 'subsampling (pair_concat)' options of RNN.
+              the max_seq_length' influenced by 'subsampling' options of RNN.
         """
-        print(input.shape)
+        print("Shape of the input: {}".format(input.shape))
 
         if (input_lengths is None):
-            cur_batch_size = input.shape[0]
-            max_seq_length = input.shape[1]
+            cur_batch_size, max_seq_length, cur_input_size = input.shape
             input_lengths = [max_seq_length] * cur_batch_size
 
         output = input
@@ -220,8 +222,6 @@ class SpeechEncoder(nn.Module):
             output = layer(output)
 
         output_lengths = input_lengths
-
-        too_short_for_subsampling = False # set the flag to true when speech feature is too short for subsampling.
         for i in range(len(self.enc_rnn_layers)):
             layer = self.enc_rnn_layers[i]
             packed_sequence = pack(output, output_lengths, batch_first=True)
@@ -230,37 +230,31 @@ class SpeechEncoder(nn.Module):
             # dropout of lstm module behaves randomly even with same torch seed, so we'll append dropout layer.
             output = F.dropout(output, p=self.enc_rnn_dropout[i], training=self.training)
 
-            # Deal with the problem when the length is too short for subsampling
-            if (output.shape[1] == 1 and self.enc_rnn_subsampling[i]):
-                too_short_for_subsampling = True
-            if (too_short_for_subsampling and self.enc_rnn_subsampling[i] and self.enc_rnn_subsampling_type[i] == 'pair_concat'):
-                output = torch.cat([output] * 2, dim=-1) # Double the dimension by copying the batch for the layer i outputed features.
+            # Subsampling by taking the first frame or concatenating frames for every two frames.
+            if (self.enc_rnn_subsampling[i]):
 
-            # Subsampling by taking the second frame or concatenating frames for every two frames.
-            if (self.enc_rnn_subsampling[i] and not too_short_for_subsampling):
-                if (self.enc_rnn_subsampling_type[i] == 'pair_take_second'):
-                    output = output[:, (2 - 1)::2] # Sample the second frame every two frames
-                    output_lengths = torch.LongTensor([(length // 2 if length // 2 > 0 else 1) for length in output_lengths]) # at least left 1 frame after subsampling
-                elif (self.enc_rnn_subsampling_type[i] == 'pair_concat'): # apply concatenation for each outputed features
-                    output = output[:, :output.shape[1] // 2 * 2].contiguous() # Drop the last frame if the length is odd.
-                    # without contiguous => RuntimeError: view size is not compatible...(at least one dimension spans across two contiguous subspaces).
+                # Padding the max_seq_length be a multiple of 2 (even number) for subsampling.
+                # ps: That padding frames with a multiple of 8 (with 3 times of subsampling) before inputting to the rnn
+                #     equals to that padding 3 times in the middle of layers with a multiple of 2,
+                #     because of the pack and unpack operation only takes feature with effective lengths to rnn.
+                if (output.shape[1] % 2 != 0): # odd length
+                    extended_part = torch.ones(output.shape[0], 1, output.shape[2], device = output.device) * self.enc_input_padding_value
+                    output = torch.cat([output, extended_part], dim=1) # pad to be even length
+
+                if (self.enc_rnn_subsampling_type[i] == 'pair_take_first'):
+                    output = output[:, ::2]
+                    output_lengths = torch.LongTensor([(length + (2 - 1)) // 2 for length in output_lengths])
+                elif (self.enc_rnn_subsampling_type[i] == 'pair_concat'):
                     output = output.view(output.shape[0], output.shape[1] // 2, output.shape[2] * 2)
-                    output_lengths = torch.LongTensor([(length // 2 if length // 2 > 0 else 1) for length in output_lengths])
+                    output_lengths = torch.LongTensor([(length + (2 - 1)) // 2 for length in output_lengths])
                 else:
                     raise NotImplementedError("The subsampling type {} is not implemented yet.\n".format(self.enc_rnn_subsampling_type[i]) +
-                                              "Only support the type 'pair_concat' and 'pair_take_second':\n" +
-                                              "The type 'pair_take_second' only preserves the last frame every two frames.\n" +
-                                              "The type 'pair_concat' concatenates the frames every two frames.\n")
+                                              "Only support the type 'pair_concat' and 'pair_take_first':\n" +
+                                              "The type 'pair_take_first' takes the first frame every two frames.\n" +
+                                              "The type 'pair_concat' concatenates the frame pair every two frames.\n")
 
             print("After layer '{}' applying the subsampling '{}' with type '{}': shape is {}, lengths is {} ".format(
                 i, self.enc_rnn_subsampling[i], self.enc_rnn_subsampling_type[i], output.shape, output_lengths))
-
-            # Print the warning if the length is too short for subsampling.
-            if (too_short_for_subsampling and self.enc_rnn_subsampling[i] and self.enc_rnn_subsampling_type[i] == 'pair_take_second'):
-                print("Warning: Input speech too short (seq_len = 1) for 'pair_take_second' subsampling. Subsampling shuts down for the layer {} outputed features for current batch.".format(i), file=sys.stderr)
-            if (too_short_for_subsampling and self.enc_rnn_subsampling[i] and self.enc_rnn_subsampling_type[i] == 'pair_concat'):
-                print("Warning: Input speech too short (seq_len = 1) for 'pair_concat' subsampling. Double the dimension by copying the batch for the layer {} outputed features.".format(i), file=sys.stderr)
-
             print("mask of lengths is\n{}".format(length2mask(output_lengths)))
 
         context, context_mask = output, length2mask(output_lengths)
@@ -268,7 +262,9 @@ class SpeechEncoder(nn.Module):
 
 input = next(iter(dataloader))['feat']
 input_lengths = next(iter(dataloader))['num_frames'] # or None
-input_lengths = torch.LongTensor([7, 2, 1])
+# input_lengths = torch.LongTensor([7, 2, 1])
+# input = batches[1]['feat']
+# input_lengths = batches[1]['num_frames']
 in_size = input.shape[-1]
 
 speech_encoder = SpeechEncoder(in_size,
