@@ -73,7 +73,7 @@ def get_act(name):
         avaliable_act_module =  [key for key, value in torch.nn.modules.activation.__dict__.items() if "torch.nn.modules.activation." in str(value)]
         raise NotImplementedError("The activation Module '{}' is not implemented\nAvaliable activation modules include {}".format(name, avaliable_act_module))
 
-def length2mask(sequence_lengths: torch.tensor, max_length: Union[int, None] = None) -> torch.tensor:
+def length2mask(sequence_lengths: torch.Tensor, max_length: Union[int, None] = None) -> torch.Tensor:
     """
     Given a variable of shape ``(batch_size,)`` that represents the sequence lengths of each batch
     element, this function returns a ``(batch_size, max_length)`` mask variable.  For example, if
@@ -103,7 +103,7 @@ def length2mask(sequence_lengths: torch.tensor, max_length: Union[int, None] = N
                 [1, 1, 1]])
     """
     if max_length is None:
-        max_length = torch.max(sequence_lengths)
+        max_length = int(torch.max(sequence_lengths).item())
     ones_seqs = sequence_lengths.new_ones(len(sequence_lengths), max_length)
     cumsum_ones = ones_seqs.cumsum(dim=-1)
 
@@ -196,14 +196,11 @@ class SpeechEncoder(nn.Module):
                  'enc_rnn_dropout': self.enc_rnn_dropout,
                  'enc_rnn_subsampling': self.enc_rnn_subsampling,
                  'enc_rnn_subsampling_type': self.enc_rnn_subsampling_type,
-                 'enc_fnn_layers': self.enc_fnn_layers,
-                 'enc_rnn_layers': self.enc_rnn_layers,
-                 'enc_final_size': self.enc_final_size,
                  'enc_input_padding_value': self.enc_input_padding_value}
 
     def encode(self,
                input: torch.Tensor,
-               input_lengths: Union[List[int], None] = None)->(torch.FloatTensor, torch.Tensor):
+               input_lengths: Union[torch.Tensor, None] = None)->(torch.Tensor, torch.Tensor):
         """ Encode the feature (batch_size x max_seq_length x in_size),
         and output the context vector (batch_size x max_seq_length' x context_size)
         and its mask (batch_size x max_seq_length').
@@ -238,15 +235,15 @@ class SpeechEncoder(nn.Module):
                 #     equals to that padding 3 times in the middle of layers with a multiple of 2,
                 #     because of the pack and unpack operation only takes feature with effective lengths to rnn.
                 if (output.shape[1] % 2 != 0): # odd length
-                    extended_part = torch.ones(output.shape[0], 1, output.shape[2], device = output.device) * self.enc_input_padding_value
+                    extended_part = output.new_ones(output.shape[0], 1, output.shape[2]) * self.enc_input_padding_value
                     output = torch.cat([output, extended_part], dim=1) # pad to be even length
 
                 if (self.enc_rnn_subsampling_type[i] == 'pair_take_first'):
                     output = output[:, ::2]
-                    output_lengths = torch.LongTensor([(length + (2 - 1)) // 2 for length in output_lengths])
+                    output_lengths = torch.LongTensor([(length + (2 - 1)) // 2 for length in output_lengths]).to(output.device)
                 elif (self.enc_rnn_subsampling_type[i] == 'pair_concat'):
                     output = output.view(output.shape[0], output.shape[1] // 2, output.shape[2] * 2)
-                    output_lengths = torch.LongTensor([(length + (2 - 1)) // 2 for length in output_lengths])
+                    output_lengths = torch.LongTensor([(length + (2 - 1)) // 2 for length in output_lengths]).to(output.device)
                 else:
                     raise NotImplementedError("The subsampling type {} is not implemented yet.\n".format(self.enc_rnn_subsampling_type[i]) +
                                               "Only support the type 'pair_concat' and 'pair_take_first':\n" +
@@ -260,14 +257,17 @@ class SpeechEncoder(nn.Module):
         context, context_mask = output, length2mask(output_lengths)
         return context, context_mask
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Device: '{}'".format(device))
+
 input = next(iter(dataloader))['feat']
 input_lengths = next(iter(dataloader))['num_frames'] # or None
 # input_lengths = torch.LongTensor([7, 2, 1])
 # input = batches[1]['feat']
 # input_lengths = batches[1]['num_frames']
-in_size = input.shape[-1]
+enc_input_size = input.shape[-1]
 
-speech_encoder = SpeechEncoder(in_size,
+speech_encoder = SpeechEncoder(enc_input_size,
                                enc_fnn_sizes = [4, 9],
                                enc_fnn_act = 'ReLU',
                                enc_fnn_dropout = 0.25,
@@ -276,7 +276,9 @@ speech_encoder = SpeechEncoder(in_size,
                                enc_rnn_dropout = 0.25,
                                enc_rnn_subsampling = [False, True, True],
                                enc_rnn_subsampling_type = 'pair_concat')
-
 speech_encoder.get_config()
+
+speech_encoder.to(device)
+input, input_lengths = input.to(device), input_lengths.to(device)
 context, context_mask = speech_encoder.encode(input, input_lengths)
 # print(context.shape, context_mask)
