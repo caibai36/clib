@@ -25,6 +25,7 @@ if torch.cuda.is_available():
     torch.cuda.manual_seed_all(seed)
 
 # created by local/script/create_simple_utts_json.py
+# TODO: put the create_simple_utts_json into dataloader.
 json_file = 'data/test_small/utts.json'
 
 parser = argparse.ArgumentParser()
@@ -319,31 +320,32 @@ class SubsamplingRNNEncoder(nn.Module):
         context, context_mask = output, length2mask(output_lengths)
         return context, context_mask
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Device: '{}'".format(device))
+def test_encoder():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Device: '{}'".format(device))
 
-input = next(iter(dataloader))['feat']
-input_lengths = next(iter(dataloader))['num_frames'] # or None
-# input_lengths = torch.LongTensor([7, 2, 1])
-# input = batches[1]['feat']
-# input_lengths = batches[1]['num_frames']
-enc_input_size = input.shape[-1]
+    input = next(iter(dataloader))['feat']
+    input_lengths = next(iter(dataloader))['num_frames'] # or None
+    # input_lengths = torch.LongTensor([7, 2, 1])
+    # input = batches[1]['feat']
+    # input_lengths = batches[1]['num_frames']
+    enc_input_size = input.shape[-1]
 
-speech_encoder = SubsamplingRNNEncoder(enc_input_size,
-                                       enc_fnn_sizes = [4, 9],
-                                       enc_fnn_act = 'ReLU',
-                                       enc_fnn_dropout = 0.25,
-                                       enc_rnn_sizes = [5, 5, 5],
-                                       enc_rnn_config = {'type': 'lstm', 'bi': True},
-                                       enc_rnn_dropout = 0.25,
-                                       enc_rnn_subsampling = [False, True, True],
-                                       enc_rnn_subsampling_type = 'pair_concat')
-speech_encoder.get_config()
+    speech_encoder = SubsamplingRNNEncoder(enc_input_size,
+                                           enc_fnn_sizes = [4, 9],
+                                           enc_fnn_act = 'ReLU',
+                                           enc_fnn_dropout = 0.25,
+                                           enc_rnn_sizes = [5, 5, 5],
+                                           enc_rnn_config = {'type': 'lstm', 'bi': True},
+                                           enc_rnn_dropout = 0.25,
+                                           enc_rnn_subsampling = [False, True, True],
+                                           enc_rnn_subsampling_type = 'pair_concat')
+    speech_encoder.get_config()
 
-speech_encoder.to(device)
-input, input_lengths = input.to(device), input_lengths.to(device)
-context, context_mask = speech_encoder.encode(input, input_lengths)
-# print(context.shape, context_mask)
+    speech_encoder.to(device)
+    input, input_lengths = input.to(device), input_lengths.to(device)
+    context, context_mask = speech_encoder.encode(input, input_lengths)
+    # print(context.shape, context_mask)
 
 class DotProductAttention(nn.Module):
     """  Attention by dot product.
@@ -524,21 +526,25 @@ class MLPAttention(nn.Module):
         return {'p_context': p_context,
                 'expected_context': expected_context}
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Device: '{}'".format(device))
+def test_attention() :
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Device: '{}'".format(device))
 
-query = torch.Tensor([[3, 4], [3, 5]])
-query = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
-context = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
-mask = torch.ByteTensor([[1, 1],[1, 0]])
-input = {'query': query.to(device), 'context': context.to(device), 'mask': mask.to(device)}
+    query = torch.Tensor([[3, 4], [3, 5]])
+    query = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
+    context = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
+    mask = torch.ByteTensor([[1, 1],[1, 0]])
+    input = {'query': query.to(device), 'context': context.to(device), 'mask': mask.to(device)}
 
-attention = DotProductAttention(context.shape[-1], query.shape[-1])
-attention.to(device)
-output = attention(input)
-print(output)
+    attention = DotProductAttention(context.shape[-1], query.shape[-1])
+    attention.to(device)
+    output = attention(input)
+    print(output)
 
-attention = MLPAttention(context.shape[-1], query.shape[-1])
-attention.to(device)
-output = attention(input)
-print(output)
+    attention = MLPAttention(context.shape[-1], query.shape[-1])
+    attention.to(device)
+    output = attention(input)
+    print(output)
+
+test_encoder()
+test_attention()
