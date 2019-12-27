@@ -352,20 +352,20 @@ class DotProductAttention(nn.Module):
     DotProductAttention is a module that takes in a dict with key of 'query' and 'context' (alternative key of 'mask' and 'need_expected_context'),
     and returns a output dict with key ('p_context' and 'expected_context').
 
-    It takes 'query' (batch_size [x query_length] x query_size) and 'context' (batch_size x context_length x context_size),
+    It takes 'query' (batch_size x query_size) and 'context' (batch_size x context_length x context_size),
     returns the proportion of attention ('p_context': batch_size x context_length) the query pays to different parts of context
-    and the expected context vector ('expected_context': batch_size [x query_length] x context_size)
+    and the expected context vector ('expected_context': batch_size x context_size)
     by taking weighted average over the context by the proportion of attention.
 
     Example
     -------
     Input:
-    query = torch.Tensor([[3, 4], [3, 5]]) # query = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
+    query = torch.Tensor([[3, 4], [3, 5]])
     context = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
     mask = torch.ByteTensor([[1, 1],[1, 0]])
     input = {'query': query, 'context': context, 'mask': mask}
 
-    attention = DotProductAttention(2, 2)
+    attention = DotProductAttention()
     output = attention(input)
 
     Output:
@@ -374,8 +374,8 @@ class DotProductAttention(nn.Module):
     """
 
     def __init__(self,
-                 context_size: int,
-                 query_size: int,
+                 context_size: int = -1,
+                 query_size: int = -1,
                  normalize: bool = False) -> None:
         super().__init__()
         self.normalize = normalize
@@ -390,30 +390,7 @@ class DotProductAttention(nn.Module):
         """
         return torch.bmm(p_context.unsqueeze(-2), context).squeeze(-2)
 
-    def forward(self, input:torch.Tensor):
-        if (input['query'].dim() == 2): # batch_size x query_size
-            return self.forward_single_time_step(input)
-        elif (input['query'].dim() == 3): # batch_size x query_length x query_size
-            return self.forward_multiple_time_steps(input)
-        else:
-            raise NotImplementedError("The shape of the query ({}) should be (batch_size [x query_length] x query_size)".format(input['query'].shape))
-
-    def forward_multiple_time_steps(self, input: torch.tensor) -> Dict:
-        query = input['query'] # batch_size x query_length x query_size
-
-        output_sequence = []
-        for i in range(query.shape[1]):
-            input_cur_step = dict(input)
-            input_cur_step['query'] = query[:,i,:]
-            output_sequence.append(self.forward_single_time_step(input_cur_step).values())
-
-        # output_pair[0]: list of p_context at every time step with shape (batch_size x context_length)
-        # output_pair[1]: list of expected_context at every time step with shape (batch_size x context_size)
-        output_pair = list(zip(*output_sequence))
-        return {'p_context': torch.stack(output_pair[0], dim=1),
-                'expected_context': torch.stack(output_pair[1], dim=1)}
-
-    def forward_single_time_step(self, input: torch.Tensor) -> Dict:
+    def forward(self, input: torch.Tensor) -> Dict:
         query = input['query'] # batch_size x query_size
         context = input['context'] # batch_size x context_length x context_size
         assert query.shape[-1] == context.shape[-1], \
@@ -440,15 +417,15 @@ class MLPAttention(nn.Module):
     It is a module that takes in a dict with key of 'query' and 'context' (alternative key of 'mask' and 'need_expected_context'),
     and returns a output dict with key ('p_context' and 'expected_context').
 
-    It takes 'query' (batch_size [x query_length] x query_size) and 'context' (batch_size x context_length x context_size),
+    It takes 'query' (batch_size x query_size) and 'context' (batch_size x context_length x context_size),
     returns the proportion of attention ('p_context': batch_size x context_length) the query pays to different parts of context
-    and the expected context vector ('expected_context': batch_size [x query_length] x context_size)
+    and the expected context vector ('expected_context': batch_size x context_size)
     by taking weighted average over the context by the proportion of attention.
 
     Example
     -------
-    In:
-    query = torch.Tensor([[3, 4], [3, 5]]) # query = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
+    Input:
+    query = torch.Tensor([[3, 4], [3, 5]])
     context = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
     mask = torch.ByteTensor([[1, 1],[1, 0]])
     input = {'query': query, 'context': context, 'mask': mask}
@@ -456,7 +433,7 @@ class MLPAttention(nn.Module):
     attention = MLPAttention(context.shape[-1], query.shape[-1])
     output = attention(input)
 
-    Out:
+    Output:
     {'p_context': tensor([[0.4997, 0.5003], [0.4951, 0.5049]], grad_fn=<SoftmaxBackward>),
     'expected_context': tensor([[3.5003, 3.4997], [3.0000, 4.4951]], grad_fn=<SqueezeBackward1>)}
     """
@@ -483,30 +460,7 @@ class MLPAttention(nn.Module):
         """
         return torch.bmm(p_context.unsqueeze(-2), context).squeeze(-2)
 
-    def forward(self, input:torch.Tensor):
-        if (input['query'].dim() == 2): # batch_size x query_size
-            return self.forward_single_time_step(input)
-        elif (input['query'].dim() == 3): # batch_size x query_length x query_size
-            return self.forward_multiple_time_steps(input)
-        else:
-            raise NotImplementedError("The shape of the query ({}) should be (batch_size [x query_length] x query_size)".format(input['query'].shape))
-
-    def forward_multiple_time_steps(self, input: torch.tensor) -> Dict:
-        query = input['query'] # batch_size x query_length x query_size
-
-        output_sequence = []
-        for i in range(query.shape[1]):
-            input_cur_step = dict(input)
-            input_cur_step['query'] = query[:,i,:]
-            output_sequence.append(self.forward_single_time_step(input_cur_step).values())
-
-        # output_pair[0]: list of p_context at every time step with shape (batch_size x context_length)
-        # output_pair[1]: list of expected_context at every time step with shape (batch_size x context_size)
-        output_pair = list(zip(*output_sequence))
-        return {'p_context': torch.stack(output_pair[0], dim=1),
-                'expected_context': torch.stack(output_pair[1], dim=1)}
-
-    def forward_single_time_step(self, input: torch.Tensor) -> Dict:
+    def forward(self, input: torch.Tensor) -> Dict:
         query = input['query'] # batch_size x query_size
         batch_size, query_size = query.shape
         context = input['context'] # batch_size x context_length x context_size
