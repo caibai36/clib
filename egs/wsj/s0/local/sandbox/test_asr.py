@@ -170,11 +170,11 @@ def length2mask(sequence_lengths: torch.Tensor, max_length: Union[int, None] = N
 
     return (cumsum_ones <= sequence_lengths.unsqueeze(-1)).long()
 
-class SubsamplingRNNEncoder(nn.Module):
-    """ RNN encoder with support of subsampling (for input with long length such as speech feature).
+class PyramidRNNEncoder(nn.Module):
+    """ The RNN encoder with support of subsampling (for input with long length such as speech feature).
     https://arxiv.org/abs/1508.01211 "LAS" section 3.1 formula (5)
 
-    The SubsamplingRNNEncoder accepts the feature (batch_size x max_seq_length x in_size),
+    The PyramidRNNEncoder accepts the feature (batch_size x max_seq_length x in_size),
     passes the feature to several layers of feedforward neural network (fnn)
     and then to several layers of RNN (rnn) with subsampling
     (by concatenating every pair of frames with type 'pair_concat'
@@ -187,38 +187,33 @@ class SubsamplingRNNEncoder(nn.Module):
 
     def __init__(self,
                  enc_input_size: int,
-                 enc_fnn_sizes: List[int] = [4, 9],
-                 enc_fnn_act: Union[str, List[str]] = 'ReLU',
+                 enc_fnn_sizes: List[int] = [512],
+                 enc_fnn_act: str = 'relu',
                  enc_fnn_dropout: Union[float, List[float]] = 0.25,
-                 enc_rnn_sizes: List[int] = [5, 5, 5],
-                 enc_rnn_config: Union[Dict, List[Dict]] = {'type': 'lstm', 'bi': True},
+                 enc_rnn_sizes: List[int] = [256, 256, 256],
+                 enc_rnn_config: Dict = {'type': 'lstm', 'bi': True},
                  enc_rnn_dropout: Union[float, List[float]] = 0.25,
                  enc_rnn_subsampling: Union[bool, List[bool]] = [False, True, True],
-                 enc_rnn_subsampling_type: Union[str, List[str]] = 'pair_concat', # 'pair_concat' or 'pair_take_first'
+                 enc_rnn_subsampling_type: str = 'pair_concat', # 'pair_concat' or 'pair_take_first'
                  enc_input_padding_value: float = 0.0
     ) -> None:
         super().__init__()
 
         # make copy of the configuration for each layer.
         num_enc_fnn_layers = len(enc_fnn_sizes)
-        if not isinstance(enc_fnn_act, list): enc_fnn_act = [enc_fnn_act] * num_enc_fnn_layers
         if not isinstance(enc_fnn_dropout, list): enc_fnn_dropout = [enc_fnn_dropout] * num_enc_fnn_layers
 
         num_enc_rnn_layers = len(enc_rnn_sizes)
-        if not isinstance(enc_rnn_config, list): enc_rnn_config = [enc_rnn_config] * num_enc_rnn_layers
         if not isinstance(enc_rnn_dropout, list): enc_rnn_dropout = [enc_rnn_dropout] * num_enc_rnn_layers
         if not isinstance(enc_rnn_subsampling, list): enc_rnn_subsampling = [enc_rnn_subsampling] * num_enc_rnn_layers
-        if not isinstance(enc_rnn_subsampling_type, list): enc_rnn_subsampling_type = [enc_rnn_subsampling_type] * num_enc_rnn_layers
 
-        assert num_enc_fnn_layers == len(enc_fnn_act) == len(enc_fnn_dropout), "Number of list does not match the lengths of specified configuration lists."
-        assert num_enc_rnn_layers == len(enc_rnn_config) == len(enc_rnn_dropout) == len(enc_rnn_subsampling) == len(enc_rnn_subsampling_type), \
-            "Number of rnn layers does not matches the lengths of specificed configuration lists."
-        for t in enc_rnn_subsampling_type:
-            assert t in {'pair_concat', 'pair_take_first'}, \
-                "The subsampling type '{}' is not implemented yet.\n".format(t) + \
-                "Only support the type 'pair_concat' and 'pair_take_first':\n" + \
-                "the type 'pair_take_first' preserves the first frame every two frames;\n" + \
-                "the type 'pair_concat' concatenates the frame pair every two frames.\n"
+        assert num_enc_fnn_layers == len(enc_fnn_dropout), "Number of fnn layers does not match the lengths of specified configuration lists."
+        assert num_enc_rnn_layers == len(enc_rnn_dropout) == len(enc_rnn_subsampling), "Number of rnn layers does not matches the lengths of specificed configuration lists."
+        assert enc_rnn_subsampling_type in {'pair_concat', 'pair_take_first'}, \
+            "The subsampling type '{}' is not implemented yet.\n".format(t) + \
+            "Only support the type 'pair_concat' and 'pair_take_first':\n" + \
+            "the type 'pair_take_first' preserves the first frame every two frames;\n" + \
+            "the type 'pair_concat' concatenates the frame pair every two frames.\n"
 
         self.enc_input_size = enc_input_size
         self.enc_fnn_sizes = enc_fnn_sizes
@@ -231,22 +226,25 @@ class SubsamplingRNNEncoder(nn.Module):
         self.enc_rnn_subsampling_type = enc_rnn_subsampling_type
         self.enc_input_padding_value = enc_input_padding_value
 
+        self.num_enc_fnn_layers = num_enc_fnn_layers
+        self.num_enc_rnn_layers = num_enc_rnn_layers
+
         pre_size = self.enc_input_size
         self.enc_fnn_layers = nn.ModuleList()
         for i in range(num_enc_fnn_layers):
             self.enc_fnn_layers.append(nn.Linear(pre_size, enc_fnn_sizes[i]))
-            self.enc_fnn_layers.append(get_act(enc_fnn_act[i])())
+            self.enc_fnn_layers.append(get_act(enc_fnn_act)())
             self.enc_fnn_layers.append(nn.Dropout(p=enc_fnn_dropout[i]))
             pre_size = enc_fnn_sizes[i]
 
         self.enc_rnn_layers = nn.ModuleList()
         for i in range(num_enc_rnn_layers):
-            rnn_layer = get_rnn(enc_rnn_config[i]['type'])
-            self.enc_rnn_layers.append(rnn_layer(pre_size, enc_rnn_sizes[i], batch_first=True, bidirectional=enc_rnn_config[i]['bi']))
-            pre_size = enc_rnn_sizes[i] * (2 if enc_rnn_config[i]['bi'] else 1) # for bidirectional rnn
-            if (enc_rnn_subsampling[i] and enc_rnn_subsampling_type[i] == 'pair_concat'): pre_size = pre_size * 2 # for pair_concat subsampling
+            rnn_layer = get_rnn(enc_rnn_config['type'])
+            self.enc_rnn_layers.append(rnn_layer(pre_size, enc_rnn_sizes[i], batch_first=True, bidirectional=enc_rnn_config['bi']))
+            pre_size = enc_rnn_sizes[i] * (2 if enc_rnn_config['bi'] else 1) # for bidirectional rnn
+            if (enc_rnn_subsampling[i] and enc_rnn_subsampling_type == 'pair_concat'): pre_size = pre_size * 2 # for pair_concat subsampling
 
-        self.enc_final_size = pre_size
+        self.output_size = pre_size
 
     def get_config(self):
         return { 'class': str(self.__class__),
@@ -282,7 +280,7 @@ class SubsamplingRNNEncoder(nn.Module):
             output = layer(output)
 
         output_lengths = input_lengths
-        for i in range(len(self.enc_rnn_layers)):
+        for i in range(self.num_enc_rnn_layers):
             layer = self.enc_rnn_layers[i]
             packed_sequence = pack(output, output_lengths, batch_first=True)
             output, _ = layer(packed_sequence) # LSTM returns '(output, [hn ,cn])'
@@ -301,20 +299,20 @@ class SubsamplingRNNEncoder(nn.Module):
                     extended_part = output.new_ones(output.shape[0], 1, output.shape[2]) * self.enc_input_padding_value
                     output = torch.cat([output, extended_part], dim=1) # pad to be even length
 
-                if (self.enc_rnn_subsampling_type[i] == 'pair_take_first'):
+                if (self.enc_rnn_subsampling_type == 'pair_take_first'):
                     output = output[:, ::2]
                     output_lengths = torch.LongTensor([(length + (2 - 1)) // 2 for length in output_lengths]).to(output.device)
-                elif (self.enc_rnn_subsampling_type[i] == 'pair_concat'):
+                elif (self.enc_rnn_subsampling_type == 'pair_concat'):
                     output = output.view(output.shape[0], output.shape[1] // 2, output.shape[2] * 2)
                     output_lengths = torch.LongTensor([(length + (2 - 1)) // 2 for length in output_lengths]).to(output.device)
                 else:
-                    raise NotImplementedError("The subsampling type {} is not implemented yet.\n".format(self.enc_rnn_subsampling_type[i]) +
+                    raise NotImplementedError("The subsampling type {} is not implemented yet.\n".format(self.enc_rnn_subsampling_type) +
                                               "Only support the type 'pair_concat' and 'pair_take_first':\n" +
                                               "The type 'pair_take_first' takes the first frame every two frames.\n" +
                                               "The type 'pair_concat' concatenates the frame pair every two frames.\n")
 
             print("After layer '{}' applying the subsampling '{}' with type '{}': shape is {}, lengths is {} ".format(
-                i, self.enc_rnn_subsampling[i], self.enc_rnn_subsampling_type[i], output.shape, output_lengths))
+                i, self.enc_rnn_subsampling[i], self.enc_rnn_subsampling_type, output.shape, output_lengths))
             print("mask of lengths is\n{}".format(length2mask(output_lengths)))
 
         context, context_mask = output, length2mask(output_lengths)
@@ -331,15 +329,15 @@ def test_encoder():
     # input_lengths = batches[1]['num_frames']
     enc_input_size = input.shape[-1]
 
-    speech_encoder = SubsamplingRNNEncoder(enc_input_size,
-                                           enc_fnn_sizes = [4, 9],
-                                           enc_fnn_act = 'ReLU',
-                                           enc_fnn_dropout = 0.25,
-                                           enc_rnn_sizes = [5, 5, 5],
-                                           enc_rnn_config = {'type': 'lstm', 'bi': True},
-                                           enc_rnn_dropout = 0.25,
-                                           enc_rnn_subsampling = [False, True, True],
-                                           enc_rnn_subsampling_type = 'pair_concat')
+    speech_encoder = PyramidRNNEncoder(enc_input_size,
+                                       enc_fnn_sizes = [4, 9],
+                                       enc_fnn_act = 'ReLU',
+                                       enc_fnn_dropout = 0.25,
+                                       enc_rnn_sizes = [5, 5, 5],
+                                       enc_rnn_config = {'type': 'lstm', 'bi': True},
+                                       enc_rnn_dropout = 0.25,
+                                       enc_rnn_subsampling = [False, True, True],
+                                       enc_rnn_subsampling_type = 'pair_concat')
     speech_encoder.get_config()
 
     speech_encoder.to(device)
@@ -367,7 +365,7 @@ class DotProductAttention(nn.Module):
     mask = torch.ByteTensor([[1, 1],[1, 0]])
     input = {'query': query, 'context': context, 'mask': mask}
 
-    attention = DotProductAttention()
+    attention = DotProductAttention(2, 2)
     output = attention(input)
 
     Output:
@@ -376,8 +374,8 @@ class DotProductAttention(nn.Module):
     """
 
     def __init__(self,
-                 context_size: int = -1,
-                 query_size: int = -1,
+                 context_size: int,
+                 query_size: int,
                  normalize: bool = False) -> None:
         super().__init__()
         self.normalize = normalize
@@ -449,7 +447,7 @@ class MLPAttention(nn.Module):
 
     Example
     -------
-    Input:
+    In:
     query = torch.Tensor([[3, 4], [3, 5]]) # query = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
     context = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
     mask = torch.ByteTensor([[1, 1],[1, 0]])
@@ -458,7 +456,7 @@ class MLPAttention(nn.Module):
     attention = MLPAttention(context.shape[-1], query.shape[-1])
     output = attention(input)
 
-    Output:
+    Out:
     {'p_context': tensor([[0.4997, 0.5003], [0.4951, 0.5049]], grad_fn=<SoftmaxBackward>),
     'expected_context': tensor([[3.5003, 3.4997], [3.0000, 4.4951]], grad_fn=<SqueezeBackward1>)}
     """
@@ -466,7 +464,7 @@ class MLPAttention(nn.Module):
     def __init__(self,
                  context_size: int,
                  query_size: int,
-                 att_hidden_size: int =256,
+                 att_hidden_size: int = 256,
                  att_act: str = 'tanh',
                  normalize: bool = True) -> None:
         super().__init__()
@@ -531,7 +529,7 @@ def test_attention() :
     print("Device: '{}'".format(device))
 
     query = torch.Tensor([[3, 4], [3, 5]])
-    query = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
+#    query = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
     context = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
     mask = torch.ByteTensor([[1, 1],[1, 0]])
     input = {'query': query.to(device), 'context': context.to(device), 'mask': mask.to(device)}
@@ -546,5 +544,161 @@ def test_attention() :
     output = attention(input)
     print(output)
 
-test_encoder()
-test_attention()
+class LuongDecoder(nn.Module):
+    """ Implementation of the decoder of "Effective NMT" by Luong.
+    https://arxiv.org/abs/1508.04025 "Effective MNT"
+    section 3 formula (5) to create attentional vector
+    section 3.3 the input feeding approach
+
+    At time step t of decoder, the message flows as follows
+    [attentional_vector[t-1], input] -> hidden[t] ->
+    [expected_context_vector[t], hidden[t]] -> attentional_vector[t]
+
+    Input feeding: concatenate the input with the attentional vector from
+    last time step to combine the alignment information in the past.
+
+    attentional vector: we get hidden state at the top the stacked LSTM layers,
+    then concatenate the hidden state and expected context vector for linearly
+    projecting (context_proj_*) to the attentional vector.
+    see "Effective NMT" section 3 formula (5)
+        attentional_vector = tanh(W[context_vector, hidden])
+
+    Example
+    -------
+    In:
+    input_embedding = torch.Tensor([[0.3, 0.4], [0.3, 0.5]])
+    context = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
+    context_mask = torch.ByteTensor([[1, 1],[1, 0]])
+
+    luong_decoder = LuongDecoder(att_config={"type": "mlp"},
+                                 context_size=context.shape[-1],
+                                 input_size=input_embedding.shape[-1],
+                                 rnn_sizes=[512, 512],
+                                 rnn_config={"type": "lstmcell"},
+                                 rnn_dropout=0.25,
+                                 context_proj_size=3, # the size of attentional vector
+                                 context_proj_act='tanh')
+
+    luong_decoder.set_context(context, context_mask)
+    output, att_out = luong_decoder(input_embedding)
+    # output, att_out = luong_decoder(input_embedding, dec_mask=torch.Tensor([0, 1])) # mask the first instance in two batches
+    print("output of Luong decoder: {}".format(output))
+    print("output of attention layer: {}".format(att_out))
+
+    Out:
+    output of Luong decoder: tensor([[0.0268, 0.0782, 0.0374], [0.0285, 0.1341, 0.0169]], grad_fn=<TanhBackward>)
+    output of attention layer: {'p_context': tensor([[0.4982, 0.5018], [0.4990, 0.5010]], grad_fn=<SoftmaxBackward>),
+                         'expected_context': tensor([[3.5018, 3.4982], [3.0000, 4.4990]], grad_fn=<SqueezeBackward1>)}
+    """
+
+    def __init__(self,
+                 att_config: Dict, # configuration of attention
+                 context_size: int,
+                 input_size: int,
+                 rnn_sizes: List[int] = [512, 512],
+                 rnn_config: Dict = {"type": "lstmcell"},
+                 rnn_dropout: Union[List[float], float] = 0.25,
+                 context_proj_size: int = 256, # the size of attentional vector
+                 context_proj_act: str = 'tanh'):
+        super().__init__()
+
+        # Copy the configuration for each layer
+        num_rnn_layers = len(rnn_sizes)
+        if not isinstance(rnn_dropout, list): rnn_dropout = [rnn_dropout] * num_rnn_layers
+        assert num_rnn_layers == len(rnn_dropout), "The number of rnn layers does not match length of rnn_dropout list."
+
+        self.att_config = att_config
+        self.context_size = context_size
+        self.input_size = input_size
+        self.rnn_sizes = rnn_sizes
+        self.rnn_config = rnn_config
+        self.rnn_dropout = rnn_dropout
+        self.context_proj_size = context_proj_size
+        self.context_proj_act = context_proj_act
+
+        self.num_rnn_layers = num_rnn_layers
+
+        # Initialize attentional vector of previous time step
+        self.attentional_vector_pre = None
+        self.rnn_layers = nn.ModuleList()
+        pre_size = input_size + context_proj_size # input feeding
+        for i in range(num_rnn_layers):
+            self.rnn_layers.append(get_rnn(rnn_config['type'])(pre_size, rnn_sizes[i]))
+            pre_size = rnn_sizes[i]
+
+        # Get expected context vector from attention
+        self.attention_layer = get_att(att_config['type'])(context_size, pre_size)
+
+        # Combine hidden state and context vector to be attentional vector.
+        self.context_proj_layer = nn.Linear(pre_size + context_size, context_proj_size)
+
+        self.output_size = context_proj_size
+
+    def set_context(self, context: torch.Tensor, context_mask: torch.Tensor = None):
+        self.context = context
+        self.context_mask = context_mask
+
+    def reset(self):
+        self.attentional_vector_pre = None
+
+    def forward(self, input, dec_mask=None):
+        """
+        input: batch_size x input_size
+        dec_mask: batch_size
+        # target batch 3 with length 2, 1, 3 => mask = [[1, 1, 0], [1, 0, 0], [1, 1, 1]]
+        # Each time step corresponds to each column of the mask.
+        # In time step 2, the second column [1, 0, 1] as the dec_mask
+        # dec_mask with shape [batch_size]
+        # target * dec_mask.unsqueeze(-1).expend_as(target) will mask out
+        # the feature of the second element of batch at time step 2, while the element with length 1
+        """
+        batch_size, input_size = input.shape
+        if self.attentional_vector_pre is None:
+            self.attentional_vector_pre = input.new_zeros(batch_size, self.context_proj_size)
+
+        # Input feeding: initialize the input of LSTM with previous attentional vector information
+        output = torch.cat([input, self.attentional_vector_pre], dim=-1)
+        for i in range(self.num_rnn_layers):
+            output, _ = self.rnn_layers[i](output) # LSTM cell return (h, c)
+            if dec_mask is not None: output = output * dec_mask.unsqueeze(-1).expand_as(output)
+
+            output = F.dropout(output, p=self.rnn_dropout[i], training=self.training)
+
+        # Get the context vector from the hidden state at the top of rnn layers.
+        att_out = self.attention_layer({'query': output, 'context': self.context, 'mask': self.context_mask})
+
+        # Get the attentional vector of current time step by linearly projection from hidden state and context vector
+        act_func = get_act(self.context_proj_act)()
+        output = act_func(self.context_proj_layer(torch.cat([output, att_out['expected_context']], dim = -1)))
+
+        if dec_mask is not None: output = output * dec_mask.unsqueeze(-1).expand_as(output)
+
+        self.attentional_vector_pre = output
+
+        return output, att_out
+
+# test_encoder()
+# test_attention()
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Device: '{}'".format(device))
+
+input_embedding = torch.Tensor([[0.3, 0.4], [0.3, 0.5]])
+context = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
+context_mask = torch.ByteTensor([[1, 1],[1, 0]])
+
+luong_decoder = LuongDecoder(att_config={"type": "mlp"},
+                             context_size=context.shape[-1],
+                             input_size=input_embedding.shape[-1],
+                             rnn_sizes=[512, 512],
+                             rnn_config={"type": "lstmcell"},
+                             rnn_dropout=0.25,
+                             context_proj_size=3, # the size of attentional vector
+                             context_proj_act='tanh')
+input_embedding, context, context_mask = input_embedding.to(device), context.to(device), context_mask.to(device)
+luong_decoder.to(device)
+luong_decoder.set_context(context, context_mask)
+output, att_out = luong_decoder(input_embedding)
+# output, att_out = luong_decoder(input_embedding, dec_mask=torch.Tensor([0, 1])) # mask the first instance in two batches
+print("output of Luong decoder: {}".format(output))
+print("output of attention layer: {}".format(att_out))
