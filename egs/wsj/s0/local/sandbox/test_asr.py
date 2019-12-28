@@ -553,7 +553,8 @@ class LuongDecoder(nn.Module):
                  rnn_config: Dict = {"type": "lstmcell"},
                  rnn_dropout: Union[List[float], float] = 0.25,
                  context_proj_size: int = 256, # the size of attentional vector
-                 context_proj_act: str = 'tanh'):
+                 context_proj_act: str = 'tanh',
+                 context_proj_dropout: int = 0.25):
         super().__init__()
 
         # Copy the configuration for each layer
@@ -569,6 +570,7 @@ class LuongDecoder(nn.Module):
         self.rnn_dropout = rnn_dropout
         self.context_proj_size = context_proj_size
         self.context_proj_act = context_proj_act
+        self.context_proj_dropout = context_proj_dropout
 
         self.num_rnn_layers = num_rnn_layers
 
@@ -627,7 +629,9 @@ class LuongDecoder(nn.Module):
 
         if dec_mask is not None: output = output * dec_mask.unsqueeze(-1).expand_as(output)
 
-        self.attentional_vector_pre = output
+        self.attentional_vector_pre = output # attentional vector before dropout might be more stable
+
+        output = F.dropout(output, p=self.context_proj_dropout, training=self.training)
 
         return output, att_out
 
