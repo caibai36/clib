@@ -246,18 +246,18 @@ class PyramidRNNEncoder(nn.Module):
 
         self.output_size = pre_size
 
-    def get_context_size(self):
+    def get_context_size(self) -> int:
         return self.output_size
 
     def encode(self,
                input: torch.Tensor,
                input_lengths: Union[torch.Tensor, None] = None)->(torch.Tensor, torch.Tensor):
-        """ Encode the feature (batch_size x max_seq_length x in_size),
+        """ Encode the feature (batch_size x max_seq_length x in_size), optionally with its lengths (batch_size),
         and output the context vector (batch_size x max_seq_length' x context_size)
-        and its mask (batch_size x max_seq_length').
+        with its mask (batch_size x max_seq_length').
 
-        Note: the dimension of context vector is influenced by 'bidirectional' and 'subsampling (pair_concat)' options of RNN.
-              the max_seq_length' influenced by 'subsampling' options of RNN.
+        ps: the dimension of context vector is influenced by 'bidirectional' and 'subsampling (pair_concat)' options of RNN.
+            the max_seq_length' influenced by 'subsampling' options of RNN.
         """
         print("Shape of the input: {}".format(input.shape))
 
@@ -328,7 +328,6 @@ def test_encoder():
                                        enc_rnn_dropout = 0.25,
                                        enc_rnn_subsampling = [False, True, True],
                                        enc_rnn_subsampling_type = 'pair_concat')
-    speech_encoder.get_config()
 
     speech_encoder.to(device)
     input, input_lengths = input.to(device), input_lengths.to(device)
@@ -544,7 +543,7 @@ class LuongDecoder(nn.Module):
                  rnn_dropout: Union[List[float], float] = 0.25,
                  context_proj_size: int = 256, # the size of attentional vector
                  context_proj_act: str = 'tanh',
-                 context_proj_dropout: int = 0.25):
+                 context_proj_dropout: int = 0.25) -> None:
         super().__init__()
 
         # Copy the configuration for each layer
@@ -580,14 +579,14 @@ class LuongDecoder(nn.Module):
 
         self.output_size = context_proj_size
 
-    def set_context(self, context: torch.Tensor, context_mask: torch.Tensor = None):
+    def set_context(self, context: torch.Tensor, context_mask: torch.Tensor = None) -> None:
         self.context = context
         self.context_mask = context_mask
 
-    def reset(self):
+    def reset(self) -> None:
         self.attentional_vector_pre = None
 
-    def forward(self, input: torch.Tensor, dec_mask: torch.Tensor = None) -> (torch.Tensor, Dict):
+    def decode(self, input: torch.Tensor, dec_mask: torch.Tensor = None) -> Tuple[torch.Tensor, Dict]:
         """
         input: batch_size x input_size
         dec_mask: batch_size
@@ -644,7 +643,7 @@ def test_luong_decoder():
     input_embedding, context, context_mask = input_embedding.to(device), context.to(device), context_mask.to(device)
     luong_decoder.to(device)
     luong_decoder.set_context(context, context_mask)
-    output, att_out = luong_decoder(input_embedding)
+    output, att_out = luong_decoder.decode(input_embedding)
     # output, att_out = luong_decoder(input_embedding, dec_mask=torch.Tensor([0, 1])) # mask the first instance in two batches
     print("output of Luong decoder: {}".format(output))
     print("output of attention layer: {}".format(att_out))
@@ -703,7 +702,7 @@ class EncRNNDecRNNAtt(nn.Module):
                  enc_config: Dict = {'type': 'pyramid_rnn_encoder'},
                  dec_config: Dict = {'type': 'luong_decoder'},
                  att_config: Dict = {'type': 'mlp'}, # configuration of attention
-    ):
+    ) -> None:
         super().__init__()
 
         self.enc_input_size = enc_input_size
@@ -773,7 +772,7 @@ class EncRNNDecRNNAtt(nn.Module):
             # tie weights between dec_embedder(input_onehot => input_embedding) and presoftmax(output_embedding => pre_softmax)
             self.dec_presoftmax.weight = self.dec_embedder.weight
 
-    def get_config(self):
+    def get_config(self) -> Dict:
         return { 'class': str(self.__class__),
                  'enc_input_size': self.enc_input_size,
                  'dec_input_size': self.dec_input_size,
@@ -799,39 +798,105 @@ class EncRNNDecRNNAtt(nn.Module):
                  'dec_config': self.dec_config,
                  'att_config': self.att_config}
 
+    def encode(self,
+               rec_input: torch.Tensor,
+               rec_input_lengths: Union[torch.Tensor, None] = None)->Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Paramters
+        ---------
+        enc_input: input feature with shape (batch_size x max_seq_length x in_size),
+        enc_input_lengths: lengths of input with shape (batch_size) or None
+
+        Returns
+        -------
+        the context vector (batch_size x max_context_length x context_size)
+        the mask of context vector (batch_size x max_context_length).
+
+        Note:
+        We set the context for decoder when calling the encode function.
+        """
+        context, context_mask = self.encoder.encode(rec_input, rec_input_lengths)
+        self.decoder.set_context(context, context_mask)
+        return context, context_mask
+
+    def decode(self,
+               dec_input: torch.Tensor,
+               dec_mask: torch.Tensor = None) -> Tuple[torch.Tensor, Dict]:
+        """
+        Paramters
+        ---------
+        dec_input: a sequence of input tokenids at current time step with shape [batch_size]
+        dec_mask: mask the embedding at the current step with shape [batch_size] or None
+            # target batch 3 with length 2, 1, 3 => mask = [[1, 1, 0], [1, 0, 0], [1, 1, 1]]
+            # Each time step dec_mask corresponds to each column of the mask.
+            # For example: in time step 2, the second column [1, 0, 1] as the dec_mask
+
+        Returns
+        -------
+        the dec_output with shape (batch_size x dec_output_size)
+        the att_output of key 'p_context' with its value (batch_size x context_length)
+            and key 'expected_context' with its value (batch_size x context_size).
+
+        Note:
+        Before calling self.decode, make sure the context is already set by calling self.encode.
+        """
+        assert dec_input.dim() == 1, "Input of decoder should with a sequence of tokenids with size [batch_size]"
+        dec_input_embedding = self.dec_embedder(dec_input)
+        dec_input_embedding = F.dropout(dec_input_embedding, p=self.dec_embedding_dropout, training=self.training)
+        dec_output, att_output = self.decoder.decode(dec_input_embedding, dec_mask)
+        return dec_output, att_output
+
+def test_EncRNNDecRNNAtt():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Device: '{}'".format(device))
+
+    batch = next(iter(dataloader))
+    # batch = batches[1]
+    enc_input = batch['feat']
+    enc_input_lengths = batch['num_frames'] # or None
+    enc_input_size = enc_input.shape[-1]
+    dec_input = batch['tokenid']
+    dec_input_size = batch['vocab_size']
+    dec_output_size = batch['vocab_size']
+
+    model = EncRNNDecRNNAtt(enc_input_size,
+                            dec_input_size,
+                            dec_output_size,
+                            enc_fnn_sizes=[4, 9],
+                            enc_fnn_act='relu',
+                            enc_fnn_dropout=0.25,
+                            enc_rnn_sizes=[5, 5, 5],
+                            enc_rnn_config={'type': 'lstm', 'bi': True},
+                            enc_rnn_dropout=0.25,
+                            enc_rnn_subsampling=[False, True, True],
+                            enc_rnn_subsampling_type='pair_concat',
+                            dec_embedding_size=6,
+                            dec_embedding_dropout=0.25,
+                            dec_embedding_weights_tied=True,
+                            dec_rnn_sizes=[8, 8],
+                            dec_rnn_config={"type": "lstmcell"},
+                            dec_rnn_dropout=0.25,
+                            dec_context_proj_size=6,
+                            dec_context_proj_act='tanh',
+                            dec_context_proj_dropout=0.25,
+                            enc_config={'type': 'pyramid_rnn_encoder'},
+                            dec_config={'type': 'luong_decoder'},
+                            att_config={'type': 'mlp'})
+
+    enc_input, enc_input_lengths, dec_input = enc_input.to(device), enc_input_lengths.to(device), dec_input.to(device)
+    model = model.to(device)
+    context, context_mask = model.encode(enc_input, enc_input_lengths)
+    dec_output, att_output = model.decode(dec_input[:,2]) # at time step 2
+
+    print(f"enc_input: {enc_input}")
+    print(f"enc_input_lengths: {enc_input_lengths}")
+    print(f"dec_input at time step 2: {dec_input[:,2]}")
+    print(f"context: {context}")
+    print(f"context_mask: {context_mask}")
+    print(f"dec_output: {dec_output}")
+    print(f"att_output: {att_output}")
+
 # test_encoder()
 # test_attention()
 # test_luong_decoder()
-
-batch = next(iter(dataloader))
-# batch = batches[1]
-enc_input = batch['feat']
-enc_input_lengths = batch['num_frames'] # or None
-enc_input_size = enc_input.shape[-1]
-dec_input = batch['tokenid']
-dec_input_size = batch['vocab_size']
-dec_output_size = batch['vocab_size']
-
-model = EncRNNDecRNNAtt(enc_input_size,
-                        dec_input_size,
-                        dec_output_size,
-                        enc_fnn_sizes=[4, 9],
-                        enc_fnn_act='relu',
-                        enc_fnn_dropout=0.25,
-                        enc_rnn_sizes=[5, 5, 5],
-                        enc_rnn_config={'type': 'lstm', 'bi': True},
-                        enc_rnn_dropout=0.25,
-                        enc_rnn_subsampling=[False, True, True],
-                        enc_rnn_subsampling_type='pair_concat',
-                        dec_embedding_size=6,
-                        dec_embedding_dropout=0.25,
-                        dec_embedding_weights_tied=True,
-                        dec_rnn_sizes=[8, 8],
-                        dec_rnn_config={"type": "lstmcell"},
-                        dec_rnn_dropout=0.25,
-                        dec_context_proj_size=6,
-                        dec_context_proj_act='tanh',
-                        dec_context_proj_dropout=0.25,
-                        enc_config={'type': 'pyramid_rnn_encoder'},
-                        dec_config={'type': 'luong_decoder'},
-                        att_config={'type': 'mlp'})
+test_EncRNNDecRNNAtt()
