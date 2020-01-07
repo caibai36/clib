@@ -2,22 +2,19 @@ from typing import List, Dict, Tuple, Union
 
 import sys
 import os
-import re
-import math
-from pprint import pprint
 # Add clib package at current directory to the binary searching path.
 sys.path.append(os.getcwd())
 
-import json
-import pprint
 import argparse
-import torch
-from clib.kaldi.kaldi_data import KaldiDataLoader, KaldiDataset
+import math
+import json
 
 import torch
 from torch import nn
 from torch.nn import functional as F
 from torch.nn.utils.rnn import pack_padded_sequence as pack, pad_packed_sequence as unpack
+
+from clib.kaldi.kaldi_data import KaldiDataLoader, KaldiDataset
 
 seed = 2019
 torch.manual_seed(seed)
@@ -903,20 +900,30 @@ def test_EncRNNDecRNNAtt():
 # test_luong_decoder()
 # test_EncRNNDecRNNAtt()
 
-seed = 2019
-torch.manual_seed(seed)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(seed)
-
 # created by local/script/create_simple_utts_json.py
 # TODO: put the create_simple_utts_json into dataloader.
 json_file = 'data/test_small/utts.json'
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--seed', type=int, default=2019, help="seed")
+parser.add_argument('--gpu', type=str, default="auto", help="eg. --gpu 2 for using 'cuda:2'")
 parser.add_argument('--json_file', type=str, default=json_file, help="the test utterance json file")
-# We follow the index convention of torchtext by setting padding id as 1.
-parser.add_argument('--padding_tokenid', type=int, default=1, help="the id of padding token")
+parser.add_argument('--padding_tokenid', type=int, default=1, help="the id of padding token") # We follow torchtext by setting default text padding as 1
 args = parser.parse_args()
+
+opts = vars(args)
+print(opts)
+
+torch.manual_seed(opts['seed'])
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(opts['seed'])
+
+if opts['gpu'] != 'auto':
+    device = torch.device("cuda:{}".format(opts['gpu']) if torch.cuda.is_available() else "cpu")
+else:
+    import GPUtil # GPUtil.getAvailable() returns a list of available device ids of GPUs if less than half of memory and load is used.
+    device = torch.device("cuda:{}".format(GPUtil.getAvailable()[0]) if torch.cuda.is_available() and GPUtil.getAvailable() else "cpu")
+print("Device: '{}'".format(device))
 
 with open(args.json_file, encoding='utf8') as f:
     # utts_json is a dictionary mapping utt_id to fields of each utterance
