@@ -32,10 +32,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--json_file', type=str, default=json_file, help="the test utterance json file")
 # We follow the index convention of torchtext by setting padding id as 1.
 parser.add_argument('--padding_tokenid', type=int, default=1, help="the id of padding token")
-
-# Temporarily disable passing parameters to interactive shell (for emacs to run python (or rlipython)).
-# remove [] when passing parameters to python scripts (eg. python test_ars.py --padding_tokenid=-5)
-args = parser.parse_args([])
+args = parser.parse_args()
 
 with open(args.json_file, encoding='utf8') as f:
     # utts_json is a dictionary mapping utt_id to fields of each utterance
@@ -287,7 +284,7 @@ class PyramidRNNEncoder(nn.Module):
                 #     because of the pack and unpack operation only takes feature with effective lengths to rnn.
                 if (output.shape[1] % 2 != 0): # odd length
                     extended_part = output.new_ones(output.shape[0], 1, output.shape[2]) * self.enc_input_padding_value
-                    output = torch.cat([output, extended_part], dim=1) # pad to be even length
+                    output = torch.cat([output, extended_part], dim=-2) # pad to be even length
 
                 if (self.enc_rnn_subsampling_type == 'pair_take_first'):
                     output = output[:, ::2]
