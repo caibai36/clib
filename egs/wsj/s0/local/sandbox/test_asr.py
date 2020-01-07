@@ -24,29 +24,6 @@ torch.manual_seed(seed)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(seed)
 
-# created by local/script/create_simple_utts_json.py
-# TODO: put the create_simple_utts_json into dataloader.
-json_file = 'data/test_small/utts.json'
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--json_file', type=str, default=json_file, help="the test utterance json file")
-# We follow the index convention of torchtext by setting padding id as 1.
-parser.add_argument('--padding_tokenid', type=int, default=1, help="the id of padding token")
-args = parser.parse_args()
-
-with open(args.json_file, encoding='utf8') as f:
-    # utts_json is a dictionary mapping utt_id to fields of each utterance
-    utts_json = json.load(f)
-    # Each utterance instance is a list of fields includes 'feat', 'tokenid' and etc.
-    utts_instances = list(utts_json.values())
-
-    dataset = KaldiDataset(utts_instances)
-    dataloader = KaldiDataLoader(dataset=dataset, batch_size=3, padding_tokenid=args.padding_tokenid)
-
-    batches = []
-    for batch in dataloader:
-        batches.append(batch)
-
 def get_rnn(name):
     """ Get the RNN module by its name string.
     We can write string more convenient in the configuration file.
@@ -306,6 +283,20 @@ class PyramidRNNEncoder(nn.Module):
         return context, context_mask
 
 def test_encoder():
+    json_file = 'data/test_small/utts.json'
+    padding_tokenid = 1 # follow torchtext
+
+    with open(json_file, encoding='utf8') as f:
+        utts_json = json.load(f)
+        utts_instances = list(utts_json.values())
+
+        dataset = KaldiDataset(utts_instances)
+        dataloader = KaldiDataLoader(dataset=dataset, batch_size=3, padding_tokenid=padding_tokenid)
+
+    batches = []
+    for batch in dataloader:
+        batches.append(batch)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Device: '{}'".format(device))
 
@@ -844,6 +835,20 @@ class EncRNNDecRNNAtt(nn.Module):
         return dec_output, att_output
 
 def test_EncRNNDecRNNAtt():
+    json_file = 'data/test_small/utts.json'
+    padding_tokenid = 1 # follow torchtext
+
+    with open(json_file, encoding='utf8') as f:
+        utts_json = json.load(f)
+        utts_instances = list(utts_json.values())
+
+        dataset = KaldiDataset(utts_instances)
+        dataloader = KaldiDataLoader(dataset=dataset, batch_size=3, padding_tokenid=padding_tokenid)
+
+    batches = []
+    for batch in dataloader:
+        batches.append(batch)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Device: '{}'".format(device))
 
@@ -896,4 +901,32 @@ def test_EncRNNDecRNNAtt():
 # test_encoder()
 # test_attention()
 # test_luong_decoder()
-test_EncRNNDecRNNAtt()
+# test_EncRNNDecRNNAtt()
+
+seed = 2019
+torch.manual_seed(seed)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(seed)
+
+# created by local/script/create_simple_utts_json.py
+# TODO: put the create_simple_utts_json into dataloader.
+json_file = 'data/test_small/utts.json'
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--json_file', type=str, default=json_file, help="the test utterance json file")
+# We follow the index convention of torchtext by setting padding id as 1.
+parser.add_argument('--padding_tokenid', type=int, default=1, help="the id of padding token")
+args = parser.parse_args()
+
+with open(args.json_file, encoding='utf8') as f:
+    # utts_json is a dictionary mapping utt_id to fields of each utterance
+    utts_json = json.load(f)
+    # Each utterance instance is a list of fields includes 'feat', 'tokenid' and etc.
+    utts_instances = list(utts_json.values())
+
+    dataset = KaldiDataset(utts_instances)
+    dataloader = KaldiDataLoader(dataset=dataset, batch_size=3, padding_tokenid=args.padding_tokenid)
+
+    batches = []
+    for batch in dataloader:
+        batches.append(batch)
