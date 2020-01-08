@@ -7,7 +7,9 @@ sys.path.append(os.getcwd())
 
 import argparse
 import math
-import json
+import json # for data files
+import yaml # for config files
+from pprint import pprint
 
 import torch
 from torch import nn
@@ -900,19 +902,19 @@ def test_EncRNNDecRNNAtt():
 # test_luong_decoder()
 # test_EncRNNDecRNNAtt()
 
-# created by local/script/create_simple_utts_json.py
-# TODO: put the create_simple_utts_json into dataloader.
-json_file = 'data/test_small/utts.json'
+data_config_default = "conf/data/test_small/test.yaml"
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=2019, help="seed")
 parser.add_argument('--gpu', type=str, default="auto", help="eg. --gpu 2 for using 'cuda:2'")
-parser.add_argument('--json_file', type=str, default=json_file, help="the test utterance json file")
+parser.add_argument('--data_config', type=str, default=data_config_default, help="config. for dataset (eg. train, dev and test jsons)")
+parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
 parser.add_argument('--padding_tokenid', type=int, default=1, help="the id of padding token") # We follow torchtext by setting default text padding as 1
 args = parser.parse_args()
 
 opts = vars(args)
-print(opts)
+print("Options:")
+pprint(opts)
 
 torch.manual_seed(opts['seed'])
 if torch.cuda.is_available():
@@ -921,19 +923,29 @@ if torch.cuda.is_available():
 if opts['gpu'] != 'auto':
     device = torch.device("cuda:{}".format(opts['gpu']) if torch.cuda.is_available() else "cpu")
 else:
-    import GPUtil # GPUtil.getAvailable() returns a list of available device ids of GPUs if less than half of memory and load is used.
+    import GPUtil # GPUtil.getAvailable() returns a list of available device ids of GPUs of which less than half of memory and load are used.
     device = torch.device("cuda:{}".format(GPUtil.getAvailable()[0]) if torch.cuda.is_available() and GPUtil.getAvailable() else "cpu")
-print("Device: '{}'".format(device))
+print("\nDevice: '{}'".format(device))
 
-with open(args.json_file, encoding='utf8') as f:
-    # utts_json is a dictionary mapping utt_id to fields of each utterance
-    utts_json = json.load(f)
-    # Each utterance instance is a list of fields includes 'feat', 'tokenid' and etc.
-    utts_instances = list(utts_json.values())
+data_config = yaml.load(open(opts['data_config']), Loader=yaml.FullLoader) # contains train, dev, test utterance json file and token2id map file
+print("\nDataset:")
+pprint(data_config)
 
-    dataset = KaldiDataset(utts_instances)
-    dataloader = KaldiDataLoader(dataset=dataset, batch_size=3, padding_tokenid=args.padding_tokenid)
+loader = {}
+for dataset in {'train', 'dev', 'test'}:
+    instances = json.load(open(data_config[dataset])).values() # the json file mapping utterid to instance (eg. {'num_frames': 20, ...})
+    loader[dataset] = KaldiDataLoader(dataset=KaldiDataset(instances), batch_size=opts['batch_size'], padding_tokenid=opts['padding_tokenid'])
 
-    batches = []
-    for batch in dataloader:
-        batches.append(batch)
+
+
+# with open(args.json_file, encoding='utf8') as f:
+#     utts_json = json.load(f)
+#     # Each utterance instance is a list of fields includes 'feat', 'tokenid' and etc.
+#     utts_instances = list(utts_json.values())
+
+#     dataset = KaldiDataset(utts_instances)
+#     dataloader = KaldiDataLoader(dataset=dataset, batch_size=3, padding_tokenid=args.padding_tokenid)
+
+#     batches = []
+#     for batch in dataloader:
+#         batches.append(batch)
