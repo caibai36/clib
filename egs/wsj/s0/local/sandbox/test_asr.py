@@ -902,16 +902,19 @@ def test_EncRNNDecRNNAtt():
 # test_luong_decoder()
 # test_EncRNNDecRNNAtt()
 
-data_config_default = "conf/data/test_small/test.yaml"
+data_config_default = "conf/data/test_small/data.yaml"
+model_config_default = "conf/data/test_small/model.yaml"
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=2019, help="seed")
 parser.add_argument('--gpu', type=str, default="auto", help="eg. --gpu 2 for using 'cuda:2'")
-parser.add_argument('--data_config', type=str, default=data_config_default, help="config. for dataset (eg. train, dev and test jsons)")
+parser.add_argument('--data_config', type=str, default=data_config_default, help="config. for dataset (eg. train, dev and test jsons; see: local/script/create_simple_utts_json.py)")
+parser.add_argument('--model_config', type=str, default=model_config_default, help="config. for model") #TODO: add pretrained model
 parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
 parser.add_argument('--padding_token', type=str, default="<pad>", help="name of token for padding")
 args = parser.parse_args()
 
+print("Getting Options...")
 opts = vars(args)
 print("Options:")
 pprint(opts)
@@ -925,11 +928,13 @@ if opts['gpu'] != 'auto':
 else:
     import GPUtil # GPUtil.getAvailable() returns a list of available device ids of GPUs of which less than half of memory and load are used.
     device = torch.device("cuda:{}".format(GPUtil.getAvailable()[0]) if torch.cuda.is_available() and GPUtil.getAvailable() else "cpu")
-print("\nDevice: '{}'".format(device))
+print("Device: '{}'\n".format(device))
 
+print("Loading Dataset...")
 data_config = yaml.load(open(opts['data_config']), Loader=yaml.FullLoader) # contains token2id map file and (train, dev, test) utterance json file
-print("\nDataset:")
+print("Dataset:")
 pprint(data_config)
+print()
 
 token2id = {}
 id2token = {}
@@ -941,7 +946,14 @@ with open(data_config['token2id'], encoding='utf8') as ft2d:
 assert opts['padding_token'] in token2id, \
     "Required token {}, for padding the token sequence, not found in '{}' file".format(opts['padding_token'], data_config['token2id'])
 
-loader = {}
+dataloader = {}
 for dataset in {'train', 'dev', 'test'}:
     instances = json.load(open(data_config[dataset], encoding='utf8')).values() # the json file mapping utterid to instance (eg. {'num_frames': 20, ...})
-    loader[dataset] = KaldiDataLoader(dataset=KaldiDataset(instances), batch_size=opts['batch_size'], padding_tokenid=token2id[opts['padding_token']])
+    # TODO: add cutoff here?
+    dataloader[dataset] = KaldiDataLoader(dataset=KaldiDataset(instances), batch_size=opts['batch_size'], padding_tokenid=token2id[opts['padding_token']])
+
+# print("Loading Model...")
+# first_batch = next(iter(dataloader['train']))
+# enc_input_size = first_batch['feat_dim']
+# dec_input_size = first_batch['vocab_size']
+# dec_output_size = first_batch['vocab_size']
