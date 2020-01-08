@@ -903,7 +903,7 @@ def test_EncRNNDecRNNAtt():
 # test_EncRNNDecRNNAtt()
 
 data_config_default = "conf/data/test_small/data.yaml"
-model_config_default = "conf/data/test_small/model.yaml"
+model_config_default = "conf/model/test_small/model.yaml"
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=2019, help="seed")
@@ -926,8 +926,8 @@ if torch.cuda.is_available():
 if opts['gpu'] != 'auto':
     device = torch.device("cuda:{}".format(opts['gpu']) if torch.cuda.is_available() else "cpu")
 else:
-    import GPUtil # GPUtil.getAvailable() returns a list of available device ids of GPUs of which less than half of memory and load are used.
-    device = torch.device("cuda:{}".format(GPUtil.getAvailable()[0]) if torch.cuda.is_available() and GPUtil.getAvailable() else "cpu")
+    import GPUtil # GPUtil.getAvailable(order='memory') returns a list of ids of devices (more than half of memory and load is available) ordered by memory.
+    device = torch.device("cuda:{}".format(GPUtil.getAvailable(order='memory')[0]) if torch.cuda.is_available() and GPUtil.getAvailable(order='memory') else "cpu")
 print("Device: '{}'\n".format(device))
 
 print("Loading Dataset...")
@@ -957,3 +957,4 @@ for dataset in {'train', 'dev', 'test'}:
 # enc_input_size = first_batch['feat_dim']
 # dec_input_size = first_batch['vocab_size']
 # dec_output_size = first_batch['vocab_size']
+# model_config = yaml.load(open(opts['model_config']), Loader=yaml.FullLoader)
