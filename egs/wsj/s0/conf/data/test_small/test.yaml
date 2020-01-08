@@ -1,3 +1,4 @@
 train: "data/test_small/utts.json"
 dev: "data/test_small/utts.json"
 test: "data/test_small/utts.json"
+token2id: "data/test_small/token2id.txt"

@@ -29,6 +29,15 @@ def main():
     # id 2, 3 for <sos> and <eos>
     # id 4 for <space>
     # <unk> in vocabulary; <pad> not
+    token2id = {"<unk>": 0,
+                "<pad>": 1,
+                "<sos>": 2,
+                "<eos>": 3,
+                "<space>": 4,
+                "A": 5,
+                "B": 6,
+                "C": 7}
+
     utts = {
         "spk1_u1": {
             "feat": args.output_dir + "/feats1.ark",
@@ -83,6 +92,9 @@ def main():
     if args.output_dir:
         with open(args.output_dir + "/utts.json", 'w', encoding='utf-8') as fuo:
             json.dump(utts, fp=fuo, indent=4, sort_keys=True, ensure_ascii=False)
+        with open(args.output_dir + "/token2id.txt", 'w', encoding='utf-8') as ft2d:
+            for key, value in token2id.items():
+                print(str(key) + " " + str(value), file=ft2d)
     else:
         json.dump(utts, fp=io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8'), indent=4, sort_keys=True, ensure_ascii=False)
 

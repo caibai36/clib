@@ -909,7 +909,7 @@ parser.add_argument('--seed', type=int, default=2019, help="seed")
 parser.add_argument('--gpu', type=str, default="auto", help="eg. --gpu 2 for using 'cuda:2'")
 parser.add_argument('--data_config', type=str, default=data_config_default, help="config. for dataset (eg. train, dev and test jsons)")
 parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
-parser.add_argument('--padding_tokenid', type=int, default=1, help="the id of padding token") # We follow torchtext by setting default text padding as 1
+parser.add_argument('--padding_token', type=str, default="<pad>", help="name of token for padding")
 args = parser.parse_args()
 
 opts = vars(args)
@@ -927,25 +927,21 @@ else:
     device = torch.device("cuda:{}".format(GPUtil.getAvailable()[0]) if torch.cuda.is_available() and GPUtil.getAvailable() else "cpu")
 print("\nDevice: '{}'".format(device))
 
-data_config = yaml.load(open(opts['data_config']), Loader=yaml.FullLoader) # contains train, dev, test utterance json file and token2id map file
+data_config = yaml.load(open(opts['data_config']), Loader=yaml.FullLoader) # contains token2id map file and (train, dev, test) utterance json file
 print("\nDataset:")
 pprint(data_config)
 
+token2id = {}
+id2token = {}
+with open(data_config['token2id'], encoding='utf8') as ft2d:
+    for line in ft2d:
+        token, token_id = line.split();
+        token2id[token] = int(token_id)
+        id2token[int(token_id)] = token
+assert opts['padding_token'] in token2id, \
+    "Required token {}, for padding the token sequence, not found in '{}' file".format(opts['padding_token'], data_config['token2id'])
+
 loader = {}
 for dataset in {'train', 'dev', 'test'}:
-    instances = json.load(open(data_config[dataset])).values() # the json file mapping utterid to instance (eg. {'num_frames': 20, ...})
-    loader[dataset] = KaldiDataLoader(dataset=KaldiDataset(instances), batch_size=opts['batch_size'], padding_tokenid=opts['padding_tokenid'])
-
-
-
-# with open(args.json_file, encoding='utf8') as f:
-#     utts_json = json.load(f)
-#     # Each utterance instance is a list of fields includes 'feat', 'tokenid' and etc.
-#     utts_instances = list(utts_json.values())
-
-#     dataset = KaldiDataset(utts_instances)
-#     dataloader = KaldiDataLoader(dataset=dataset, batch_size=3, padding_tokenid=args.padding_tokenid)
-
-#     batches = []
-#     for batch in dataloader:
-#         batches.append(batch)
+    instances = json.load(open(data_config[dataset], encoding='utf8')).values() # the json file mapping utterid to instance (eg. {'num_frames': 20, ...})
+    loader[dataset] = KaldiDataLoader(dataset=KaldiDataset(instances), batch_size=opts['batch_size'], padding_tokenid=token2id[opts['padding_token']])
