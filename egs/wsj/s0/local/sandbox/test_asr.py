@@ -7,6 +7,7 @@ sys.path.append(os.getcwd())
 
 import argparse
 import math
+import re # parser class name
 import json # for data files
 import yaml # for config files
 from pprint import pprint
@@ -914,6 +915,7 @@ parser.add_argument('--batch_size', type=int, default=3, help="batch size for th
 parser.add_argument('--padding_token', type=str, default="<pad>", help="name of token for padding")
 args = parser.parse_args()
 
+###########################
 print("Getting Options...")
 opts = vars(args)
 print("Options:")
@@ -926,10 +928,11 @@ if torch.cuda.is_available():
 if opts['gpu'] != 'auto':
     device = torch.device("cuda:{}".format(opts['gpu']) if torch.cuda.is_available() else "cpu")
 else:
-    import GPUtil # GPUtil.getAvailable(order='memory') returns a list of ids of devices (more than half of memory and load is available) ordered by memory.
+    import GPUtil # Get the device using the least GPU memory.
     device = torch.device("cuda:{}".format(GPUtil.getAvailable(order='memory')[0]) if torch.cuda.is_available() and GPUtil.getAvailable(order='memory') else "cpu")
 print("Device: '{}'\n".format(device))
 
+###########################
 print("Loading Dataset...")
 data_config = yaml.load(open(opts['data_config']), Loader=yaml.FullLoader) # contains token2id map file and (train, dev, test) utterance json file
 print("Dataset:")
@@ -952,9 +955,24 @@ for dataset in {'train', 'dev', 'test'}:
     # TODO: add cutoff here?
     dataloader[dataset] = KaldiDataLoader(dataset=KaldiDataset(instances), batch_size=opts['batch_size'], padding_tokenid=token2id[opts['padding_token']])
 
-# print("Loading Model...")
-# first_batch = next(iter(dataloader['train']))
-# enc_input_size = first_batch['feat_dim']
-# dec_input_size = first_batch['vocab_size']
-# dec_output_size = first_batch['vocab_size']
-# model_config = yaml.load(open(opts['model_config']), Loader=yaml.FullLoader)
+#########################
+print("Loading Model...")
+first_batch = next(iter(dataloader['train']))
+model_config = yaml.load(open(opts['model_config']), Loader=yaml.FullLoader)
+model_config['enc_input_size'] = first_batch['feat_dim']
+model_config['dec_input_size'] = first_batch['vocab_size']
+model_config['dec_output_size'] = first_batch['vocab_size']
+
+def get_model_object(model_config: Dict) -> object:
+     """ Get model object from model configuration dictionary.
+
+     The configuration contains model class name and object parameters,
+     eg. {'class': "<class 'seq2seq.asr.EncRNNDecRNNAtt'>", 'dec_embedding_size: 6}
+     """
+     import importlib
+     full_class_name = model_config.pop('class', None) # get model_config['class'] and delete 'class' item
+     module_name, class_name = re.findall("<class '([0-9a-zA-Z_\.]+)\.([0-9a-zA-Z_]+)'>", full_class_name)[0]
+     class_obj = getattr(importlib.import_module(module_name), class_name)
+     return class_obj(**model_config)
+
+model = get_model_object(model_config).to(device)
