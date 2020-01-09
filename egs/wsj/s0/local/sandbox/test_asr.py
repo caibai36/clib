@@ -89,7 +89,7 @@ def get_att(name):
 
     Example
     -------
-    In [347]: query = torch.Tensor([[3, 4], [3, 5]]) # query = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
+    In [347]: query = torch.Tensor([[3, 4], [3, 5]])
     In [348]: context = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
     In [349]: mask = torch.ByteTensor([[1, 0],[1, 1]])
     In [350]: input = {'query': query, 'context': context, 'mask': mask}
@@ -107,6 +107,32 @@ def get_att(name):
         return registered_att[name.lower()]
     else:
         raise NotImplementedError("The att module '{}' is not implemented\nAvaliable att modules include {}".format(name, avaliable_att))
+
+def get_optim(name):
+    """ Get optimizer by name string.
+    The name can be 'adam', 'sgd' and etc.
+
+    Example
+    -------
+    In [350]: model=nn.Linear(2, 3)
+    In [351]: optimizer = get_optim('adam')(model.parameters(), lr=0.005)
+    """
+    registered_optim = {"adam": torch.optim.Adam,
+                        "sgd": torch.optim.SGD,
+                        "adamw": torch.optim.AdamW,
+                        "sparse_adam": torch.optim.SparseAdam,
+                        "adagrad": torch.optim.Adagrad,
+                        "adadelta": torch.optim.Adadelta,
+                        "rmsprop": torch.optim.RMSprop,
+                        "adamax": torch.optim.Adamax,
+                        "averaged_sgd": torch.optim.ASGD}
+
+    avaliable_optim = list(registered_optim.keys())
+
+    if name.lower() in registered_optim:
+        return registered_optim[name.lower()]
+    else:
+        raise NotImplementedError("The optim module '{}' is not implemented\nAvaliable optim modules include {}".format(name, avaliable_optim))
 
 def length2mask(sequence_lengths: torch.Tensor, max_length: Union[int, None] = None) -> torch.Tensor:
     """
@@ -1008,10 +1034,16 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=2019, help="seed")
 parser.add_argument('--gpu', type=str, default="0", help="eg. '--gpu 2' for using 'cuda:2'; '--gpu auto' for using the device with least gpu memory ")
 parser.add_argument('--data_config', type=str, default=data_config_default, help="config. for dataset (eg. train, dev and test jsons; see: local/script/create_simple_utts_json.py)")
-parser.add_argument('--model_config', type=str, default=model_config_default, help="config. for model") #TODO: add pretrained model
-parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
-parser.add_argument('--label_smoothing', type=float, default=0, help="label smoothing for loss function")
 parser.add_argument('--padding_token', type=str, default="<pad>", help="name of token for padding")
+parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
+parser.add_argument('--model_config', type=str, default=model_config_default, help="config. for model") #TODO: add pretrained model
+parser.add_argument('--label_smoothing', type=float, default=0, help="label smoothing for loss function")
+parser.add_argument('--optim', type=str, default='Adam', help="optimizer")
+parser.add_argument('--lr', type=float, default=0.001, help="learning rate for optimizer")
+parser.add_argument('--reducelr', type=dict, default={'factor':0.5, 'patience':3},
+                    help="None or a dict with keys of 'factor' and 'patience'. \
+                    If performance keeps bad more than 'patience' epochs, \
+                    reduce the lr by lr = lr * 'factor'")
 args = parser.parse_args()
 
 ###########################
@@ -1082,3 +1114,10 @@ print("Making Loss Function...\n")
 classes_weight = torch.ones(first_batch['vocab_size']).detach().to(device)
 classes_weight[token2id[opts['padding_token']]] = 0
 loss_func = CrossEntropyLossLabelSmoothing(label_smoothing=opts['label_smoothing'], weight=classes_weight, reduction='none') # loss per batch
+
+###########################
+print("Setting Optimizer...\n")
+optimizer = get_optim(opts['optim'])(model.parameters(), lr=opts['lr'])
+if opts['reducelr'] is not None:
+    from torch.optim.lr_scheduler import ReduceLROnPlateau
+    scheduler = ReduceLROnPlateau(optimizer=optimizer, factor=opts['reducelr']['factor'], patience=opts['reducelr']['patience'], min_lr=5e-5, verbose=True)
