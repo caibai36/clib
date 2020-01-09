@@ -1010,13 +1010,13 @@ parser.add_argument('--gpu', type=str, default="0", help="eg. '--gpu 2' for usin
 parser.add_argument('--data_config', type=str, default=data_config_default, help="config. for dataset (eg. train, dev and test jsons; see: local/script/create_simple_utts_json.py)")
 parser.add_argument('--model_config', type=str, default=model_config_default, help="config. for model") #TODO: add pretrained model
 parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
+parser.add_argument('--label_smoothing', type=float, default=0, help="label smoothing for loss function")
 parser.add_argument('--padding_token', type=str, default="<pad>", help="name of token for padding")
 args = parser.parse_args()
 
 ###########################
 print("Getting Options...")
 opts = vars(args)
-print("Options:")
 pprint(opts)
 
 torch.manual_seed(opts['seed'])
@@ -1033,7 +1033,6 @@ print("Device: '{}'\n".format(device))
 ###########################
 print("Loading Dataset...")
 data_config = yaml.load(open(opts['data_config']), Loader=yaml.FullLoader) # contains token2id map file and (train, dev, test) utterance json file
-print("Dataset:")
 pprint(data_config)
 print()
 
@@ -1055,8 +1054,8 @@ for dataset in {'train', 'dev', 'test'}:
     # TODO: add example to dataloader?
     # TODO: use pip to install kaldi_io?
 
-#########################
-print("Loading Model...")
+###########################
+print("Loading Model...\n")
 first_batch = next(iter(dataloader['train']))
 model_config = yaml.load(open(opts['model_config']), Loader=yaml.FullLoader)
 model_config['enc_input_size'] = first_batch['feat_dim']
@@ -1076,3 +1075,10 @@ def get_model_object(model_config: Dict) -> object:
      return class_obj(**model_config)
 
 model = get_model_object(model_config).to(device)
+
+###########################
+print("Making Loss Function...\n")
+# Set the padding token with weight zero, other types one.
+classes_weight = torch.ones(first_batch['vocab_size']).detach().to(device)
+classes_weight[token2id[opts['padding_token']]] = 0
+loss_func = CrossEntropyLossLabelSmoothing(label_smoothing=opts['label_smoothing'], weight=classes_weight, reduction='none') # loss per batch
