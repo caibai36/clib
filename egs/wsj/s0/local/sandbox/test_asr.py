@@ -144,6 +144,103 @@ def length2mask(sequence_lengths: torch.Tensor, max_length: Union[int, None] = N
 
     return (cumsum_ones <= sequence_lengths.unsqueeze(-1)).long()
 
+class CrossEntropyLossLabelSmoothing(nn.Module):
+    """ Cross entropy loss function support label smoothing and weight of classes.
+
+    https://arxiv.org/abs/1512.00567 Section 7. Model Regularization via Label Smoothing
+    smoothed_loss = (1 - label_smoothing) * H(label_prob, model_prob) + label_smoothing * H(label_prob, uniform_prob)
+
+    Cross entropy between two true distribution 'prob1' and model distribution 'prob2'
+    (https://en.wikipedia.org/wiki/Cross_entropy)
+    H(prob1, prob2) = -sum(prob1 *log(prob2))
+
+    Paramters
+    ---------
+    label_smoothing: ratio smoothed by the uniform distribution
+    weight: weight of the each type of class; shape (num_classes) (eg. setting the weight zero when target is the padding label)
+    reduction: 'mean' or 'sum' or 'none'; take the 'mean' or 'sum' of loss over batch, or return loss per batch if 'none'.
+
+    Paramters of forward function
+    -----------------------------
+    source: shape (batch_size, num_classes) (or (batch_size*seq_length, num_classes))
+    target: shape (batch_size)
+
+    Returns of forward function
+    ---------------------------
+    loss: shape (batch_size) if reduction is 'none'
+    or shape () if reduction is 'mean' or 'sum'
+
+    Example
+    -------
+    Input:
+        source = torch.Tensor([[0.9, 0.2, 0.3], [0.1, 0.9, 0.3], [0.9, 0.2, 0.3]])
+        target = torch.LongTensor([1, 2, 1])
+
+        label_smoothing = 0.8
+        weight = torch.Tensor([0.1, 0.5, 0.4])
+        reduction = 'none'
+
+        ce_loss = CrossEntropyLossLabelSmoothing(label_smoothing=label_smoothing, weight=weight, reduction=reduction)
+        print(ce_loss(source, target))
+
+    Output:
+        tensor([0.6011, 0.4742, 0.6011])
+    """
+    def __init__(self,
+                 label_smoothing: float = 0.,
+                 weight: Union[torch.Tensor, None] = None,
+                 reduction: str = 'mean') -> None:
+        super().__init__()
+        self.label_smoothing = label_smoothing
+        self.weight = weight
+        self.reduction = reduction
+
+        assert reduction == 'sum' or reduction == 'mean' or reduction == 'none', \
+            "unknown return eduction '{}', reduction should be 'none', 'sum' or 'mean'".format(reduction)
+
+    def forward(self, source: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        log_model_prob = torch.nn.functional.log_softmax(source, dim=-1) # batch_size x num_classes
+        cross_entropy_label_and_model = -log_model_prob.gather(dim=1, index=target.unsqueeze(1)).squeeze(1) # cross entropy per batch with shape of (batch_size)
+
+        if(self.label_smoothing > 0):
+            num_classes = source.shape[-1]
+            uniform_prob = torch.ones_like(source) * (1 / num_classes) # batch_size * num_classes
+            cross_entropy_uniform_and_model = -(log_model_prob * uniform_prob).sum(dim=-1) # cross entropy per batch with shape of (batch_size)
+            cross_entropy_mixed = (1 - self.label_smoothing) * cross_entropy_label_and_model + self.label_smoothing * cross_entropy_uniform_and_model
+        else:
+            cross_entropy_mixed = cross_entropy_label_and_model # shape of (batch_size)
+
+        if self.weight is not None:
+            cross_entropy_mixed = cross_entropy_mixed * self.weight.index_select(dim=0, index=target) # shape of (batch_size)
+
+        if (self.reduction == 'none'):
+            return cross_entropy_mixed
+        elif (self.reduction == 'sum'):
+            return cross_entropy_mixed.sum(dim=-1)
+        else:
+            return cross_entropy_mixed.mean(dim=-1)
+
+def test_cross_entropy_label_smooth():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Device: '{}'".format(device))
+
+    source = torch.Tensor([[0.9, 0.2, 0.3], [0.1, 0.9, 0.3], [0.9, 0.2, 0.3]])
+    target = torch.LongTensor([1, 2, 1])
+
+    label_smoothing = 0.8
+    weight = torch.Tensor([0.1, 0.5, 0.4])
+    reduction = 'none'
+
+    source, target, weight = source.to(device), target.to(device), weight.to(device)
+    ce_loss = CrossEntropyLossLabelSmoothing(label_smoothing=label_smoothing, weight=weight, reduction=reduction)
+    ce_loss.to(device)
+
+    A = ce_loss(source, target)
+    B = torch.Tensor([0.6011, 0.4742, 0.6011]).to(device)
+    print(A)
+    print(B)
+    assert torch.all(torch.lt(torch.abs(torch.add(A,-B)), 1e-4)) # A == B
+
 class PyramidRNNEncoder(nn.Module):
     """ The RNN encoder with support of subsampling (for input with long length such as speech feature).
     https://arxiv.org/abs/1508.01211 "LAS" section 3.1 formula (5)
@@ -898,6 +995,7 @@ def test_EncRNNDecRNNAtt():
     print(f"dec_output: {dec_output}")
     print(f"att_output: {att_output}")
 
+# test_cross_entropy_label_smooth()
 # test_encoder()
 # test_attention()
 # test_luong_decoder()
@@ -908,7 +1006,7 @@ model_config_default = "conf/model/test_small/model.yaml"
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=2019, help="seed")
-parser.add_argument('--gpu', type=str, default="auto", help="eg. --gpu 2 for using 'cuda:2'")
+parser.add_argument('--gpu', type=str, default="0", help="eg. '--gpu 2' for using 'cuda:2'; '--gpu auto' for using the device with least gpu memory ")
 parser.add_argument('--data_config', type=str, default=data_config_default, help="config. for dataset (eg. train, dev and test jsons; see: local/script/create_simple_utts_json.py)")
 parser.add_argument('--model_config', type=str, default=model_config_default, help="config. for model") #TODO: add pretrained model
 parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
@@ -952,8 +1050,10 @@ assert opts['padding_token'] in token2id, \
 dataloader = {}
 for dataset in {'train', 'dev', 'test'}:
     instances = json.load(open(data_config[dataset], encoding='utf8')).values() # the json file mapping utterid to instance (eg. {'num_frames': 20, ...})
-    # TODO: add cutoff here?
     dataloader[dataset] = KaldiDataLoader(dataset=KaldiDataset(instances), batch_size=opts['batch_size'], padding_tokenid=token2id[opts['padding_token']])
+    # TODO: add cutoff here?
+    # TODO: add example to dataloader?
+    # TODO: use pip to install kaldi_io?
 
 #########################
 print("Loading Model...")
