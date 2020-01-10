@@ -230,7 +230,7 @@ class CrossEntropyLossLabelSmoothing(nn.Module):
 
         if(self.label_smoothing > 0):
             num_classes = source.shape[-1]
-            uniform_prob = torch.ones_like(source) * (1 / num_classes) # batch_size * num_classes
+            uniform_prob = torch.ones_like(source) * (1 / num_classes) # batch_size * num_classes; sometimes people use '1 / (num_classes - 2)' to exclude <sos> and <eos>
             cross_entropy_uniform_and_model = -(log_model_prob * uniform_prob).sum(dim=-1) # cross entropy per batch with shape of (batch_size)
             cross_entropy_mixed = (1 - self.label_smoothing) * cross_entropy_label_and_model + self.label_smoothing * cross_entropy_uniform_and_model
         else:
@@ -1079,9 +1079,10 @@ assert opts['padding_token'] in token2id, \
     "Required token {}, for padding the token sequence, not found in '{}' file".format(opts['padding_token'], data_config['token2id'])
 
 dataloader = {}
+padding_tokenid=token2id[opts['padding_token']] # global config.
 for dataset in {'train', 'dev', 'test'}:
     instances = json.load(open(data_config[dataset], encoding='utf8')).values() # the json file mapping utterid to instance (eg. {'num_frames': 20, ...})
-    dataloader[dataset] = KaldiDataLoader(dataset=KaldiDataset(instances), batch_size=opts['batch_size'], padding_tokenid=token2id[opts['padding_token']])
+    dataloader[dataset] = KaldiDataLoader(dataset=KaldiDataset(instances), batch_size=opts['batch_size'], padding_tokenid=padding_tokenid)
     # TODO: add cutoff here?
     # TODO: add example to dataloader?
     # TODO: use pip to install kaldi_io?
@@ -1089,10 +1090,12 @@ for dataset in {'train', 'dev', 'test'}:
 ###########################
 print("Loading Model...\n")
 first_batch = next(iter(dataloader['train']))
+feat_dim, vocab_size = first_batch['feat_dim'], first_batch['vocab_size'] # global config
+
 model_config = yaml.load(open(opts['model_config']), Loader=yaml.FullLoader)
-model_config['enc_input_size'] = first_batch['feat_dim']
-model_config['dec_input_size'] = first_batch['vocab_size']
-model_config['dec_output_size'] = first_batch['vocab_size']
+model_config['enc_input_size'] = feat_dim
+model_config['dec_input_size'] = vocab_size
+model_config['dec_output_size'] = vocab_size
 
 def get_model_object(model_config: Dict) -> object:
      """ Get model object from model configuration dictionary.
@@ -1111,8 +1114,8 @@ model = get_model_object(model_config).to(device)
 ###########################
 print("Making Loss Function...\n")
 # Set the padding token with weight zero, other types one.
-classes_weight = torch.ones(first_batch['vocab_size']).detach().to(device)
-classes_weight[token2id[opts['padding_token']]] = 0
+classes_weight = torch.ones(vocab_size).detach().to(device)
+classes_weight[padding_tokenid] = 0
 loss_func = CrossEntropyLossLabelSmoothing(label_smoothing=opts['label_smoothing'], weight=classes_weight, reduction='none') # loss per batch
 
 ###########################
