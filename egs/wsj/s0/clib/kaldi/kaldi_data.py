@@ -26,6 +26,9 @@ class KaldiDataset(Dataset):
     instances: a list of instances, each instance contains several fields.
     field_to_sort: we use to sort all instances by the field. (assume integer field)
         For example, we sort the instances according to the field 'num_frames', as needed by seq2seq model of ASR.
+        # Sorting by length makes each batch has instances with similar lengths in DataLoader.
+        #    1. less padded elements, thus less time wasted on the padded elements
+        #    2. Instances sorted by lengths within a batch is required by 'pad_packed_sequence' of LSTM (pytorch < 1.3)
 
     Example
     -------
@@ -82,8 +85,11 @@ class KaldiDataLoader(DataLoader):
     dataset: dataset from which to load the data.
     batch_size: how many samples per batch to load
         (default: ``1``).
-    shuffle: set to ``True`` to have the data reshuffled
+    shuffle_sample: set to ``True`` to have the sample reshuffled
         at every epoch (default: ``False``).
+    shuffle_batch: set to ``True`` to have the batch reshuffled
+        at every epoch (default: ``False``).  Only permutate the
+        complete batches, not the possible not complete last batch.
     sampler: defines the strategy to draw samples from
         the dataset. If specified, ``shuffle`` must be False.
     batch_sampler: like sampler, but returns a batch of
@@ -125,7 +131,8 @@ class KaldiDataLoader(DataLoader):
     def __init__(self,
                  dataset: Dataset,
                  batch_size: int = 1,
-                 shuffle: bool = False,
+                 shuffle_sample: bool = False,
+                 shuffle_batch: bool = False,
                  sampler: Optional[Sampler] = None,
                  batch_sampler: Optional[Sampler] = None,
                  num_workers: int = 0,
@@ -133,9 +140,14 @@ class KaldiDataLoader(DataLoader):
                  pin_memory: bool = False,
                  drop_last: bool = False,
                  padding_tokenid: int = -1) -> None:
-        if(not collate_fn):
+        if not collate_fn:
             collate_fn = self._kaldi_collate
-        super().__init__(dataset, batch_size, shuffle, sampler,
+        if shuffle_batch: # shuffle by batch or not
+            batch_sampler = RandomBatchSampler(dataset, batch_size, drop_last)
+            # batch_sampler option is mutually exclusive with batch_size, shuffle, sampler, and drop_last
+            batch_size, shuffle, sampler, drop_last = 1, False, None, False
+
+        super().__init__(dataset, batch_size, shuffle_sample, sampler,
                          batch_sampler, num_workers, collate_fn, pin_memory, drop_last)
         self.padding_tokenid = padding_tokenid
 
@@ -160,3 +172,59 @@ class KaldiDataLoader(DataLoader):
             return batch_dict
         else:
             return default_collate(batch)
+
+class RandomBatchSampler(Sampler):
+    r"""Shuffle samples by batch; Yield a mini-batch of indices with random batch order
+
+    Motivation
+    I'm working on a variable length sequence classification problem and use collate_fn to padding zeros in each batch.
+    Sorting the samples approximates the length of the samples within a batch to avoid excessive padding.
+    So I would prefer to shuffle only by batch rather than by sample.
+
+    Arguments
+    ---------
+    data_source (Dataset): dataset to sample from
+    batch_size (int): Size of mini-batch
+    drop_last (bool): If ``True``, the sampler will drop the last batch if
+                    its size would be less than ``batch_size``
+
+    Note
+    ----
+    only permutate the complete batches, not the possible not complete last batch
+
+    Reference
+    ---------
+    https://github.com/pytorch/pytorch/issues/18317
+    """
+
+    def __init__(self,
+                 data_source: Dataset,
+                 batch_size: int,
+                 drop_last: bool) -> None:
+
+        if not isinstance(batch_size, int) or batch_size <= 0:
+            raise ValueError("batch_size should be a positive integeral "
+                             "value, but got batch_size={}".format(batch_size))
+        if not isinstance(drop_last, bool):
+            raise ValueError("drop_last should be a boolean value, but got "
+                             "drop_last={}".format(drop_last))
+
+        self.data_source = data_source
+        self.batch_size = batch_size
+        self.drop_last = drop_last
+        self.fragment_size = len(data_source) % batch_size
+
+    def __iter__(self):
+        batch_indices = range(0, len(self.data_source) - self.fragment_size, self.batch_size)
+
+        for batch_indices_idx in torch.randperm(len(self.data_source) // self.batch_size):
+            yield list(range(batch_indices[batch_indices_idx], batch_indices[batch_indices_idx]+self.batch_size))
+
+        if self.fragment_size > 0 and not self.drop_last:
+            yield list(range(len(self.data_source) - self.fragment_size, len(self.data_source)))
+
+    def __len__(self):
+        if self.drop_last:
+            return len(self.data_source) // self.batch_size
+        else:
+            return (len(self.data_source) + self.batch_size - 1) // self.batch_size

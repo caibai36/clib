@@ -26,7 +26,7 @@ if torch.cuda.is_available():
 
 def get_rnn(name):
     """ Get the RNN module by its name string.
-    We can write string more convenient in the configuration file.
+    We can write module name directly in the configuration file.
     We can also manage the already registered rnns or add the new custom rnns.
     The name can be "LSTM", 'lstm' and etc.
 
@@ -1080,9 +1080,11 @@ assert opts['padding_token'] in token2id, \
 
 dataloader = {}
 padding_tokenid=token2id[opts['padding_token']] # global config.
-for dataset in {'train', 'dev', 'test'}:
-    instances = json.load(open(data_config[dataset], encoding='utf8')).values() # the json file mapping utterid to instance (eg. {'num_frames': 20, ...})
-    dataloader[dataset] = KaldiDataLoader(dataset=KaldiDataset(instances), batch_size=opts['batch_size'], padding_tokenid=padding_tokenid)
+for dset in {'train', 'dev', 'test'}:
+    instances = json.load(open(data_config[dset], encoding='utf8')).values() # the json file mapping utterid to instance (eg. {'num_frames': 20, ...})
+    dataset = KaldiDataset(instances, field_to_sort='num_frames') # Every batch has instances with similar lengths, thus less padded elements; required by pad_packed_sequence (pytorch < 1.3)
+    shuffle_batch = True if dset == 'train' else False # shuffle the batch when training, with each batch has instances with similar lengths.
+    dataloader[dset] = KaldiDataLoader(dataset=dataset, batch_size=opts['batch_size'], shuffle_batch=shuffle_batch, padding_tokenid=padding_tokenid)
     # TODO: add cutoff here?
     # TODO: add example to dataloader?
     # TODO: use pip to install kaldi_io?
@@ -1117,6 +1119,7 @@ print("Making Loss Function...\n")
 classes_weight = torch.ones(vocab_size).detach().to(device)
 classes_weight[padding_tokenid] = 0
 loss_func = CrossEntropyLossLabelSmoothing(label_smoothing=opts['label_smoothing'], weight=classes_weight, reduction='none') # loss per batch
+loss_func.to(device)
 
 ###########################
 print("Setting Optimizer...\n")
