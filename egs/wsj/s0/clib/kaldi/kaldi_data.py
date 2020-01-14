@@ -1,6 +1,6 @@
 # kaldi_data.py implemented by bin-wu at 23:43 in 2019.01.13
 
-from typing import List, Dict, Any, Callable, Optional, TypeVar
+from typing import List, Dict, Any, Callable, Optional, TypeVar, Tuple
 import logging
 import collections
 import json
@@ -75,6 +75,42 @@ class KaldiDataset(Dataset):
         fstring += f'Each instance has fields {self.instances[0].keys()}\n'
         if self._field_to_sort: fstring += f'The database is sorted by the field \'{self._field_to_sort}\''
         return fstring
+
+    @staticmethod
+    def cutoff_long_instances(instances: List[Instance], cutoff: int, save_excluded_utts_to: str = None,
+                              field_to_cutoff: int = 'num_frames', dataset: str = "", verbose: bool = True) -> Tuple[Dict, Dict]:
+        """ Divide the instances as included_instances and excluded_instances.
+        Include the utterances with 'num_frames' <= cutoff, exclude the remainings.
+        The function returns (included_instances, excluded_instances)
+
+        eg. instances = [{'uttid': '02c', 'feat_dim': '83', 'num_frames': '840', 'tokenid': '27'},
+                         {'uttid': '011', 'feat_dim': '83', 'num_frames': '845', 'tokenid': '20 38 18'},
+                         {'uttid': '22b', 'feat_dim': '83', 'num_frames': '783', 'tokenid': '20 54'}]
+            cutoff_long_instances(instances, cutoff=800, save_excluded_utts_to="save_utt.json")
+            # saving to file "save_utt.json" with utterances (mapping uttid to instance) of number of frames > 800
+            #   {'02c': {'uttid': '02c', 'feat_dim': '83', 'num_frames': '840', 'tokenid': '27'},
+            #   '011': {'uttid': '011', 'feat_dim': '83', 'num_frames': '845', 'tokenid': '20 38 18'}}
+        """
+        included_instances, excluded_instances = [], []
+        for instance in instances:
+            if (int(instance[field_to_cutoff]) <= cutoff):
+                included_instances.append(instance)
+            else:
+                excluded_instances.append(instance)
+
+        if save_excluded_utts_to is not None:
+            excluded_utts = {instance['uttid']: instance for instance in excluded_instances}
+            with open(save_excluded_utts_to, 'w', encoding='utf-8') as f:
+                json.dump(excluded_utts, fp=f, indent=4, sort_keys=True, ensure_ascii=False)
+
+        if verbose and not save_excluded_utts_to:
+                print("Warning: Cutting off {} long utterances > {} frames of {} dataset (Excluded/Included/Total {}/{}/{}).".format(
+                    len(excluded_instances), cutoff, dataset, len(excluded_instances), len(instances), len(instances) + len(excluded_instances)))
+        if verbose and save_excluded_utts_to:
+                print("Warning: Cutting off {} long utterances > {} frames of {} dataset (Excluded/Included/Total {}/{}/{}), saving to '{}'".format(
+                    len(excluded_instances), cutoff, dataset, len(excluded_instances), len(instances), len(instances) + len(excluded_instances), save_excluded_utts_to))
+
+        return included_instances, excluded_instances
 
 
 class KaldiDataLoader(DataLoader):
@@ -172,6 +208,7 @@ class KaldiDataLoader(DataLoader):
             return batch_dict
         else:
             return default_collate(batch)
+
 
 class RandomBatchSampler(Sampler):
     r"""Shuffle samples by batch; Yield a mini-batch of indices with random batch order

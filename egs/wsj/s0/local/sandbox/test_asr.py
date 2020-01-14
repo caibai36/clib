@@ -1034,6 +1034,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=2019, help="seed")
 parser.add_argument('--gpu', type=str, default="0", help="eg. '--gpu 2' for using 'cuda:2'; '--gpu auto' for using the device with least gpu memory ")
 parser.add_argument('--data_config', type=str, default=data_config_default, help="config. for dataset (eg. train, dev and test jsons; see: local/script/create_simple_utts_json.py)")
+parser.add_argument('--cutoff', type=int, default=-1, help="cut off the utterances with the frames more than x.")
 parser.add_argument('--padding_token', type=str, default="<pad>", help="name of token for padding")
 parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
 parser.add_argument('--model_config', type=str, default=model_config_default, help="config. for model") #TODO: add pretrained model
@@ -1066,10 +1067,8 @@ print("Device: '{}'\n".format(device))
 print("Loading Dataset...")
 data_config = yaml.load(open(opts['data_config']), Loader=yaml.FullLoader) # contains token2id map file and (train, dev, test) utterance json file
 pprint(data_config)
-print()
 
-token2id = {}
-id2token = {}
+token2id, id2token = {}, {}
 with open(data_config['token2id'], encoding='utf8') as ft2d:
     for line in ft2d:
         token, token_id = line.split();
@@ -1081,14 +1080,16 @@ assert opts['padding_token'] in token2id, \
 dataloader = {}
 padding_tokenid=token2id[opts['padding_token']] # global config.
 for dset in {'train', 'dev', 'test'}:
-    instances = json.load(open(data_config[dset], encoding='utf8')).values() # the json file mapping utterid to instance (eg. {'num_frames': 20, ...})
+    instances = json.load(open(data_config[dset], encoding='utf8')).values() # the json file mapping utterid to instance (eg. {'02c': {'uttid': '02c' 'num_frames': 20}, ...})
+    if (opts['cutoff'] > 0): instances, _ = KaldiDataset.cutoff_long_instances(instances, opts['cutoff'], dataset=dset, verbose=True) # cutoff the long utterances
     dataset = KaldiDataset(instances, field_to_sort='num_frames') # Every batch has instances with similar lengths, thus less padded elements; required by pad_packed_sequence (pytorch < 1.3)
     shuffle_batch = True if dset == 'train' else False # shuffle the batch when training, with each batch has instances with similar lengths.
     dataloader[dset] = KaldiDataLoader(dataset=dataset, batch_size=opts['batch_size'], shuffle_batch=shuffle_batch, padding_tokenid=padding_tokenid)
-    # TODO: add cutoff here?
+    # TODO: add save excluded instances
     # TODO: add example to dataloader?
     # TODO: use pip to install kaldi_io?
 
+print()
 ###########################
 print("Loading Model...\n")
 first_batch = next(iter(dataloader['train']))
