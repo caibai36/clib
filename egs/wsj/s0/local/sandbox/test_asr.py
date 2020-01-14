@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Union
+from typing import List, Dict, Tuple, Union, Any
 
 import sys
 import os
@@ -348,7 +348,8 @@ class PyramidRNNEncoder(nn.Module):
 
     def encode(self,
                input: torch.Tensor,
-               input_lengths: Union[torch.Tensor, None] = None)->(torch.Tensor, torch.Tensor):
+               input_lengths: Union[torch.Tensor, None] = None,
+               verbose: bool = False)->(torch.Tensor, torch.Tensor):
         """ Encode the feature (batch_size x max_seq_length x in_size), optionally with its lengths (batch_size),
         and output the context vector (batch_size x max_seq_length' x context_size)
         with its mask (batch_size x max_seq_length').
@@ -356,8 +357,6 @@ class PyramidRNNEncoder(nn.Module):
         ps: the dimension of context vector is influenced by 'bidirectional' and 'subsampling (pair_concat)' options of RNN.
             the max_seq_length' influenced by 'subsampling' options of RNN.
         """
-        print("Shape of the input: {}".format(input.shape))
-
         if (input_lengths is None):
             cur_batch_size, max_seq_length, cur_input_size = input.shape
             input_lengths = [max_seq_length] * cur_batch_size
@@ -397,10 +396,10 @@ class PyramidRNNEncoder(nn.Module):
                                               "Only support the type 'pair_concat' and 'pair_take_first':\n" +
                                               "The type 'pair_take_first' takes the first frame every two frames.\n" +
                                               "The type 'pair_concat' concatenates the frame pair every two frames.\n")
-
-            print("After layer '{}' applying the subsampling '{}' with type '{}': shape is {}, lengths is {} ".format(
-                i, self.enc_rnn_subsampling[i], self.enc_rnn_subsampling_type, output.shape, output_lengths))
-            print("mask of lengths is\n{}".format(length2mask(output_lengths)))
+            if verbose:
+                print("After layer '{}' applying the subsampling '{}' with type '{}': shape is {}, lengths is {} ".format(
+                    i, self.enc_rnn_subsampling[i], self.enc_rnn_subsampling_type, output.shape, output_lengths))
+                print("mask of lengths is\n{}".format(length2mask(output_lengths)))
 
         context, context_mask = output, length2mask(output_lengths)
         return context, context_mask
@@ -442,7 +441,7 @@ def test_encoder():
 
     speech_encoder.to(device)
     input, input_lengths = input.to(device), input_lengths.to(device)
-    context, context_mask = speech_encoder.encode(input, input_lengths)
+    context, context_mask = speech_encoder.encode(input, input_lengths, verbose=True)
     # print(context.shape, context_mask)
 
 class DotProductAttention(nn.Module):
@@ -910,8 +909,8 @@ class EncRNNDecRNNAtt(nn.Module):
                  'att_config': self.att_config}
 
     def encode(self,
-               rec_input: torch.Tensor,
-               rec_input_lengths: Union[torch.Tensor, None] = None)->Tuple[torch.Tensor, torch.Tensor]:
+               enc_input: torch.Tensor,
+               enc_input_lengths: Union[torch.Tensor, None] = None)->Tuple[torch.Tensor, torch.Tensor]:
         """
         Paramters
         ---------
@@ -926,7 +925,7 @@ class EncRNNDecRNNAtt(nn.Module):
         Note:
         We set the context for decoder when calling the encode function.
         """
-        context, context_mask = self.encoder.encode(rec_input, rec_input_lengths)
+        context, context_mask = self.encoder.encode(enc_input, enc_input_lengths)
         self.decoder.set_context(context, context_mask)
         return context, context_mask
 
@@ -956,6 +955,10 @@ class EncRNNDecRNNAtt(nn.Module):
         dec_input_embedding = F.dropout(dec_input_embedding, p=self.dec_embedding_dropout, training=self.training)
         dec_output, att_output = self.decoder.decode(dec_input_embedding, dec_mask)
         return dec_output, att_output
+
+    def reset(self):
+        """ Reset the decoder state. """
+        self.decoder.reset()
 
 def test_EncRNNDecRNNAtt():
     json_file = 'data/test_small/utts.json'
