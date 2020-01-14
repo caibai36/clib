@@ -954,7 +954,7 @@ class EncRNNDecRNNAtt(nn.Module):
         dec_input_embedding = self.dec_embedder(dec_input)
         dec_input_embedding = F.dropout(dec_input_embedding, p=self.dec_embedding_dropout, training=self.training)
         dec_output, att_output = self.decoder.decode(dec_input_embedding, dec_mask)
-        return dec_output, att_output
+        return self.dec_presoftmax(dec_output), att_output
 
     def reset(self):
         """ Reset the decoder state. """
