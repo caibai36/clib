@@ -188,12 +188,12 @@ class CrossEntropyLossLabelSmoothing(nn.Module):
 
     Paramters of forward function
     -----------------------------
-    source: shape (batch_size, num_classes) (or (batch_size*seq_length, num_classes))
-    target: shape (batch_size)
+    source: shape (batch_size, num_classes) (or (batch_size * seq_length, num_classes))
+    target: shape (batch_size) or (batch_size * seq_length)
 
     Returns of forward function
     ---------------------------
-    loss: shape (batch_size) if reduction is 'none'
+    loss: shape (batch_size) or (batch_size * seq_length) if reduction is 'none'
     or shape () if reduction is 'mean' or 'sum'
 
     Example
@@ -1048,6 +1048,7 @@ parser.add_argument('--reducelr', type=dict, default={'factor':0.5, 'patience':3
                     help="None or a dict with keys of 'factor' and 'patience'. \
                     If performance keeps bad more than 'patience' epochs, \
                     reduce the lr by lr = lr * 'factor'")
+parser.add_argument('--grad_clip', type=float, default=20, help="Gradient clipping to prevent the gradient explode(NaN).")
 args = parser.parse_args()
 
 ###########################
@@ -1131,3 +1132,46 @@ optimizer = get_optim(opts['optim'])(model.parameters(), lr=opts['lr'])
 if opts['reducelr'] is not None:
     from torch.optim.lr_scheduler import ReduceLROnPlateau
     scheduler = ReduceLROnPlateau(optimizer=optimizer, factor=opts['reducelr']['factor'], patience=opts['reducelr']['patience'], min_lr=5e-5, verbose=True)
+
+###########################
+print("Start Training...\n")
+first_batch = next(iter(dataloader['train']))
+# feat (batch_size x max_seq_length x enc_input_size)
+# text (batch_size x max_text_length)
+# feat_len, text_len (batch_size)
+feat, feat_len = first_batch['feat'].to(device), first_batch['num_frames'].to(device)
+text, text_len = first_batch['tokenid'].to(device), first_batch['num_tokens'].to(device)
+
+def run_batch(feat, feat_len, text, text_len, train_batch):
+    dec_input = text[:, 0:-1] # batch_size x dec_length
+    dec_target = text[:, 1:] # batch_size x dec_length
+    batch_size, dec_length = dec_input.shape
+
+    model.train(train_batch) # for dropout and etc.
+    model.reset() # reset the state for each utterance for decoder
+
+    model.encode(feat, feat_len) # encode and set context for decoder
+
+    dec_presoftmax_list = []
+    for dec_time_step in range(dec_length):
+        dec_presoftmax_cur, _ = model.decode(dec_input[:, dec_time_step]) # batch_size x dec_output_size (or vocab_size or num_classes)
+        dec_presoftmax_list.append(dec_presoftmax_cur)
+    dec_presoftmax = torch.stack(dec_presoftmax_list, dim=-2) # batch_size x dec_length x vocab_size
+
+    length_denominator = text_len - 1 # batch_size
+    loss = loss_func(dec_presoftmax.contiguous().view(batch_size * dec_length, -1), dec_target.contiguous().view(batch_size * dec_length)).view(batch_size, dec_length) # batch_size x dec_length
+    loss = loss.sum(-1) / length_denominator.float() # average over the each length of the batch; shape [batch_size]
+    loss = loss.mean()
+
+    acc = dec_presoftmax.argmax(dim=-1).eq(dec_target) # batch_size x dec_length
+    acc = acc.masked_select(dec_target.ne(padding_tokenid)).sum() / length_denominator.sum().float() # torch.Tensor([True, True, False]).sum() = 2
+
+    if train_batch:
+        model.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), opts['grad_clip'])
+        optimizer.step()
+
+    return loss.item(), acc.item()
+
+loss, acc = run_batch(feat, feat_len, text, text_len, train_batch=True)
