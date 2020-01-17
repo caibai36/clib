@@ -3,6 +3,11 @@ from typing import List, Dict, Tuple, Union, Any
 import sys
 import os
 import time
+import logging
+# set logging
+logging.basicConfig(level=logging.INFO,
+                    format="[ %(asctime)s | %(filename)s | %(levelname)s ] %(message)s",
+                    datefmt="%d/%m/%Y %H:%M:%S")
 # Add clib package at current directory to the binary searching path.
 sys.path.append(os.getcwd())
 
@@ -12,6 +17,8 @@ import re # parser class name
 import json # for data files
 import yaml # for config files
 from pprint import pprint
+from tabulate import tabulate
+from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -1052,6 +1059,7 @@ parser.add_argument('--reducelr', type=dict, default={'factor':0.5, 'patience':3
                     reduce the lr by lr = lr * 'factor'")
 parser.add_argument('--num_epochs', type=int, default=1, help="number of epochs")
 parser.add_argument('--grad_clip', type=float, default=20, help="Gradient clipping to prevent exploding gradient (NaN).")
+parser.add_argument('--disable_progress_bar', action='store_true', help="Disable progress bar")
 args = parser.parse_args()
 
 ###########################
@@ -1089,7 +1097,7 @@ dataloader = {}
 padding_tokenid=token2id[opts['padding_token']] # global config.
 for dset in {'train', 'dev', 'test'}:
     instances = json.load(open(data_config[dset], encoding='utf8')).values() # the json file mapping utterance id to instance (eg. {'02c': {'uttid': '02c' 'num_frames': 20}, ...})
-    if (opts['cutoff'] > 0): instances, _ = KaldiDataset.cutoff_long_instances(instances, opts['cutoff'], dataset=dset, verbose=True) # cutoff the long utterances
+    if (opts['cutoff'] > 0): instances, _ = KaldiDataset.cutoff_long_instances(instances, cutoff=opts['cutoff'], dataset=dset, verbose=True) # cutoff the long utterances
     dataset = KaldiDataset(instances, field_to_sort='num_frames') # Every batch has instances with similar lengths, thus less padded elements; required by pad_packed_sequence (pytorch < 1.3)
     shuffle_batch = True if dset == 'train' else False # shuffle the batch when training, with each batch has instances with similar lengths.
     dataloader[dset] = KaldiDataLoader(dataset=dataset, batch_size=opts['batch_size'], shuffle_batch=shuffle_batch, padding_tokenid=padding_tokenid)
@@ -1108,8 +1116,8 @@ model_config['enc_input_size'] = feat_dim
 model_config['dec_input_size'] = vocab_size
 model_config['dec_output_size'] = vocab_size
 
-def get_model_object(model_config: Dict) -> object:
-     """ Get model object from model configuration dictionary.
+def load_model_config(model_config: Dict) -> object:
+     """ Get a model object from model configuration file.
 
      The configuration contains model class name and object parameters,
      eg. {'class': "<class 'seq2seq.asr.EncRNNDecRNNAtt'>", 'dec_embedding_size: 6}
@@ -1120,7 +1128,7 @@ def get_model_object(model_config: Dict) -> object:
      class_obj = getattr(importlib.import_module(module_name), class_name)
      return class_obj(**model_config)
 
-model = get_model_object(model_config).to(device)
+model = load_model_config(model_config).to(device)
 
 ###########################
 print("Making Loss Function...\n")
@@ -1139,11 +1147,8 @@ if opts['reducelr'] is not None:
 
 ###########################
 print("Start Training...\n")
-first_batch = next(iter(dataloader['train']))
-feat, feat_len = first_batch['feat'].to(device), first_batch['num_frames'].to(device)
-text, text_len = first_batch['tokenid'].to(device), first_batch['num_tokens'].to(device)
 
-def run_batch(feat, feat_len, text, text_len, train_batch):
+def run_batch(feat, feat_len, text, text_len, train_batch, model=model, loss_func=loss_func, optimizer=optimizer):
     """ Run one batch.
 
     Parameters
@@ -1151,14 +1156,21 @@ def run_batch(feat, feat_len, text, text_len, train_batch):
     feat (batch_size x max_seq_length x enc_input_size)
     text (batch_size x max_text_length)
     feat_len, text_len (batch_size)
-    train_batch (bool): training when ture, evluating when false.
+    train_batch (bool): training when True, evluating when False.
                         when train_batch is False, we will not update the parameters,
-                        and stop some function such as dropout.
+                        and stop some functions such as dropout.
 
     Returns
     -------
     average token loss of the current batch
     token accuracy of the current batch
+
+    Example
+    -------
+    first_batch = next(iter(dataloader['train']))
+    feat, feat_len = first_batch['feat'].to(device), first_batch['num_frames'].to(device)
+    text, text_len = first_batch['tokenid'].to(device), first_batch['num_tokens'].to(device)
+    loss, acc = run_batch(feat, feat_len, text, text_len, train_batch=True)
     """
 
     dec_input = text[:, 0:-1] # batch_size x dec_length
@@ -1182,7 +1194,7 @@ def run_batch(feat, feat_len, text, text_len, train_batch):
     loss = loss.mean()
 
     batch_padded_token_matching = dec_presoftmax.argmax(dim=-1).eq(dec_target) # batch_size x dec_length
-    batch_token_matching = batch_padded_token_matching.masked_select(dec_target.ne(padding_tokenid)) # shape [num_tokens_of_current_batch]
+    batch_token_matching = batch_padded_token_matching.masked_select(dec_target.ne(padding_tokenid)) # shape: [num_tokens_of_current_batch] type: bool
     batch_num_tokens = length_denominator.sum()
     acc = batch_token_matching.sum() / batch_num_tokens.float() # torch.Tensor([True, True, False]).sum() = 2
 
@@ -1194,35 +1206,39 @@ def run_batch(feat, feat_len, text, text_len, train_batch):
 
     return loss.item(), acc.item()
 
-loss, acc = run_batch(feat, feat_len, text, text_len, train_batch=True)
-
 best_loss = sys.float_info.max
 best_epoch = 0
+# save current script command
+logging.info('{}'.format(' '.join([x for x in sys.argv])))
 
-opts['num_epochs'] = 100
+opts['num_epochs'] = 10
 for epoch in range(opts['num_epochs']):
     start_time = time.time()
-    utt_loss = dict(train=0, dev=0, test=0)
-    utt_acc = dict(train=0, dev=0, test=0)
-    utt_count = dict(train=0, dev=0, test=0)
+    # take mean over statistics of utterances
+    mean_loss = dict(train=0, dev=0, test=0)
+    mean_acc = dict(train=0, dev=0, test=0)
+    mean_count = dict(train=0, dev=0, test=0)
 
     for dataset_name, dataset_loader, dataset_train_mode in [['train', dataloader['train'], True],
                                                              ['dev', dataloader['dev'], False],
                                                              ['test', dataloader['test'], False]]:
-        for batch in dataset_loader:
+        for batch in tqdm(dataset_loader, ascii=True, ncols=50, disable=opts['disable_progress_bar']):
             feat, feat_len = batch['feat'].to(device), batch['num_frames'].to(device)
             text, text_len = batch['tokenid'].to(device), batch['num_tokens'].to(device)
             batch_loss, batch_acc = run_batch(feat, feat_len, text, text_len, train_batch=dataset_train_mode)
-            if np.any(np.isnan(batch_loss)): raise ValueError("NaN detected")
+            if np.isnan(batch_loss): raise ValueError("NaN detected")
             num_utts = len(batch['uttid'])
-            utt_loss[dataset_name] += batch_loss * num_utts # sum(average token loss per utterance)
-            utt_acc[dataset_name] += batch_acc * num_utts   # sum(average token accuracy per utterance)
-            utt_count[dataset_name] += num_utts
+            mean_loss[dataset_name] += batch_loss * num_utts # sum(average token loss per utterance)
+            mean_acc[dataset_name] += batch_acc * num_utts   # sum(average token accuracy per utterance)
+            mean_count[dataset_name] += num_utts             # number of utterances of the whole dataset
 
+    info_table = []
     for dataset_name in ['train', 'dev', 'test']:
-        # averge over utterances of the whole dataset for the current epoch
-        utt_loss[dataset_name] /= utt_count[dataset_name]
-        utt_acc[dataset_name] /= utt_count[dataset_name]
-        epoch_duration = time.time() - start_time
+        # averge over number of utterances of the whole dataset for the current epoch
+        mean_loss[dataset_name] /= mean_count[dataset_name]
+        mean_acc[dataset_name] /= mean_count[dataset_name]
+        info_table.append([epoch, dataset_name, mean_loss[dataset_name], mean_acc[dataset_name]])
 
-    print(utt_loss, utt_acc, epoch_duration)
+    epoch_duration = time.time() - start_time
+    logging.info("Epoch {} -- lrate {} -- time {:.2f}".format(epoch, optimizer.param_groups[0]['lr'], epoch_duration))
+    print(tabulate(info_table, headers=['epoch', 'dataset', 'loss', 'acc'], floatfmt='.3f', tablefmt='rst'))
