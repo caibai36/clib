@@ -283,8 +283,8 @@ class PyramidRNNEncoder(nn.Module):
     The PyramidRNNEncoder accepts the feature (batch_size x max_seq_length x in_size),
     passes the feature to several layers of feedforward neural network (fnn)
     and then to several layers of RNN (rnn) with subsampling
-    (by concatenating every pair of frames with type 'pair_concat'
-    or by taking the first frame every frame pair with the type 'pair_take_first').
+    (by concatenating every pair of frames with type 'concat'
+    or by taking the first frame every frame pair with the type 'drop').
 
     ps: We can pass the parameters by copying the same configuration to each layer
         or by specifying a list of configurations for each layer.
@@ -300,7 +300,7 @@ class PyramidRNNEncoder(nn.Module):
                  enc_rnn_config: Dict = {'type': 'lstm', 'bi': True},
                  enc_rnn_dropout: Union[float, List[float]] = 0.25,
                  enc_rnn_subsampling: Union[bool, List[bool]] = [False, True, True],
-                 enc_rnn_subsampling_type: str = 'pair_concat', # 'pair_concat' or 'pair_take_first'
+                 enc_rnn_subsampling_type: str = 'concat', # 'concat' or 'drop'
                  enc_input_padding_value: float = 0.0
     ) -> None:
         super().__init__()
@@ -315,11 +315,11 @@ class PyramidRNNEncoder(nn.Module):
 
         assert num_enc_fnn_layers == len(enc_fnn_dropout), "Number of fnn layers does not match the lengths of specified configuration lists."
         assert num_enc_rnn_layers == len(enc_rnn_dropout) == len(enc_rnn_subsampling), "Number of rnn layers does not matches the lengths of specificed configuration lists."
-        assert enc_rnn_subsampling_type in {'pair_concat', 'pair_take_first'}, \
+        assert enc_rnn_subsampling_type in {'concat', 'drop'}, \
             "The subsampling type '{}' is not implemented yet.\n".format(t) + \
-            "Only support the type 'pair_concat' and 'pair_take_first':\n" + \
-            "the type 'pair_take_first' preserves the first frame every two frames;\n" + \
-            "the type 'pair_concat' concatenates the frame pair every two frames.\n"
+            "Only support the type 'concat' and 'drop':\n" + \
+            "the type 'drop' preserves the first frame every two frames;\n" + \
+            "the type 'concat' concatenates the frame pair every two frames.\n"
 
         self.enc_input_size = enc_input_size
         self.enc_fnn_sizes = enc_fnn_sizes
@@ -348,7 +348,7 @@ class PyramidRNNEncoder(nn.Module):
             rnn_layer = get_rnn(enc_rnn_config['type'])
             self.enc_rnn_layers.append(rnn_layer(pre_size, enc_rnn_sizes[i], batch_first=True, bidirectional=enc_rnn_config['bi']))
             pre_size = enc_rnn_sizes[i] * (2 if enc_rnn_config['bi'] else 1) # for bidirectional rnn
-            if (enc_rnn_subsampling[i] and enc_rnn_subsampling_type == 'pair_concat'): pre_size = pre_size * 2 # for pair_concat subsampling
+            if (enc_rnn_subsampling[i] and enc_rnn_subsampling_type == 'concat'): pre_size = pre_size * 2 # for concat subsampling
 
         self.output_size = pre_size
 
@@ -363,7 +363,7 @@ class PyramidRNNEncoder(nn.Module):
         and output the context vector (batch_size x max_seq_length' x context_size)
         with its mask (batch_size x max_seq_length').
 
-        ps: the dimension of context vector is influenced by 'bidirectional' and 'subsampling (pair_concat)' options of RNN.
+        ps: the dimension of context vector is influenced by 'bidirectional' and 'subsampling (concat)' options of RNN.
             the max_seq_length' influenced by 'subsampling' options of RNN.
         """
         if (input_lengths is None):
@@ -394,17 +394,17 @@ class PyramidRNNEncoder(nn.Module):
                     extended_part = output.new_ones(output.shape[0], 1, output.shape[2]) * self.enc_input_padding_value
                     output = torch.cat([output, extended_part], dim=-2) # pad to be even length
 
-                if (self.enc_rnn_subsampling_type == 'pair_take_first'):
+                if (self.enc_rnn_subsampling_type == 'drop'):
                     output = output[:, ::2]
                     output_lengths = torch.LongTensor([(length + (2 - 1)) // 2 for length in output_lengths]).to(output.device)
-                elif (self.enc_rnn_subsampling_type == 'pair_concat'):
+                elif (self.enc_rnn_subsampling_type == 'concat'):
                     output = output.contiguous().view(output.shape[0], output.shape[1] // 2, output.shape[2] * 2)
                     output_lengths = torch.LongTensor([(length + (2 - 1)) // 2 for length in output_lengths]).to(output.device)
                 else:
                     raise NotImplementedError("The subsampling type {} is not implemented yet.\n".format(self.enc_rnn_subsampling_type) +
-                                              "Only support the type 'pair_concat' and 'pair_take_first':\n" +
-                                              "The type 'pair_take_first' takes the first frame every two frames.\n" +
-                                              "The type 'pair_concat' concatenates the frame pair every two frames.\n")
+                                              "Only support the type 'concat' and 'drop':\n" +
+                                              "The type 'drop' takes the first frame every two frames.\n" +
+                                              "The type 'concat' concatenates the frame pair every two frames.\n")
             if verbose:
                 print("After layer '{}' applying the subsampling '{}' with type '{}': shape is {}, lengths is {} ".format(
                     i, self.enc_rnn_subsampling[i], self.enc_rnn_subsampling_type, output.shape, output_lengths))
@@ -446,7 +446,7 @@ def test_encoder():
                                        enc_rnn_config = {'type': 'lstm', 'bi': True},
                                        enc_rnn_dropout = 0.25,
                                        enc_rnn_subsampling = [False, True, True],
-                                       enc_rnn_subsampling_type = 'pair_concat')
+                                       enc_rnn_subsampling_type = 'concat')
 
     speech_encoder.to(device)
     input, input_lengths = input.to(device), input_lengths.to(device)
@@ -808,7 +808,7 @@ class EncRNNDecRNNAtt(nn.Module):
                  enc_rnn_config: Dict = {'type': 'lstm', 'bi': True},
                  enc_rnn_dropout: Union[float, List[float]] = 0.25,
                  enc_rnn_subsampling: Union[bool, List[bool]] = [False, True, True],
-                 enc_rnn_subsampling_type: str = 'pair_concat', # 'pair_concat' or 'pair_take_first'
+                 enc_rnn_subsampling_type: str = 'concat', # 'concat' or 'drop'
                  dec_embedding_size: int = 256,
                  dec_embedding_dropout: float = 0.25,
                  dec_embedding_weights_tied: bool = True, # share weights between (input_onehot => input_embedding) and (output_embedding => pre_softmax)
@@ -1006,7 +1006,7 @@ def test_EncRNNDecRNNAtt():
                             enc_rnn_config={'type': 'lstm', 'bi': True},
                             enc_rnn_dropout=0.25,
                             enc_rnn_subsampling=[False, True, True],
-                            enc_rnn_subsampling_type='pair_concat',
+                            enc_rnn_subsampling_type='concat',
                             dec_embedding_size=6,
                             dec_embedding_dropout=0.25,
                             dec_embedding_weights_tied=True,
@@ -1060,6 +1060,7 @@ parser.add_argument('--reducelr', type=dict, default={'factor':0.5, 'patience':3
 parser.add_argument('--num_epochs', type=int, default=1, help="number of epochs")
 parser.add_argument('--grad_clip', type=float, default=20, help="Gradient clipping to prevent exploding gradient (NaN).")
 parser.add_argument('--disable_progress_bar', action='store_true', help="Disable progress bar")
+parser.add_argument('--result', type=str, default="", help="result directory")
 args = parser.parse_args()
 
 ###########################
