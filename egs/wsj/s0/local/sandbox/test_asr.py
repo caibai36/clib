@@ -355,6 +355,17 @@ class PyramidRNNEncoder(nn.Module):
     def get_context_size(self) -> int:
         return self.output_size
 
+    def get_model_name(self) -> str:
+        """ Get the name of the model. (e.g. 'enc3_bi256_ds2_concat') """
+        bi = "bi" if self.enc_rnn_config['bi'] else ""
+        ds_num = self.enc_rnn_subsampling.count(True)
+        ds_type = self.enc_rnn_subsampling_type
+        if len(set(self.enc_rnn_sizes)) == 1: # same size
+            enc_name = f"enc{len(self.enc_rnn_sizes)}_{bi}{self.enc_rnn_sizes[0]}_ds{ds_num}_{ds_type}" # eg. 'enc3_bi256_ds2_concat'
+        else:
+            enc_name = f"enc{len(self.enc_rnn_sizes)}_{bi}" + "_".join([str(x) for x in self.enc_rnn_sizes]) + f"_ds{ds_num}_{ds_type}" # eg. 'enc2_bi256_256_ds2_concat'
+        return enc_name
+
     def encode(self,
                input: torch.Tensor,
                input_lengths: Union[torch.Tensor, None] = None,
@@ -667,7 +678,7 @@ class LuongDecoder(nn.Module):
 
         # Copy the configuration for each layer
         num_rnn_layers = len(rnn_sizes)
-        if not isinstance(rnn_dropout, list): rnn_dropout = [rnn_dropout] * num_rnn_layers
+        if not isinstance(rnn_dropout, list): rnn_dropout = [rnn_dropout] * num_rnn_layers # sometimes the dropout does not apply to the top layer
         assert num_rnn_layers == len(rnn_dropout), "The number of rnn layers does not match length of rnn_dropout list."
 
         self.att_config = att_config
@@ -704,6 +715,15 @@ class LuongDecoder(nn.Module):
 
     def reset(self) -> None:
         self.attentional_vector_pre = None
+
+    def get_model_name(self) -> str:
+        """ Get the name of the model (e.g. 'dec2_h8_do0.25') """
+        dropout_str = f"{self.rnn_dropout[0]}" if len(set(self.rnn_dropout)) == 1 else "_".join([str(x) for x in self.rnn_dropout])
+        if len(set(self.rnn_sizes)) == 1: # same size
+            dec_name = f"dec{len(self.rnn_sizes)}_h{self.rnn_sizes[0]}_do{dropout_str}" # eg. "dec2_h8_do0.25"
+        else:
+            dec_name = f"dec{len(self.rnn_sizes)}_h" + "_".join([str(x) for x in self.rnn_sizes]) + f"_do{dropout_str}" # eg. 'dec2_h8_9_do0.25'
+        return dec_name
 
     def decode(self, input: torch.Tensor, dec_mask: torch.Tensor = None) -> Tuple[torch.Tensor, Dict]:
         """
@@ -916,6 +936,14 @@ class EncRNNDecRNNAtt(nn.Module):
                  'enc_config': self.enc_config,
                  'dec_config': self.dec_config,
                  'att_config': self.att_config}
+
+    def get_model_name(self) -> str:
+        """ Return the name of the model. e.g. 'EncRNNDecRNNAtt-enc3_bi5_ds2_concat-dec2_h8_do0.25-att_mlp' """
+        enc_name = self.encoder.get_model_name()
+        dec_name = self.decoder.get_model_name()
+        att_name = f"att_{self.att_config['type']}"
+
+        return "-".join(["EncRNNDecRNNAtt", enc_name, dec_name, att_name])
 
     def encode(self,
                enc_input: torch.Tensor,
