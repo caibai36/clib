@@ -1243,3 +1243,5 @@ for epoch in range(opts['num_epochs']):
     epoch_duration = time.time() - start_time
     logging.info("Epoch {} -- lrate {} -- time {:.2f}".format(epoch, optimizer.param_groups[0]['lr'], epoch_duration))
     print(tabulate(info_table, headers=['epoch', 'dataset', 'loss', 'acc'], floatfmt='.3f', tablefmt='rst'))
+
+    if opts['reducelr']: scheduler.step(mean_loss['dev'], epoch)
