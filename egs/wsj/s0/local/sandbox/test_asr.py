@@ -1043,7 +1043,7 @@ data_config_default = "conf/data/test_small/data.yaml"
 model_config_default = "conf/model/test_small/model.yaml"
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--seed', type=int, default=2019, help="seed")
+parser.add_argument('--seed', type=int, default=2020, help="seed")
 parser.add_argument('--gpu', type=str, default="0", help="eg. '--gpu 2' for using 'cuda:2'; '--gpu auto' for using the device with least gpu memory ")
 parser.add_argument('--data_config', type=str, default=data_config_default, help="config. for dataset (eg. train, dev and test jsons; see: local/script/create_simple_utts_json.py)")
 parser.add_argument('--cutoff', type=int, default=-1, help="cut off the utterances with the frames more than x.")
@@ -1060,7 +1060,8 @@ parser.add_argument('--reducelr', type=dict, default={'factor':0.5, 'patience':3
 parser.add_argument('--num_epochs', type=int, default=1, help="number of epochs")
 parser.add_argument('--grad_clip', type=float, default=20, help="Gradient clipping to prevent exploding gradient (NaN).")
 parser.add_argument('--disable_progress_bar', action='store_true', help="Disable progress bar")
-parser.add_argument('--result', type=str, default="", help="result directory")
+parser.add_argument('--result', type=str, default="tmp_result", help="result directory")
+parser.add_argument('--save_interval', type=int, default=1, help='save the model every x epoch')
 args = parser.parse_args()
 
 ###########################
@@ -1109,13 +1110,6 @@ for dset in {'train', 'dev', 'test'}:
 print()
 ###########################
 print("Loading Model...\n")
-first_batch = next(iter(dataloader['train']))
-feat_dim, vocab_size = first_batch['feat_dim'], first_batch['vocab_size'] # global config
-
-model_config = yaml.load(open(opts['model_config']), Loader=yaml.FullLoader)
-model_config['enc_input_size'] = feat_dim
-model_config['dec_input_size'] = vocab_size
-model_config['dec_output_size'] = vocab_size
 
 def load_model_config(model_config: Dict) -> object:
      """ Get a model object from model configuration file.
@@ -1128,6 +1122,30 @@ def load_model_config(model_config: Dict) -> object:
      module_name, class_name = re.findall("<class '([0-9a-zA-Z_\.]+)\.([0-9a-zA-Z_]+)'>", full_class_name)[0]
      class_obj = getattr(importlib.import_module(module_name), class_name)
      return class_obj(**model_config)
+
+def save_model_config(path: str, model_config: Dict) -> None:
+    assert ('class' in model_config), "The model configuration should contain the class name"
+    json.dump(model_config, open(path, 'w'), indent=4)
+
+def save_model_state_dict(path: str, model_state_dict: Dict) -> None:
+    model_state_dict_at_cpu = {k: v.cpu() for k, v in list(model_state_dict.items())}
+    torch.save(model_state_dict_at_cpu, path)
+
+def save_options(path: str, options: Dict) -> None:
+    json.dump(options, open(path, 'w'), indent=4)
+
+def save_model(model_name: str, model: nn.Module) -> None:
+    save_options(os.path.join(opts['result'], f"{model_name}.opt"), opts)
+    save_model_config(os.path.join(opts['result'], f"{model_name}.conf"), model.get_config())
+    save_model_state_dict(os.path.join(opts['result'], f"{model_name}.mdl"), model.state_dict())
+
+first_batch = next(iter(dataloader['train']))
+feat_dim, vocab_size = first_batch['feat_dim'], first_batch['vocab_size'] # global config
+
+model_config = yaml.load(open(opts['model_config']), Loader=yaml.FullLoader)
+model_config['enc_input_size'] = feat_dim
+model_config['dec_input_size'] = vocab_size
+model_config['dec_output_size'] = vocab_size
 
 model = load_model_config(model_config).to(device)
 
@@ -1207,10 +1225,11 @@ def run_batch(feat, feat_len, text, text_len, train_batch, model=model, loss_fun
 
     return loss.item(), acc.item()
 
-best_loss = sys.float_info.max
-best_epoch = 0
 # save current script command
 logging.info('{}'.format(' '.join([x for x in sys.argv])))
+
+best_dev_loss = sys.float_info.max
+best_dev_epoch = 0
 
 opts['num_epochs'] = 10
 for epoch in range(opts['num_epochs']):
@@ -1242,6 +1261,19 @@ for epoch in range(opts['num_epochs']):
 
     epoch_duration = time.time() - start_time
     logging.info("Epoch {} -- lrate {} -- time {:.2f}".format(epoch, optimizer.param_groups[0]['lr'], epoch_duration))
+
+    if epoch % opts['save_interval'] == 0:
+        save_model("model_e{}".format(epoch), model)
+
+    if best_dev_loss > mean_loss['dev']:
+        best_dev_loss = mean_loss['dev']
+        best_dev_epoch = epoch
+        logging.info("Get the better dev loss {:.3f} at epoch {} ... saving the model".format(best_dev_loss, best_dev_epoch))
+        save_model("best_model", model)
+
     print(tabulate(info_table, headers=['epoch', 'dataset', 'loss', 'acc'], floatfmt='.3f', tablefmt='rst'))
 
     if opts['reducelr']: scheduler.step(mean_loss['dev'], epoch)
+
+logging.info("Result path: {}".format(opts['result']))
+logging.info("Get the best dev loss {:.3f} at the epoch {}".format(best_dev_loss, best_dev_epoch))
