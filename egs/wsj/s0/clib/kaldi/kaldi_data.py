@@ -5,6 +5,7 @@ import logging
 import collections
 import json
 import pprint
+import logging
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -78,7 +79,8 @@ class KaldiDataset(Dataset):
 
     @staticmethod
     def cutoff_long_instances(instances: List[Instance], cutoff: int, save_excluded_utts_to: str = None,
-                              field_to_cutoff: int = 'num_frames', dataset: str = "", verbose: bool = True) -> Tuple[Dict, Dict]:
+                              dataset: str = "", verbose: bool = False, logger: logging.RootLogger = None,
+                              field_to_cutoff: int = 'num_frames') -> Tuple[Dict, Dict]:
         """ Divide the instances as included_instances and excluded_instances.
         Include the utterances with 'num_frames' <= cutoff, exclude the remainings.
         The function returns (included_instances, excluded_instances)
@@ -103,12 +105,17 @@ class KaldiDataset(Dataset):
             with open(save_excluded_utts_to, 'w', encoding='utf-8') as f:
                 json.dump(excluded_utts, fp=f, indent=4, sort_keys=True, ensure_ascii=False)
 
-        if verbose and not save_excluded_utts_to:
-                print("Warning: Cutting off {} long utterances > {} frames of {} dataset (Excluded/Included/Total {}/{}/{}).".format(
-                    len(excluded_instances), cutoff, dataset, len(excluded_instances), len(instances), len(instances) + len(excluded_instances)))
-        if verbose and save_excluded_utts_to:
-                print("Warning: Cutting off {} long utterances > {} frames of {} dataset (Excluded/Included/Total {}/{}/{}), saving to '{}'".format(
-                    len(excluded_instances), cutoff, dataset, len(excluded_instances), len(instances), len(instances) + len(excluded_instances), save_excluded_utts_to))
+        if save_excluded_utts_to and field_to_cutoff == 'num_frames':
+            output = "Warning: Cutting off {} long utterances > {} frames of {} dataset (Excluded/Included/Total {}/{}/{})\nsaving to '{}'".format(
+                len(excluded_instances), cutoff, dataset, len(excluded_instances), len(instances), len(instances) + len(excluded_instances), save_excluded_utts_to)
+        elif field_to_cutoff == 'num_frames':
+            output = "Warning: Cutting off {} long utterances > {} frames of {} dataset (Excluded/Included/Total {}/{}/{}).".format(
+                len(excluded_instances), cutoff, dataset, len(excluded_instances), len(instances), len(instances) + len(excluded_instances))
+        else:
+            output = ''
+
+        if verbose: print(output)
+        if logger: logger.warn(output)
 
         return included_instances, excluded_instances
 

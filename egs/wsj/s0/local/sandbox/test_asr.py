@@ -4,10 +4,6 @@ import sys
 import os
 import time
 import logging
-# set logging
-logging.basicConfig(level=logging.INFO,
-                    format="[ %(asctime)s | %(filename)s | %(levelname)s ] %(message)s",
-                    datefmt="%d/%m/%Y %H:%M:%S")
 # Add clib package at current directory to the binary searching path.
 sys.path.append(os.getcwd())
 
@@ -1039,6 +1035,24 @@ def test_EncRNNDecRNNAtt():
 # test_luong_decoder()
 # test_EncRNNDecRNNAtt()
 
+def init_logger(file_name=""):
+    """ Initialize a logger to terminal and file at the same time. """
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter("[ %(asctime)s | %(filename)s | %(levelname)s ] %(message)s", "%d/%m/%Y %H:%M:%S")
+
+    if not logger.handlers: # There may already exists stream handlers.
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+
+    if file_name:
+        file_handler = logging.FileHandler(file_name, 'w') # overwrite the log file if exists
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+
+    return logger
+
 data_config_default = "conf/data/test_small/data.yaml"
 model_config_default = "conf/model/test_small/model.yaml"
 
@@ -1080,10 +1094,12 @@ else:
     device = torch.device("cuda:{}".format(GPUtil.getAvailable(order='memory')[0]) if torch.cuda.is_available() and GPUtil.getAvailable(order='memory') else "cpu")
 print("Device: '{}'\n".format(device))
 
+logger = init_logger(os.path.join(opts['result'], "report.log"))
 ###########################
 print("Loading Dataset...")
 data_config = yaml.load(open(opts['data_config']), Loader=yaml.FullLoader) # contains token2id map file and (train, dev, test) utterance json file
 pprint(data_config)
+print()
 
 token2id, id2token = {}, {}
 with open(data_config['token2id'], encoding='utf8') as ft2d:
@@ -1098,8 +1114,9 @@ assert opts['padding_token'] in token2id, \
 dataloader = {}
 padding_tokenid=token2id[opts['padding_token']] # global config.
 for dset in {'train', 'dev', 'test'}:
+    save_json = os.path.join(opts['result'], "excluded_utts_" + dset + ".json") # json file to save the excluded long utterances
     instances = json.load(open(data_config[dset], encoding='utf8')).values() # the json file mapping utterance id to instance (eg. {'02c': {'uttid': '02c' 'num_frames': 20}, ...})
-    if (opts['cutoff'] > 0): instances, _ = KaldiDataset.cutoff_long_instances(instances, cutoff=opts['cutoff'], dataset=dset, verbose=True) # cutoff the long utterances
+    if (opts['cutoff'] > 0): instances, _ = KaldiDataset.cutoff_long_instances(instances, cutoff=opts['cutoff'], dataset=dset, save_excluded_utts_to=save_json, logger=logger) # cutoff the long utterances
     dataset = KaldiDataset(instances, field_to_sort='num_frames') # Every batch has instances with similar lengths, thus less padded elements; required by pad_packed_sequence (pytorch < 1.3)
     shuffle_batch = True if dset == 'train' else False # shuffle the batch when training, with each batch has instances with similar lengths.
     dataloader[dset] = KaldiDataLoader(dataset=dataset, batch_size=opts['batch_size'], shuffle_batch=shuffle_batch, padding_tokenid=padding_tokenid)
@@ -1121,7 +1138,7 @@ def load_model_config(model_config: Dict) -> object:
      full_class_name = model_config.pop('class', None) # get model_config['class'] and delete 'class' item
      module_name, class_name = re.findall("<class '([0-9a-zA-Z_\.]+)\.([0-9a-zA-Z_]+)'>", full_class_name)[0]
      class_obj = getattr(importlib.import_module(module_name), class_name)
-     return class_obj(**model_config)
+     return class_obj(**model_config) # get a model object
 
 def save_model_config(path: str, model_config: Dict) -> None:
     assert ('class' in model_config), "The model configuration should contain the class name"
@@ -1142,7 +1159,7 @@ def save_model(model_name: str, model: nn.Module) -> None:
 first_batch = next(iter(dataloader['train']))
 feat_dim, vocab_size = first_batch['feat_dim'], first_batch['vocab_size'] # global config
 
-model_config = yaml.load(open(opts['model_config']), Loader=yaml.FullLoader)
+model_config = yaml.load(open(opts['model_config']), Loader=yaml.FullLoader) # yaml can load json or yaml
 model_config['enc_input_size'] = feat_dim
 model_config['dec_input_size'] = vocab_size
 model_config['dec_output_size'] = vocab_size
@@ -1226,7 +1243,7 @@ def run_batch(feat, feat_len, text, text_len, train_batch, model=model, loss_fun
     return loss.item(), acc.item()
 
 # save current script command
-logging.info('{}'.format(' '.join([x for x in sys.argv])))
+logger.info('{}'.format(' '.join([x for x in sys.argv])))
 
 best_dev_loss = sys.float_info.max
 best_dev_epoch = 0
@@ -1260,7 +1277,7 @@ for epoch in range(opts['num_epochs']):
         info_table.append([epoch, dataset_name, mean_loss[dataset_name], mean_acc[dataset_name]])
 
     epoch_duration = time.time() - start_time
-    logging.info("Epoch {} -- lrate {} -- time {:.2f}".format(epoch, optimizer.param_groups[0]['lr'], epoch_duration))
+    logger.info("Epoch {} -- lrate {} -- time {:.2f}".format(epoch, optimizer.param_groups[0]['lr'], epoch_duration))
 
     if epoch % opts['save_interval'] == 0:
         save_model("model_e{}".format(epoch), model)
@@ -1268,12 +1285,12 @@ for epoch in range(opts['num_epochs']):
     if best_dev_loss > mean_loss['dev']:
         best_dev_loss = mean_loss['dev']
         best_dev_epoch = epoch
-        logging.info("Get the better dev loss {:.3f} at epoch {} ... saving the model".format(best_dev_loss, best_dev_epoch))
+        logger.info("Get the better dev loss {:.3f} at epoch {} ... saving the model".format(best_dev_loss, best_dev_epoch))
         save_model("best_model", model)
 
-    print(tabulate(info_table, headers=['epoch', 'dataset', 'loss', 'acc'], floatfmt='.3f', tablefmt='rst'))
+    logger.info("\n" + tabulate(info_table, headers=['epoch', 'dataset', 'loss', 'acc'], floatfmt='.3f', tablefmt='rst'))
 
     if opts['reducelr']: scheduler.step(mean_loss['dev'], epoch)
 
-logging.info("Result path: {}".format(opts['result']))
-logging.info("Get the best dev loss {:.3f} at the epoch {}".format(best_dev_loss, best_dev_epoch))
+logger.info("Result path: {}".format(opts['result']))
+logger.info("Get the best dev loss {:.3f} at the epoch {}".format(best_dev_loss, best_dev_epoch))
