@@ -14,9 +14,9 @@ import math
 import re # parser class name
 import json # for data files
 import yaml # for config files
-from pprint import pprint
-from tabulate import tabulate
-from tqdm import tqdm
+import pprint
+import tabulate
+import tqdm
 
 import numpy as np
 import torch
@@ -139,7 +139,8 @@ def get_optim(name):
     if name.lower() in registered_optim:
         return registered_optim[name.lower()]
     else:
-        raise NotImplementedError("The optim module '{}' is not implemented\nAvaliable optim modules include {}".format(name, avaliable_optim))
+        raise NotImplementedError("The optim module '{}' is not implemented\n".format(name) +
+                                  "Avaliable optim modules include {}".format(avaliable_optim))
 
 def length2mask(sequence_lengths: torch.Tensor, max_length: Union[int, None] = None) -> torch.Tensor:
     """
@@ -190,7 +191,7 @@ class CrossEntropyLossLabelSmoothing(nn.Module):
     Paramters
     ---------
     label_smoothing: ratio smoothed by the uniform distribution
-    weight: weight of the each type of class; shape (num_classes) (eg. setting the weight zero when target is the padding label)
+    weight: weight of the each type of class; shape (num_classes) (e.g., setting the weight zero when target is the padding label)
     reduction: 'mean' or 'sum' or 'none'; take the 'mean' or 'sum' of loss over batch, or return loss per batch if 'none'.
 
     Paramters of forward function
@@ -233,13 +234,15 @@ class CrossEntropyLossLabelSmoothing(nn.Module):
 
     def forward(self, source: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         log_model_prob = torch.nn.functional.log_softmax(source, dim=-1) # batch_size x num_classes
-        cross_entropy_label_and_model = -log_model_prob.gather(dim=1, index=target.unsqueeze(1)).squeeze(1) # cross entropy per batch with shape of (batch_size)
+        cross_entropy_label_and_model = -log_model_prob.gather(dim=1, index=target.unsqueeze(1)).squeeze(1) # [batch_size]; ce per batch
 
         if(self.label_smoothing > 0):
             num_classes = source.shape[-1]
-            uniform_prob = torch.ones_like(source) * (1 / num_classes) # batch_size * num_classes; sometimes people use '1 / (num_classes - 2)' to exclude <sos> and <eos>
-            cross_entropy_uniform_and_model = -(log_model_prob * uniform_prob).sum(dim=-1) # cross entropy per batch with shape of (batch_size)
-            cross_entropy_mixed = (1 - self.label_smoothing) * cross_entropy_label_and_model + self.label_smoothing * cross_entropy_uniform_and_model
+            # sometimes '1/(num_classes-2)' to exclude <sos> and <eos>
+            uniform_prob = torch.ones_like(source) * (1 / num_classes) # [batch_size * num_classes]
+            cross_entropy_uniform_and_model = -(log_model_prob * uniform_prob).sum(dim=-1) # [batch_size]; cross entropy per batch
+            cross_entropy_mixed = (1 - self.label_smoothing) * cross_entropy_label_and_model + \
+                                  self.label_smoothing * cross_entropy_uniform_and_model
         else:
             cross_entropy_mixed = cross_entropy_label_and_model # shape of (batch_size)
 
@@ -311,8 +314,10 @@ class PyramidRNNEncoder(nn.Module):
         if not isinstance(enc_rnn_dropout, list): enc_rnn_dropout = [enc_rnn_dropout] * num_enc_rnn_layers
         if not isinstance(enc_rnn_subsampling, list): enc_rnn_subsampling = [enc_rnn_subsampling] * num_enc_rnn_layers
 
-        assert num_enc_fnn_layers == len(enc_fnn_dropout), "Number of fnn layers does not match the lengths of specified configuration lists."
-        assert num_enc_rnn_layers == len(enc_rnn_dropout) == len(enc_rnn_subsampling), "Number of rnn layers does not matches the lengths of specificed configuration lists."
+        assert num_enc_fnn_layers == len(enc_fnn_dropout), \
+            "Number of fnn layers does not match the lengths of specified configuration lists."
+        assert num_enc_rnn_layers == len(enc_rnn_dropout) == len(enc_rnn_subsampling), \
+            "Number of rnn layers does not matches the lengths of specificed configuration lists."
         assert enc_rnn_subsampling_type in {'concat', 'drop'}, \
             "The subsampling type '{}' is not implemented yet.\n".format(t) + \
             "Only support the type 'concat' and 'drop':\n" + \
@@ -455,7 +460,8 @@ class DotProductAttention(nn.Module):
     """  Attention by dot product.
     https://arxiv.org/abs/1508.04025 "Effective MNT" section 3.1 formula (8) (dot version)
 
-    DotProductAttention is a module that takes in a dict with key of 'query' and 'context' (alternative key of 'mask' and 'need_expected_context'),
+    DotProductAttention is a module that takes in a dict with key of 'query' and 'context'
+    (alternative key of 'mask' and 'need_expected_context'),
     and returns a output dict with key ('p_context' and 'expected_context').
 
     It takes 'query' (batch_size x query_size) and 'context' (batch_size x context_length x context_size),
@@ -500,7 +506,8 @@ class DotProductAttention(nn.Module):
         query = input['query'] # batch_size x query_size
         context = input['context'] # batch_size x context_length x context_size
         assert query.shape[-1] == context.shape[-1], \
-            "The query_size ({}) and context_size ({}) need to be same for the DotProductAttention.".format(query.shape[-1], context.shape[-1])
+            "The query_size ({}) and context_size ({}) need to be same for the DotProductAttention.".format(
+                query.shape[-1], context.shape[-1])
         mask = input.get('mask', None)
         need_expected_context = input.get('need_expected_context', True)
 
@@ -665,7 +672,7 @@ class LuongDecoder(nn.Module):
 
         # Copy the configuration for each layer
         num_rnn_layers = len(rnn_sizes)
-        if not isinstance(rnn_dropout, list): rnn_dropout = [rnn_dropout] * num_rnn_layers # sometimes the dropout does not apply to the top layer
+        if not isinstance(rnn_dropout, list): rnn_dropout = [rnn_dropout] * num_rnn_layers # sometimes dropout not at the top layer
         assert num_rnn_layers == len(rnn_dropout), "The number of rnn layers does not match length of rnn_dropout list."
 
         self.att_config = att_config
@@ -770,19 +777,24 @@ class EncRNNDecRNNAtt(nn.Module):
 
     The default encoder is pyramid RNN Encoder (https://arxiv.org/abs/1508.01211 "LAS" section 3.1 formula (5)),
     which passes the input feature through forward feedback neural network ('enc_fnn_*') and RNN ('enc_rnn_*').
-    Between the RNN layers we use the subsampling ('enc_rnn_subsampling_*') by concatenating both frames or taking the first frame every two frames.
+    Between the RNN layers we use the subsampling ('enc_rnn_subsampling_*')
+by concatenating both frames or taking the first frame every two frames.
 
     The default decoder is Luong Decoder (https://arxiv.org/abs/1508.04025 "Effective MNT"
     section 3 formula (5) to create attentional vector; section 3.3 the input feeding approach)
-    which passes the embedding of the input ('dec_embedding_*') along with previous attentional vector into a stacked RNN layers ('dec_rnn_*'),
+    which passes the embedding of the input ('dec_embedding_*')
+    along with previous attentional vector into a stacked RNN layers ('dec_rnn_*'),
     linearly projects the top RNN hidden state and expected context vector to the current attentional vector ('dec_context_proj_*'),
     and feed the attentional vector to next time step.
 
-    The default attention is the multilayer perception attention by concatenation (https://arxiv.org/abs/1508.04025 "Effective MNT" section 3.1 formula (8) (concat version))
-    which concatenates the hidden state from decoder and each part of context from encoder and passes them to two layers neural network to get the alignment score.
+    The default attention is the multilayer perception attention by concatenation
+    (https://arxiv.org/abs/1508.04025 "Effective MNT" section 3.1 formula (8) (concat version))
+    which concatenates the hidden state from decoder and each part of context from encoder
+    and passes them to two layers neural network to get the alignment score.
     The scores are then normalized to get the probability of different part of context and get the expected context vector.
 
-    We tie the embedding weight by default (https://arxiv.org/abs/1608.05859 "Using the Output Embedding to Improve Language Models" introduction),
+    We tie the embedding weight by default
+    (https://arxiv.org/abs/1608.05859 "Using the Output Embedding to Improve Language Models" introduction),
     which shares the weights between (dec_onehot => dec_embedding) and (output_embedding(attentional vector) => pre_softmax)
 
     Information flow:
@@ -809,7 +821,8 @@ class EncRNNDecRNNAtt(nn.Module):
                  enc_rnn_subsampling_type: str = 'concat', # 'concat' or 'drop'
                  dec_embedding_size: int = 256,
                  dec_embedding_dropout: float = 0.25,
-                 dec_embedding_weights_tied: bool = True, # share weights between (input_onehot => input_embedding) and (output_embedding => pre_softmax)
+                 # share weights between (input_onehot => input_embedding) and (output_embedding => pre_softmax)
+                 dec_embedding_weights_tied: bool = True,
                  dec_rnn_sizes: List[int] = [512, 512],
                  dec_rnn_config: Dict = {"type": "lstmcell"},
                  dec_rnn_dropout: Union[List[float], float] = 0.25,
@@ -884,8 +897,10 @@ class EncRNNDecRNNAtt(nn.Module):
         # Typing weight
         if (dec_embedding_weights_tied):
             assert (dec_input_size, dec_embedding_size) == (dec_output_size, dec_context_proj_size), \
-                f"When tying embedding weights: the shape of embedder weights: (dec_input_size = {dec_input_size}, dec_embedding_size = {dec_embedding_size})\n" + \
-                f"should be same as the shape of presoftmax weights: (dec_output_size = {dec_output_size}, dec_context_proj_size = {dec_context_proj_size})"
+                f"When tying embedding weights: the shape of embedder weights: " + \
+                f"(dec_input_size = {dec_input_size}, dec_embedding_size = {dec_embedding_size})\n" + \
+                f"should be same as the shape of presoftmax weights: " + \
+                f"(dec_output_size = {dec_output_size}, dec_context_proj_size = {dec_context_proj_size})"
             # tie weights between dec_embedder(input_onehot => input_embedding) and presoftmax(output_embedding => pre_softmax)
             self.dec_presoftmax.weight = self.dec_embedder.weight
 
@@ -1061,8 +1076,10 @@ model_config_default = "conf/model/test_small/model.yaml"
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=2020, help="seed")
-parser.add_argument('--gpu', type=str, default="0", help="eg. '--gpu 2' for using 'cuda:2'; '--gpu auto' for using the device with least gpu memory ")
-parser.add_argument('--data_config', type=str, default=data_config_default, help="configuration for dataset (eg. train, dev and test jsons; see: local/script/create_simple_utts_json.py)")
+parser.add_argument('--gpu', type=str, default="0",
+                    help="e.g., '--gpu 2' for using 'cuda:2'; '--gpu auto' for using the device with least gpu memory ")
+parser.add_argument('--data_config', type=str, default=data_config_default,
+                    help="configuration for dataset (e.g., train, dev and test jsons; see: local/script/create_simple_utts_json.py)")
 parser.add_argument('--cutoff', type=int, default=-1, help="cut off the utterances with the frames more than x.")
 parser.add_argument('--padding_token', type=str, default="<pad>", help="name of token for padding")
 parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
@@ -1079,14 +1096,14 @@ parser.add_argument('--grad_clip', type=float, default=20, help="Gradient clippi
 parser.add_argument('--result', type=str, default="tmp_result", help="result directory")
 parser.add_argument('--save_interval', type=int, default=1, help='save the model every x epoch')
 parser.add_argument('--overwrite_result', action='store_true', help='over write the result')
-parser.add_argument('--pretrained_model', default="", help="the path to pretrained model (model.mdl) with its configuration (model.conf) at same directory")
+parser.add_argument('--pretrained_model', default="",
+                    help="the path to pretrained model (model.mdl) with its configuration (model.conf) at same directory")
 args = parser.parse_args()
 
 ###########################
-print("Getting Options...")
 opts = vars(args)
-pprint(opts)
 
+np.random.seed(opts['seed'])
 torch.manual_seed(opts['seed'])
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(opts['seed'])
@@ -1095,14 +1112,16 @@ if opts['gpu'] != 'auto':
     device = torch.device("cuda:{}".format(opts['gpu']) if torch.cuda.is_available() else "cpu")
 else:
     import GPUtil # Get the device using the least GPU memory.
-    device = torch.device("cuda:{}".format(GPUtil.getAvailable(order='memory')[0]) if torch.cuda.is_available() and GPUtil.getAvailable(order='memory') else "cpu")
-print("Device: '{}'\n".format(device))
+    device = torch.device("cuda:{}".format(GPUtil.getAvailable(order='memory')[0]) if torch.cuda.is_available() and \
+                          GPUtil.getAvailable(order='memory') else "cpu")
 
+overwrite_warning=""
 if not os.path.exists(opts['result']):
     os.makedirs(opts['result'])
 else:
     assert os.path.dirname(opts['pretrained_model']) != opts['result'], \
-        "the pretrained_model '{}' at the existing result directory '{}' to be deleted for overwriting!".format(opts['pretrained_model'], opts['result'])
+        "the pretrained_model '{}' at the existing result directory '{}' to be deleted for overwriting!".format(
+            opts['pretrained_model'], opts['result'])
     overwrite_or_not = 'yes' if opts['overwrite_result'] else None
     while overwrite_or_not not in {'yes', 'no', 'n', 'y'}:
         overwrite_or_not = input("Overwriting the result directory ('{}') [y/n]?".format(opts['result']).lower().strip())
@@ -1110,16 +1129,21 @@ else:
             for x in glob.glob(os.path.join(opts['result'], "*")):
                 if os.path.isdir(x): shutil.rmtree(x)
                 if os.path.isfile(x): os.remove(x)
-            logging.warning("!!!Overwriting the result directory: '{}'".format(opts['result']))
+            overwrite_warning = "!!!Overwriting the result directory: '{}'".format(opts['result'])
         elif overwrite_or_not in {'no', 'n'}: sys.exit()
         else: continue
 
 logger = init_logger(os.path.join(opts['result'], "report.log"))
+
+if overwrite_warning: logger.warning(overwrite_warning)
+logger.info('{}'.format("python " + ' '.join([x for x in sys.argv]))) # save current script command
+logger.info("Getting Options...")
+logger.info("\n" + pprint.pformat(opts))
+logger.info("Device: '{}'".format(device))
 ###########################
-print("Loading Dataset...")
+logger.info("Loading Dataset...")
 data_config = yaml.load(open(opts['data_config']), Loader=yaml.FullLoader) # contains token2id map file and (train, dev, test) utterance json file
-pprint(data_config)
-print()
+logger.info("\n" + pprint.pformat(data_config))
 
 token2id, id2token = {}, {}
 with open(data_config['token2id'], encoding='utf8') as ft2d:
@@ -1127,31 +1151,34 @@ with open(data_config['token2id'], encoding='utf8') as ft2d:
         token, token_id = line.split()
         token2id[token] = int(token_id)
         id2token[int(token_id)] = token
-assert len(token2id) == len(id2token), "token and id in token2id file '{}' should be one-to-one correspondence".format(data_config['token2id'])
+assert len(token2id) == len(id2token), \
+    "token and id in token2id file '{}' should be one-to-one correspondence".format(data_config['token2id'])
 assert opts['padding_token'] in token2id, \
     "Required token {}, for padding the token sequence, not found in '{}' file".format(opts['padding_token'], data_config['token2id'])
 
 dataloader = {}
 padding_tokenid=token2id[opts['padding_token']] # global config.
 for dset in {'train', 'dev', 'test'}:
-    save_json = os.path.join(opts['result'], "excluded_utts_" + dset + ".json") # json file to save the excluded long utterances
-    instances = json.load(open(data_config[dset], encoding='utf8')).values() # the json file mapping utterance id to instance (eg. {'02c': {'uttid': '02c' 'num_frames': 20}, ...})
-    if (opts['cutoff'] > 0): instances, _ = KaldiDataset.cutoff_long_instances(instances, cutoff=opts['cutoff'], dataset=dset, save_excluded_utts_to=save_json, logger=logger) # cutoff the long utterances
+    instances = json.load(open(data_config[dset], encoding='utf8')).values() # the json file mapping utterance id to instance (e.g., {'02c': {'uttid': '02c' 'num_frames': 20}, ...})
+
+    save_json = os.path.join(opts['result'], "excluded_utts_" + dset + ".json") # json file (e.g., '$result_dir/excluded_utts_train.json') to save the excluded long utterances
+    if (opts['cutoff'] > 0):
+        instances, _ = KaldiDataset.cutoff_long_instances(instances, cutoff=opts['cutoff'], dataset=dset, save_excluded_utts_to=save_json, logger=logger) # cutoff the long utterances
+
     dataset = KaldiDataset(instances, field_to_sort='num_frames') # Every batch has instances with similar lengths, thus less padded elements; required by pad_packed_sequence (pytorch < 1.3)
     shuffle_batch = True if dset == 'train' else False # shuffle the batch when training, with each batch has instances with similar lengths.
     dataloader[dset] = KaldiDataLoader(dataset=dataset, batch_size=opts['batch_size'], shuffle_batch=shuffle_batch, padding_tokenid=padding_tokenid)
     # TODO: add example to dataloader?
     # TODO: use pip to install kaldi_io?
 
-print()
 ###########################
-print("Loading Model...\n")
+logger.info("Loading Model...")
 
 def load_model_config(model_config: Dict) -> object:
      """ Get a model object from model configuration file.
 
      The configuration contains model class name and object parameters,
-     eg. {'class': "<class 'seq2seq.asr.EncRNNDecRNNAtt'>", 'dec_embedding_size: 6}
+     e.g., {'class': "<class 'seq2seq.asr.EncRNNDecRNNAtt'>", 'dec_embedding_size: 6}
      """
      import importlib
      full_class_name = model_config.pop('class', None) # get model_config['class'] and delete 'class' item
@@ -1196,11 +1223,10 @@ else:
     model_config['enc_input_size'] = feat_dim
     model_config['dec_input_size'] = vocab_size
     model_config['dec_output_size'] = vocab_size
-
     model = load_model_config(model_config).to(device)
 
 ###########################
-print("Making Loss Function...\n")
+logger.info("Making Loss Function...")
 # Set the padding token with weight zero, other types one.
 classes_weight = torch.ones(vocab_size).detach().to(device)
 classes_weight[padding_tokenid] = 0
@@ -1208,14 +1234,15 @@ loss_func = CrossEntropyLossLabelSmoothing(label_smoothing=opts['label_smoothing
 loss_func.to(device)
 
 ###########################
-print("Setting Optimizer...\n")
+logger.info("Setting Optimizer...")
 optimizer = get_optim(opts['optim'])(model.parameters(), lr=opts['lr'])
 if opts['reducelr'] is not None:
     from torch.optim.lr_scheduler import ReduceLROnPlateau
-    scheduler = ReduceLROnPlateau(optimizer=optimizer, factor=opts['reducelr']['factor'], patience=opts['reducelr']['patience'], min_lr=5e-5, verbose=True)
+    scheduler = ReduceLROnPlateau(optimizer=optimizer, factor=opts['reducelr']['factor'],
+                                  patience=opts['reducelr']['patience'], min_lr=5e-5, verbose=True)
 
 ###########################
-print("Start Training...\n")
+logger.info("Start Training...")
 
 def run_batch(feat, feat_len, text, text_len, train_batch, model=model, loss_func=loss_func, optimizer=optimizer):
     """ Run one batch.
@@ -1258,7 +1285,8 @@ def run_batch(feat, feat_len, text, text_len, train_batch, model=model, loss_fun
     dec_presoftmax = torch.stack(dec_presoftmax_list, dim=-2) # batch_size x dec_length x vocab_size
 
     length_denominator = text_len - 1 # batch_size
-    loss = loss_func(dec_presoftmax.contiguous().view(batch_size * dec_length, -1), dec_target.contiguous().view(batch_size * dec_length)).view(batch_size, dec_length) # batch_size x dec_length
+    loss = loss_func(dec_presoftmax.contiguous().view(batch_size * dec_length, -1),
+                     dec_target.contiguous().view(batch_size * dec_length)).view(batch_size, dec_length) # batch_size x dec_length
     loss = loss.sum(-1) / length_denominator.float() # average over the each length of the batch; shape [batch_size]
     loss = loss.mean()
 
@@ -1275,9 +1303,6 @@ def run_batch(feat, feat_len, text, text_len, train_batch, model=model, loss_fun
 
     return loss.item(), acc.item()
 
-# save current script command
-logger.info('{}'.format(' '.join([x for x in sys.argv])))
-
 best_dev_loss = sys.float_info.max
 best_dev_epoch = 0
 
@@ -1292,7 +1317,7 @@ for epoch in range(opts['num_epochs']):
     for dataset_name, dataset_loader, dataset_train_mode in [['train', dataloader['train'], True],
                                                              ['dev', dataloader['dev'], False],
                                                              ['test', dataloader['test'], False]]:
-        for batch in tqdm(dataset_loader, ascii=True, ncols=50):
+        for batch in tqdm.tqdm(dataset_loader, ascii=True, ncols=50):
             feat, feat_len = batch['feat'].to(device), batch['num_frames'].to(device)
             text, text_len = batch['tokenid'].to(device), batch['num_tokens'].to(device)
             batch_loss, batch_acc = run_batch(feat, feat_len, text, text_len, train_batch=dataset_train_mode)
@@ -1321,7 +1346,7 @@ for epoch in range(opts['num_epochs']):
         logger.info("Get the better dev loss {:.3f} at epoch {} ... saving the model".format(best_dev_loss, best_dev_epoch))
         save_model("best_model", model)
 
-    logger.info("\n" + tabulate(info_table, headers=['epoch', 'dataset', 'loss', 'acc'], floatfmt='.3f', tablefmt='rst'))
+    logger.info("\n" + tabulate.tabulate(info_table, headers=['epoch', 'dataset', 'loss', 'acc'], floatfmt='.3f', tablefmt='rst'))
 
     if opts['reducelr']: scheduler.step(mean_loss['dev'], epoch)
 
