@@ -423,7 +423,7 @@ def test_encoder():
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-    json_file = 'data/test_small/utts.json'
+    json_file = 'conf/data/test_small/utts.json'
     padding_tokenid = 1 # follow torchtext
 
     with open(json_file, encoding='utf8') as f:
@@ -1004,7 +1004,7 @@ def test_EncRNNDecRNNAtt():
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-    json_file = 'data/test_small/utts.json'
+    json_file = 'conf/data/test_small/utts.json'
     padding_tokenid = 1 # follow torchtext
 
     with open(json_file, encoding='utf8') as f:
