@@ -1203,9 +1203,9 @@ padding_tokenid=token2id[opts['padding_token']] # global config.
 for dset in {'train', 'dev', 'test'}:
     instances = json.load(open(data_config[dset], encoding='utf8')).values() # the json file mapping utterance id to instance (e.g., {'02c': {'uttid': '02c' 'num_frames': 20}, ...})
 
-    save_json = os.path.join(opts['result'], "excluded_utts_" + dset + ".json") # json file (e.g., '$result_dir/excluded_utts_train.json') to save the excluded long utterances
+    save_json_path = os.path.join(opts['result'], "excluded_utts_" + dset + ".json") # json file (e.g., '$result_dir/excluded_utts_train.json') to save the excluded long utterances
     if (opts['cutoff'] > 0):
-        instances, _ = KaldiDataset.cutoff_long_instances(instances, cutoff=opts['cutoff'], dataset=dset, save_excluded_utts_to=save_json, logger=logger) # cutoff the long utterances
+        instances, _ = KaldiDataset.cutoff_long_instances(instances, cutoff=opts['cutoff'], dataset=dset, save_excluded_utts_to=save_json_path, logger=logger) # cutoff the long utterances
 
     dataset = KaldiDataset(instances, field_to_sort='num_frames') # Every batch has instances with similar lengths, thus less padded elements; required by pad_packed_sequence (pytorch < 1.3)
     shuffle_batch = True if dset == 'train' else False # shuffle the batch when training, with each batch has instances with similar lengths.
@@ -1228,21 +1228,21 @@ def load_model_config(model_config: Dict) -> object:
      class_obj = getattr(importlib.import_module(module_name), class_name)
      return class_obj(**model_config) # get a model object
 
-def save_model_config(path: str, model_config: Dict) -> None:
+def save_model_config(model_config: Dict, path: str) -> None:
     assert ('class' in model_config), "The model configuration should contain the class name"
     json.dump(model_config, open(path, 'w'), indent=4)
 
-def save_model_state_dict(path: str, model_state_dict: Dict) -> None:
+def save_model_state_dict(model_state_dict: Dict, path: str) -> None:
     model_state_dict_at_cpu = {k: v.cpu() for k, v in list(model_state_dict.items())}
     torch.save(model_state_dict_at_cpu, path)
 
-def save_options(path: str, options: Dict) -> None:
+def save_options(options: Dict, path: str) -> None:
     json.dump(options, open(path, 'w'), indent=4)
 
 def save_model(model_name: str, model: nn.Module) -> None:
-    save_options(os.path.join(opts['result'], f"{model_name}.opt"), opts)
-    save_model_config(os.path.join(opts['result'], f"{model_name}.conf"), model.get_config())
-    save_model_state_dict(os.path.join(opts['result'], f"{model_name}.mdl"), model.state_dict())
+    save_options(opts, os.path.join(opts['result'], f"{model_name}.opt"))
+    save_model_config(model.get_config(), os.path.join(opts['result'], f"{model_name}.conf"))
+    save_model_state_dict(model.state_dict(), os.path.join(opts['result'], f"{model_name}.mdl"))
 
 def load_pretrained_model_with_config(model_path: str) -> nn.Module:
     """ Given the path to the model, load the model ($dir/model_name.mdl)
