@@ -2,6 +2,8 @@ from typing import List, Dict, Tuple, Union, Any
 
 import sys
 import os
+import shutil
+import glob
 import time
 import logging
 # Add clib package at current directory to the binary searching path.
@@ -1076,6 +1078,7 @@ parser.add_argument('--grad_clip', type=float, default=20, help="Gradient clippi
 parser.add_argument('--disable_progress_bar', action='store_true', help="Disable progress bar")
 parser.add_argument('--result', type=str, default="tmp_result", help="result directory")
 parser.add_argument('--save_interval', type=int, default=1, help='save the model every x epoch')
+parser.add_argument('--overwrite_result', action='store_true', help='over write the result')
 args = parser.parse_args()
 
 ###########################
@@ -1093,6 +1096,20 @@ else:
     import GPUtil # Get the device using the least GPU memory.
     device = torch.device("cuda:{}".format(GPUtil.getAvailable(order='memory')[0]) if torch.cuda.is_available() and GPUtil.getAvailable(order='memory') else "cpu")
 print("Device: '{}'\n".format(device))
+
+if not os.path.exists(opts['result']):
+    os.makedirs(opts['result'])
+else:
+    overwrite_or_not = 'yes' if opts['overwrite_result'] else None
+    while overwrite_or_not not in {'yes', 'no', 'n', 'y'}:
+        overwrite_or_not = input("Overwriting the result directory ('{}') [y/n]?".format(opts['result']).lower().strip())
+        if overwrite_or_not in {'yes', 'y'}:
+            for x in glob.glob(os.path.join(opts['result'], "*")):
+                if os.path.isdir(x): shutil.rmtree(x)
+                if os.path.isfile(x): os.remove(x)
+            logging.warning("!!!Overwriting the result directory: '{}'".format(opts['result']))
+        elif overwrite_or_not in {'no', 'n'}: sys.exit()
+        else: continue
 
 logger = init_logger(os.path.join(opts['result'], "report.log"))
 ###########################
@@ -1120,7 +1137,6 @@ for dset in {'train', 'dev', 'test'}:
     dataset = KaldiDataset(instances, field_to_sort='num_frames') # Every batch has instances with similar lengths, thus less padded elements; required by pad_packed_sequence (pytorch < 1.3)
     shuffle_batch = True if dset == 'train' else False # shuffle the batch when training, with each batch has instances with similar lengths.
     dataloader[dset] = KaldiDataLoader(dataset=dataset, batch_size=opts['batch_size'], shuffle_batch=shuffle_batch, padding_tokenid=padding_tokenid)
-    # TODO: add save excluded instances
     # TODO: add example to dataloader?
     # TODO: use pip to install kaldi_io?
 
@@ -1274,7 +1290,7 @@ for epoch in range(opts['num_epochs']):
         # averge over number of utterances of the whole dataset for the current epoch
         mean_loss[dataset_name] /= mean_count[dataset_name]
         mean_acc[dataset_name] /= mean_count[dataset_name]
-        info_table.append([epoch, dataset_name, mean_loss[dataset_name], mean_acc[dataset_name]])
+        info_table.append([epoch, dataset_name + "_set", mean_loss[dataset_name], mean_acc[dataset_name]])
 
     epoch_duration = time.time() - start_time
     logger.info("Epoch {} -- lrate {} -- time {:.2f}".format(epoch, optimizer.param_groups[0]['lr'], epoch_duration))
