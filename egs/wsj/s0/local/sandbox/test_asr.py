@@ -1061,11 +1061,11 @@ model_config_default = "conf/model/test_small/model.yaml"
 parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=2020, help="seed")
 parser.add_argument('--gpu', type=str, default="0", help="eg. '--gpu 2' for using 'cuda:2'; '--gpu auto' for using the device with least gpu memory ")
-parser.add_argument('--data_config', type=str, default=data_config_default, help="config. for dataset (eg. train, dev and test jsons; see: local/script/create_simple_utts_json.py)")
+parser.add_argument('--data_config', type=str, default=data_config_default, help="configuration for dataset (eg. train, dev and test jsons; see: local/script/create_simple_utts_json.py)")
 parser.add_argument('--cutoff', type=int, default=-1, help="cut off the utterances with the frames more than x.")
 parser.add_argument('--padding_token', type=str, default="<pad>", help="name of token for padding")
 parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
-parser.add_argument('--model_config', type=str, default=model_config_default, help="config. for model") #TODO: add pretrained model
+parser.add_argument('--model_config', type=str, default=model_config_default, help="configuration for model") #TODO: add pretrained model
 parser.add_argument('--label_smoothing', type=float, default=0, help="label smoothing for loss function")
 parser.add_argument('--optim', type=str, default='Adam', help="optimizer")
 parser.add_argument('--lr', type=float, default=0.001, help="learning rate for optimizer")
@@ -1075,10 +1075,10 @@ parser.add_argument('--reducelr', type=dict, default={'factor':0.5, 'patience':3
                     reduce the lr by lr = lr * 'factor'")
 parser.add_argument('--num_epochs', type=int, default=1, help="number of epochs")
 parser.add_argument('--grad_clip', type=float, default=20, help="Gradient clipping to prevent exploding gradient (NaN).")
-parser.add_argument('--disable_progress_bar', action='store_true', help="Disable progress bar")
 parser.add_argument('--result', type=str, default="tmp_result", help="result directory")
 parser.add_argument('--save_interval', type=int, default=1, help='save the model every x epoch')
 parser.add_argument('--overwrite_result', action='store_true', help='over write the result')
+parser.add_argument('--pretrained_model', default="", help="the path to pretrained model (model.mdl) with its configuration (model.conf) at same directory")
 args = parser.parse_args()
 
 ###########################
@@ -1100,6 +1100,8 @@ print("Device: '{}'\n".format(device))
 if not os.path.exists(opts['result']):
     os.makedirs(opts['result'])
 else:
+    assert os.path.dirname(opts['pretrained_model']) != opts['result'], \
+        "the pretrained_model '{}' at the existing result directory '{}' to be deleted for overwriting!".format(opts['pretrained_model'], opts['result'])
     overwrite_or_not = 'yes' if opts['overwrite_result'] else None
     while overwrite_or_not not in {'yes', 'no', 'n', 'y'}:
         overwrite_or_not = input("Overwriting the result directory ('{}') [y/n]?".format(opts['result']).lower().strip())
@@ -1172,15 +1174,29 @@ def save_model(model_name: str, model: nn.Module) -> None:
     save_model_config(os.path.join(opts['result'], f"{model_name}.conf"), model.get_config())
     save_model_state_dict(os.path.join(opts['result'], f"{model_name}.mdl"), model.state_dict())
 
+def load_pretrained_model_with_config(model_path: str) -> nn.Module:
+    """ Given the path to the model, load the model ($dir/model_name.mdl)
+    along with its configuration ($dir/model_name.conf) at the same time. """
+    assert model_path.endswith(".mdl"), "model '{}' should end with '.mdl'".format(model_path)
+    config_path = os.path.splitext(model_path)[0] + ".conf"
+    model_config = yaml.load(open(config_path), Loader=yaml.FullLoader)
+    pretrained_model = load_model_config(model_config)
+    pretrained_model.load_state_dict(torch.load(model_path))
+    return pretrained_model
+
 first_batch = next(iter(dataloader['train']))
 feat_dim, vocab_size = first_batch['feat_dim'], first_batch['vocab_size'] # global config
 
-model_config = yaml.load(open(opts['model_config']), Loader=yaml.FullLoader) # yaml can load json or yaml
-model_config['enc_input_size'] = feat_dim
-model_config['dec_input_size'] = vocab_size
-model_config['dec_output_size'] = vocab_size
+if opts['pretrained_model']:
+    model = load_pretrained_model_with_config(opts['pretrained_model']).to(device)
+    logger.info("Loading the pretrained model '{}'".format(opts['pretrained_model']))
+else:
+    model_config = yaml.load(open(opts['model_config']), Loader=yaml.FullLoader) # yaml can load json or yaml
+    model_config['enc_input_size'] = feat_dim
+    model_config['dec_input_size'] = vocab_size
+    model_config['dec_output_size'] = vocab_size
 
-model = load_model_config(model_config).to(device)
+    model = load_model_config(model_config).to(device)
 
 ###########################
 print("Making Loss Function...\n")
@@ -1275,7 +1291,7 @@ for epoch in range(opts['num_epochs']):
     for dataset_name, dataset_loader, dataset_train_mode in [['train', dataloader['train'], True],
                                                              ['dev', dataloader['dev'], False],
                                                              ['test', dataloader['test'], False]]:
-        for batch in tqdm(dataset_loader, ascii=True, ncols=50, disable=opts['disable_progress_bar']):
+        for batch in tqdm(dataset_loader, ascii=True, ncols=50):
             feat, feat_len = batch['feat'].to(device), batch['num_frames'].to(device)
             text, text_len = batch['tokenid'].to(device), batch['num_tokens'].to(device)
             batch_loss, batch_acc = run_batch(feat, feat_len, text, text_len, train_batch=dataset_train_mode)
