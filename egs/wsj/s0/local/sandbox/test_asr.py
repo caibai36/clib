@@ -26,11 +26,6 @@ from torch.nn.utils.rnn import pack_padded_sequence as pack, pad_packed_sequence
 
 from clib.kaldi.kaldi_data import KaldiDataLoader, KaldiDataset
 
-seed = 2019
-torch.manual_seed(seed)
-if torch.cuda.is_available():
-    torch.cuda.manual_seed_all(seed)
-
 def get_rnn(name):
     """ Get the RNN module by its name string.
     We can write module name directly in the configuration file.
@@ -257,6 +252,12 @@ class CrossEntropyLossLabelSmoothing(nn.Module):
             return cross_entropy_mixed.mean(dim=-1)
 
 def test_cross_entropy_label_smooth():
+    seed = 2019
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Device: '{}'".format(device))
 
@@ -275,7 +276,7 @@ def test_cross_entropy_label_smooth():
     B = torch.Tensor([0.6011, 0.4742, 0.6011]).to(device)
     print(A)
     print(B)
-    assert torch.all(torch.lt(torch.abs(torch.add(A,-B)), 1e-4)) # A == B
+    assert torch.all(torch.lt(torch.abs(torch.add(A, -B)), 1e-4)) # A == B
 
 class PyramidRNNEncoder(nn.Module):
     """ The RNN encoder with support of subsampling (for input with long length such as speech feature).
@@ -361,7 +362,7 @@ class PyramidRNNEncoder(nn.Module):
     def encode(self,
                input: torch.Tensor,
                input_lengths: Union[torch.Tensor, None] = None,
-               verbose: bool = False)->(torch.Tensor, torch.Tensor):
+               verbose: bool = False) -> (torch.Tensor, torch.Tensor):
         """ Encode the feature (batch_size x max_seq_length x in_size), optionally with its lengths (batch_size),
         and output the context vector (batch_size x max_seq_length' x context_size)
         with its mask (batch_size x max_seq_length').
@@ -417,6 +418,11 @@ class PyramidRNNEncoder(nn.Module):
         return context, context_mask
 
 def test_encoder():
+    seed = 2019
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
     json_file = 'data/test_small/utts.json'
     padding_tokenid = 1 # follow torchtext
 
@@ -592,6 +598,11 @@ class MLPAttention(nn.Module):
                 'expected_context': expected_context}
 
 def test_attention() :
+    seed = 2019
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Device: '{}'".format(device))
 
@@ -749,12 +760,17 @@ class LuongDecoder(nn.Module):
         return output, att_out
 
 def test_luong_decoder():
+    seed = 2019
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Device: '{}'".format(device))
 
     input_embedding = torch.Tensor([[0.3, 0.4], [0.3, 0.5]])
     context = torch.Tensor([[[3, 4], [4, 3]], [[3, 5], [3, 4]]])
-    context_mask = torch.ByteTensor([[1, 1],[1, 0]])
+    context_mask = torch.ByteTensor([[1, 1], [1, 0]])
 
     luong_decoder = LuongDecoder(att_config={"type": "mlp"},
                                  context_size=context.shape[-1],
@@ -905,34 +921,34 @@ by concatenating both frames or taking the first frame every two frames.
             self.dec_presoftmax.weight = self.dec_embedder.weight
 
     def get_config(self) -> Dict:
-        return { 'class': str(self.__class__),
-                 'enc_input_size': self.enc_input_size,
-                 'dec_input_size': self.dec_input_size,
-                 'dec_output_size': self.dec_output_size,
-                 'enc_fnn_sizes': self.enc_fnn_sizes,
-                 'enc_fnn_act': self.enc_fnn_act,
-                 'enc_fnn_dropout': self.enc_fnn_dropout,
-                 'enc_rnn_sizes': self.enc_rnn_sizes,
-                 'enc_rnn_config': self.enc_rnn_config,
-                 'enc_rnn_dropout': self.enc_rnn_dropout,
-                 'enc_rnn_subsampling': self.enc_rnn_subsampling,
-                 'enc_rnn_subsampling_type': self.enc_rnn_subsampling_type,
-                 'dec_embedding_size': self.dec_embedding_size,
-                 'dec_embedding_dropout': self.dec_embedding_dropout,
-                 'dec_embedding_weights_tied': self.dec_embedding_weights_tied,
-                 'dec_rnn_sizes': self.dec_rnn_sizes,
-                 'dec_rnn_config': self.dec_rnn_config,
-                 'dec_rnn_dropout': self.dec_rnn_dropout,
-                 'dec_context_proj_size': self.dec_context_proj_size,
-                 'dec_context_proj_act': self.dec_context_proj_act,
-                 'dec_context_proj_dropout': self.dec_context_proj_dropout,
-                 'enc_config': self.enc_config,
-                 'dec_config': self.dec_config,
-                 'att_config': self.att_config}
+        return {'class': str(self.__class__),
+                'enc_input_size': self.enc_input_size,
+                'dec_input_size': self.dec_input_size,
+                'dec_output_size': self.dec_output_size,
+                'enc_fnn_sizes': self.enc_fnn_sizes,
+                'enc_fnn_act': self.enc_fnn_act,
+                'enc_fnn_dropout': self.enc_fnn_dropout,
+                'enc_rnn_sizes': self.enc_rnn_sizes,
+                'enc_rnn_config': self.enc_rnn_config,
+                'enc_rnn_dropout': self.enc_rnn_dropout,
+                'enc_rnn_subsampling': self.enc_rnn_subsampling,
+                'enc_rnn_subsampling_type': self.enc_rnn_subsampling_type,
+                'dec_embedding_size': self.dec_embedding_size,
+                'dec_embedding_dropout': self.dec_embedding_dropout,
+                'dec_embedding_weights_tied': self.dec_embedding_weights_tied,
+                'dec_rnn_sizes': self.dec_rnn_sizes,
+                'dec_rnn_config': self.dec_rnn_config,
+                'dec_rnn_dropout': self.dec_rnn_dropout,
+                'dec_context_proj_size': self.dec_context_proj_size,
+                'dec_context_proj_act': self.dec_context_proj_act,
+                'dec_context_proj_dropout': self.dec_context_proj_dropout,
+                'enc_config': self.enc_config,
+                'dec_config': self.dec_config,
+                'att_config': self.att_config}
 
     def encode(self,
                enc_input: torch.Tensor,
-               enc_input_lengths: Union[torch.Tensor, None] = None)->Tuple[torch.Tensor, torch.Tensor]:
+               enc_input_lengths: Union[torch.Tensor, None] = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Paramters
         ---------
@@ -983,6 +999,11 @@ by concatenating both frames or taking the first frame every two frames.
         self.decoder.reset()
 
 def test_EncRNNDecRNNAtt():
+    seed = 2019
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
     json_file = 'data/test_small/utts.json'
     padding_tokenid = 1 # follow torchtext
 
@@ -1071,6 +1092,21 @@ def init_logger(file_name="", stream="stdout"):
 
     return logger
 
+def continue_train():
+    """ Returns a bool indicating continue training or not and an integer of how more epochs to train"""
+    continue_or_not = ""
+    while continue_or_not not in ['yes', 'y', 'no', 'n']:
+        continue_or_not = input("Continue to train [y/n]?").lower().strip()
+        if continue_or_not in ['yes', 'y']: break
+        elif continue_or_not in ['no', 'n']: break
+        else: continue
+
+    add_epochs = "0" if continue_or_not in ['no', 'n'] else ""
+    while not add_epochs.isdigit():
+        add_epochs = input("How many addition epochs [1 to N]:").lower().strip()
+
+    return continue_or_not in ['yes', 'y'], int(add_epochs)
+
 data_config_default = "conf/data/test_small/data.yaml"
 model_config_default = "conf/model/test_small/model.yaml"
 
@@ -1078,12 +1114,16 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--seed', type=int, default=2020, help="seed")
 parser.add_argument('--gpu', type=str, default="0",
                     help="e.g., '--gpu 2' for using 'cuda:2'; '--gpu auto' for using the device with least gpu memory ")
+
 parser.add_argument('--data_config', type=str, default=data_config_default,
                     help="configuration for dataset (e.g., train, dev and test jsons; see: local/script/create_simple_utts_json.py)")
 parser.add_argument('--cutoff', type=int, default=-1, help="cut off the utterances with the frames more than x.")
 parser.add_argument('--padding_token', type=str, default="<pad>", help="name of token for padding")
 parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
-parser.add_argument('--model_config', type=str, default=model_config_default, help="configuration for model") #TODO: add pretrained model
+
+parser.add_argument('--model_config', type=str, default=model_config_default, help="configuration for model")
+parser.add_argument('--pretrained_model', default="",
+                    help="the path to pretrained model (model.mdl) with its configuration (model.conf) at same directory")
 parser.add_argument('--label_smoothing', type=float, default=0, help="label smoothing for loss function")
 parser.add_argument('--optim', type=str, default='Adam', help="optimizer")
 parser.add_argument('--lr', type=float, default=0.001, help="learning rate for optimizer")
@@ -1091,13 +1131,15 @@ parser.add_argument('--reducelr', type=dict, default={'factor':0.5, 'patience':3
                     help="None or a dict with keys of 'factor' and 'patience'. \
                     If performance keeps bad more than 'patience' epochs, \
                     reduce the lr by lr = lr * 'factor'")
+
 parser.add_argument('--num_epochs', type=int, default=1, help="number of epochs")
 parser.add_argument('--grad_clip', type=float, default=20, help="Gradient clipping to prevent exploding gradient (NaN).")
-parser.add_argument('--result', type=str, default="tmp_result", help="result directory")
 parser.add_argument('--save_interval', type=int, default=1, help='save the model every x epoch')
+
+parser.add_argument('--result', type=str, default="tmp_result", help="result directory")
 parser.add_argument('--overwrite_result', action='store_true', help='over write the result')
-parser.add_argument('--pretrained_model', default="",
-                    help="the path to pretrained model (model.mdl) with its configuration (model.conf) at same directory")
+parser.add_argument('--exit', action='store_true', help="immediately exit training or continue with additional epochs")
+
 args = parser.parse_args()
 
 ###########################
@@ -1115,7 +1157,7 @@ else:
     device = torch.device("cuda:{}".format(GPUtil.getAvailable(order='memory')[0]) if torch.cuda.is_available() and \
                           GPUtil.getAvailable(order='memory') else "cpu")
 
-overwrite_warning=""
+overwrite_warning = ""
 if not os.path.exists(opts['result']):
     os.makedirs(opts['result'])
 else:
@@ -1130,7 +1172,7 @@ else:
                 if os.path.isdir(x): shutil.rmtree(x)
                 if os.path.isfile(x): os.remove(x)
             overwrite_warning = "!!!Overwriting the result directory: '{}'".format(opts['result'])
-        elif overwrite_or_not in {'no', 'n'}: sys.exit()
+        elif overwrite_or_not in {'no', 'n'}: sys.exit(0)
         else: continue
 
 logger = init_logger(os.path.join(opts['result'], "report.log"))
@@ -1306,8 +1348,9 @@ def run_batch(feat, feat_len, text, text_len, train_batch, model=model, loss_fun
 best_dev_loss = sys.float_info.max
 best_dev_epoch = 0
 
-opts['num_epochs'] = 10
-for epoch in range(opts['num_epochs']):
+epoch = 0
+num_epochs = opts['num_epochs'] = 10
+while epoch < num_epochs:
     start_time = time.time()
     # take mean over statistics of utterances
     mean_loss = dict(train=0, dev=0, test=0)
@@ -1349,6 +1392,14 @@ for epoch in range(opts['num_epochs']):
     logger.info("\n" + tabulate.tabulate(info_table, headers=['epoch', 'dataset', 'loss', 'acc'], floatfmt='.3f', tablefmt='rst'))
 
     if opts['reducelr']: scheduler.step(mean_loss['dev'], epoch)
+
+    if epoch == num_epochs - 1 and not opts['exit']:
+        continue_or_not, add_epochs = continue_train()
+        if continue_or_not and add_epochs:
+            num_epochs += add_epochs
+            logging.info("Add {} more epochs".format(add_epochs))
+
+    epoch += 1
 
 logger.info("Result path: {}".format(opts['result']))
 logger.info("Get the best dev loss {:.3f} at the epoch {}".format(best_dev_loss, best_dev_epoch))
