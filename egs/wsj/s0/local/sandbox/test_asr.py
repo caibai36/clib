@@ -1037,13 +1037,14 @@ def test_EncRNNDecRNNAtt():
 # test_luong_decoder()
 # test_EncRNNDecRNNAtt()
 
-def init_logger(file_name=""):
+def init_logger(file_name="", stream="stdout"):
     """ Initialize a logger to terminal and file at the same time. """
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter("[ %(asctime)s | %(filename)s | %(levelname)s ] %(message)s", "%d/%m/%Y %H:%M:%S")
 
-    if not logger.handlers: # There may already exists stream handlers.
+    logger.handlers = [] # Clear existing stream and file handlers
+    if stream == "stdout":
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
