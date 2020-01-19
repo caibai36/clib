@@ -252,7 +252,7 @@ class CrossEntropyLossLabelSmoothing(nn.Module):
             return cross_entropy_mixed.mean(dim=-1)
 
 def test_cross_entropy_label_smooth():
-    seed = 2019
+    seed = 2020
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
@@ -418,7 +418,7 @@ class PyramidRNNEncoder(nn.Module):
         return context, context_mask
 
 def test_encoder():
-    seed = 2019
+    seed = 2020
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
@@ -598,7 +598,7 @@ class MLPAttention(nn.Module):
                 'expected_context': expected_context}
 
 def test_attention() :
-    seed = 2019
+    seed = 2020
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
@@ -760,7 +760,7 @@ class LuongDecoder(nn.Module):
         return output, att_out
 
 def test_luong_decoder():
-    seed = 2019
+    seed = 2020
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
@@ -999,7 +999,7 @@ by concatenating both frames or taking the first frame every two frames.
         self.decoder.reset()
 
 def test_EncRNNDecRNNAtt():
-    seed = 2019
+    seed = 2020
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
@@ -1116,12 +1116,14 @@ parser.add_argument('--gpu', type=str, default="0",
                     help="e.g., '--gpu 2' for using 'cuda:2'; '--gpu auto' for using the device with least gpu memory ")
 
 parser.add_argument('--data_config', type=str, default=data_config_default,
-                    help="configuration for dataset (e.g., train, dev and test jsons; see: local/script/create_simple_utts_json.py)")
+                    help="configuration for dataset (e.g., train, dev and test jsons; \
+                    see: conf/data/test_small/data.yaml or conf/data/test_small/create_simple_utts_json.py)")
 parser.add_argument('--cutoff', type=int, default=-1, help="cut off the utterances with the frames more than x.")
 parser.add_argument('--padding_token', type=str, default="<pad>", help="name of token for padding")
 parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
 
-parser.add_argument('--model_config', type=str, default=model_config_default, help="configuration for model")
+parser.add_argument('--model_config', type=str, default=model_config_default,
+                    help="configuration for model; see: conf/data/test_small/model.yaml")
 parser.add_argument('--pretrained_model', default="",
                     help="the path to pretrained model (model.mdl) with its configuration (model.conf) at same directory")
 parser.add_argument('--label_smoothing', type=float, default=0, help="label smoothing for loss function")
@@ -1133,7 +1135,7 @@ parser.add_argument('--reducelr', type=dict, default={'factor':0.5, 'patience':3
                     reduce the lr by lr = lr * 'factor'")
 
 parser.add_argument('--num_epochs', type=int, default=1, help="number of epochs")
-parser.add_argument('--grad_clip', type=float, default=20, help="Gradient clipping to prevent exploding gradient (NaN).")
+parser.add_argument('--grad_clip', type=float, default=20, help="gradient clipping to prevent exploding gradient (NaN).")
 parser.add_argument('--save_interval', type=int, default=1, help='save the model every x epoch')
 
 parser.add_argument('--result', type=str, default="tmp_result", help="result directory")
@@ -1210,8 +1212,6 @@ for dset in {'train', 'dev', 'test'}:
     dataset = KaldiDataset(instances, field_to_sort='num_frames') # Every batch has instances with similar lengths, thus less padded elements; required by pad_packed_sequence (pytorch < 1.3)
     shuffle_batch = True if dset == 'train' else False # shuffle the batch when training, with each batch has instances with similar lengths.
     dataloader[dset] = KaldiDataLoader(dataset=dataset, batch_size=opts['batch_size'], shuffle_batch=shuffle_batch, padding_tokenid=padding_tokenid)
-    # TODO: add example to dataloader?
-    # TODO: use pip to install kaldi_io?
 
 ###########################
 logger.info("Loading Model...")
