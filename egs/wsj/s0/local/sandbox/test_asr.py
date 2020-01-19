@@ -1134,7 +1134,7 @@ parser.add_argument('--reducelr', type=dict, default={'factor':0.5, 'patience':3
                     If performance keeps bad more than 'patience' epochs, \
                     reduce the lr by lr = lr * 'factor'")
 
-parser.add_argument('--num_epochs', type=int, default=1, help="number of epochs")
+parser.add_argument('--num_epochs', type=int, default=10, help="number of epochs")
 parser.add_argument('--grad_clip', type=float, default=20, help="gradient clipping to prevent exploding gradient (NaN).")
 parser.add_argument('--save_interval', type=int, default=1, help='save the model every x epoch')
 
@@ -1349,7 +1349,7 @@ best_dev_loss = sys.float_info.max
 best_dev_epoch = 0
 
 epoch = 0
-num_epochs = opts['num_epochs'] = 10
+num_epochs = opts['num_epochs']
 while epoch < num_epochs:
     start_time = time.time()
     # take mean over statistics of utterances
