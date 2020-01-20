@@ -1328,14 +1328,14 @@ def train_asr():
     def continue_train():
         """ Returns a bool indicating continue training or not and an integer of how more epochs to train"""
         continue_or_not = ""
-        while continue_or_not not in ['yes', 'y', 'no', 'n']:
+        while continue_or_not not in {'yes', 'y', 'no', 'n'}:
             continue_or_not = input("Continue to train [y/n]?").lower().strip()
 
-        add_epochs = "0" if continue_or_not in ['no', 'n'] else ""
+        add_epochs = "0" if continue_or_not in {'no', 'n'} else ""
         while not add_epochs.isdigit():
             add_epochs = input("How many addition epochs [1 to N]:").lower().strip()
 
-        return continue_or_not in ['yes', 'y'], int(add_epochs)
+        return continue_or_not in {'yes', 'y'}, int(add_epochs)
 
     best_dev_loss = sys.float_info.max
     best_dev_epoch = 0
@@ -1401,4 +1401,10 @@ def train_asr():
 # test_attention()
 # test_luong_decoder()
 # test_EncRNNDecRNNAtt()
-train_asr()
+# train_asr()
+
+subcommand = None
+# subcommand = 'skip'
+while subcommand not in {'1', 'train_asr', 'skip'}:
+    subcommand = input("index name\n[1] train_asr\n[2] eval_asr\nEnter index or name (e.g. 1 or train_asr)\n").lower().strip()
+if subcommand in {'1', 'train_asr'}: train_asr()
