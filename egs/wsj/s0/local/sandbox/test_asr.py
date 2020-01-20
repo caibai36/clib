@@ -1160,7 +1160,7 @@ def train_asr():
     logger = init_logger(os.path.join(opts['result'], "report.log"))
 
     if overwrite_warning: logger.warning(overwrite_warning)
-    logger.info('{}'.format("python " + ' '.join([x for x in sys.argv]))) # save current script command
+    logger.info("python " + ' '.join([x for x in sys.argv])) # save current script command
     logger.info("Getting Options...")
     logger.info("\n" + pprint.pformat(opts))
     logger.info("Device: '{}'".format(device))
@@ -1325,11 +1325,11 @@ def train_asr():
 
         return loss.item(), acc.item()
 
-    def continue_train():
+    def continue_train(message=""):
         """ Returns a bool indicating continue training or not and an integer of how more epochs to train"""
         continue_or_not = ""
         while continue_or_not not in {'yes', 'y', 'no', 'n'}:
-            continue_or_not = input("Continue to train [y/n]?").lower().strip()
+            continue_or_not = input(message + "Continue to train [y/n]?").lower().strip()
 
         add_epochs = "0" if continue_or_not in {'no', 'n'} else ""
         while not add_epochs.isdigit():
@@ -1386,7 +1386,9 @@ def train_asr():
         if opts['reducelr']: scheduler.step(mean_loss['dev'], epoch)
 
         if epoch == num_epochs - 1 and not opts['exit']:
-            continue_or_not, add_epochs = continue_train()
+            command = "python " + ' '.join([x for x in sys.argv])
+            message = "command: '{}'\nresult: '{}'\n".format(command, opts['result'])
+            continue_or_not, add_epochs = continue_train(message) # add python command and result directory to message
             if continue_or_not and add_epochs:
                 num_epochs += add_epochs
                 logging.info("Add {} more epochs".format(add_epochs))
