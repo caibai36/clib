@@ -1099,7 +1099,8 @@ def train_asr():
                         help="configuration for dataset (e.g., train, dev and test jsons; \
                         see: conf/data/test_small/data.yaml or conf/data/test_small/create_simple_utts_json.py)")
     parser.add_argument('--cutoff', type=int, default=-1, help="cut off the utterances with the frames more than x.")
-    parser.add_argument('--padding_token', type=str, default="<pad>", help="name of token for padding")
+    parser.add_argument('--const_token', type=json.loads, default=dict(unk='<unk>', pad='<pad>', sos='<sos>', eos='<sos>'),
+                        help="constant token dict used in text, default as '{\"unk\":\"<unk>\", \"pad\":\"<pad>\", \"sos\":\"<sos>\", \"eos\":\"<sos>\"}'")
     parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
 
     parser.add_argument('--model_config', type=str, default=model_config_default,
@@ -1119,7 +1120,7 @@ def train_asr():
     parser.add_argument('--save_interval', type=int, default=1, help='save the model every x epoch')
 
     parser.add_argument('--result', type=str, default="tmp_result", help="result directory")
-    parser.add_argument('--overwrite_result', action='store_true', help='over write the result')
+    parser.add_argument('--overwrite_result', action='store_true', help='overwrite the result')
     parser.add_argument('--exit', action='store_true', help="immediately exit training or continue with additional epochs")
 
     args = parser.parse_args()
@@ -1177,11 +1178,11 @@ def train_asr():
             id2token[int(token_id)] = token
     assert len(token2id) == len(id2token), \
         "token and id in token2id file '{}' should be one-to-one correspondence".format(data_config['token2id'])
-    assert opts['padding_token'] in token2id, \
-        "Required token {}, for padding the token sequence, not found in '{}' file".format(opts['padding_token'], data_config['token2id'])
+    assert opts['const_token']['pad'] in token2id, \
+        "Required token {} by option const_token, for padding the token sequence, not found in '{}' file".format(opts['padding_token'], data_config['token2id'])
+    padding_tokenid=token2id[opts['const_token']['pad']] # global config.
 
     dataloader = {}
-    padding_tokenid=token2id[opts['padding_token']] # global config.
     for dset in {'train', 'dev', 'test'}:
         instances = json.load(open(data_config[dset], encoding='utf8')).values() # the json file mapping utterance id to instance (e.g., {'02c': {'uttid': '02c' 'num_frames': 20}, ...})
 
@@ -1406,6 +1407,7 @@ def train_asr():
 # train_asr()
 
 subcommand = None
+subcommand = '1'
 # subcommand = 'skip'
 while subcommand not in {'1', 'train_asr', 'skip'}:
     subcommand = input("index name\n[1] train_asr\n[2] eval_asr\nEnter index or name (e.g. 1 or train_asr)\n").lower().strip()
