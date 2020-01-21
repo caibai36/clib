@@ -1086,6 +1086,43 @@ def init_logger(file_name="", stream="stdout"):
 
     return logger
 
+def load_model_config(model_config: Dict) -> object:
+     """ Get a model object from model configuration file.
+
+     The configuration contains model class name and object parameters,
+     e.g., {'class': "<class 'seq2seq.asr.EncRNNDecRNNAtt'>", 'dec_embedding_size: 6}
+     """
+     import importlib
+     full_class_name = model_config.pop('class', None) # get model_config['class'] and delete 'class' item
+     module_name, class_name = re.findall("<class '([0-9a-zA-Z_\.]+)\.([0-9a-zA-Z_]+)'>", full_class_name)[0]
+     class_obj = getattr(importlib.import_module(module_name), class_name)
+     return class_obj(**model_config) # get a model object
+
+def save_model_config(model_config: Dict, path: str) -> None:
+    assert ('class' in model_config), "The model configuration should contain the class name"
+    json.dump(model_config, open(path, 'w'), indent=4)
+
+def save_model_state_dict(model_state_dict: Dict, path: str) -> None:
+    model_state_dict_at_cpu = {k: v.cpu() for k, v in list(model_state_dict.items())}
+    torch.save(model_state_dict_at_cpu, path)
+
+def save_options(options: Dict, path: str) -> None:
+    json.dump(options, open(path, 'w'), indent=4)
+
+def save_model(model: nn.Module, dir_path: str, model_name: str) -> None:
+    save_model_config(model.get_config(), os.path.join(dir_path, f"{model_name}.conf"))
+    save_model_state_dict(model.state_dict(), os.path.join(dir_path, f"{model_name}.mdl"))
+
+def load_pretrained_model_with_config(model_path: str) -> nn.Module:
+    """ Given the path to the model, load the model ($dir/model_name.mdl)
+    along with its configuration ($dir/model_name.conf) at the same time. """
+    assert model_path.endswith(".mdl"), "model '{}' should end with '.mdl'".format(model_path)
+    config_path = os.path.splitext(model_path)[0] + ".conf"
+    model_config = yaml.load(open(config_path), Loader=yaml.FullLoader)
+    pretrained_model = load_model_config(model_config)
+    pretrained_model.load_state_dict(torch.load(model_path))
+    return pretrained_model
+
 def train_asr():
     data_config_default = "conf/data/test_small/data.yaml"
     model_config_default = "conf/model/test_small/model.yaml"
@@ -1120,7 +1157,7 @@ def train_asr():
     parser.add_argument('--save_interval', type=int, default=1, help='save the model every x epoch')
 
     parser.add_argument('--result', type=str, default="tmp_result", help="result directory")
-    parser.add_argument('--overwrite_result', action='store_true', help='overwrite the result')
+    parser.add_argument('--overwrite', action='store_true', help='overwrite the result')
     parser.add_argument('--exit', action='store_true', help="immediately exit training or continue with additional epochs")
 
     args = parser.parse_args()
@@ -1147,19 +1184,19 @@ def train_asr():
         assert os.path.dirname(opts['pretrained_model']) != opts['result'], \
             "the pretrained_model '{}' at the existing result directory '{}' to be deleted for overwriting!".format(
                 opts['pretrained_model'], opts['result'])
-        overwrite_or_not = 'yes' if opts['overwrite_result'] else None
+        overwrite_or_not = 'yes' if opts['overwrite'] else None
         while overwrite_or_not not in {'yes', 'no', 'n', 'y'}:
             overwrite_or_not = input("Overwriting the result directory ('{}') [y/n]?".format(opts['result']).lower().strip())
-            if overwrite_or_not in {'yes', 'y'}:
-                for x in glob.glob(os.path.join(opts['result'], "*")):
-                    if os.path.isdir(x): shutil.rmtree(x)
-                    if os.path.isfile(x): os.remove(x)
-                overwrite_warning = "!!!Overwriting the result directory: '{}'".format(opts['result'])
-            elif overwrite_or_not in {'no', 'n'}: sys.exit(0)
-            else: continue
+        if overwrite_or_not in {'yes', 'y'}:
+            for x in glob.glob(os.path.join(opts['result'], "*")):
+                if os.path.isdir(x): shutil.rmtree(x)
+                if os.path.isfile(x): os.remove(x)
+            overwrite_warning = "!!!Overwriting the result directory: '{}'".format(opts['result'])
+        else: sys.exit(0) # overwrite_or_not in {'no', 'n'}
+
+    save_options(opts, os.path.join(opts['result'], "options.json"))
 
     logger = init_logger(os.path.join(opts['result'], "report.log"))
-
     if overwrite_warning: logger.warning(overwrite_warning)
     logger.info("python " + ' '.join([x for x in sys.argv])) # save current script command
     logger.info("Getting Options...")
@@ -1196,45 +1233,6 @@ def train_asr():
 
     ###########################
     logger.info("Loading Model...")
-
-    def load_model_config(model_config: Dict) -> object:
-         """ Get a model object from model configuration file.
-
-         The configuration contains model class name and object parameters,
-         e.g., {'class': "<class 'seq2seq.asr.EncRNNDecRNNAtt'>", 'dec_embedding_size: 6}
-         """
-         import importlib
-         full_class_name = model_config.pop('class', None) # get model_config['class'] and delete 'class' item
-         module_name, class_name = re.findall("<class '([0-9a-zA-Z_\.]+)\.([0-9a-zA-Z_]+)'>", full_class_name)[0]
-         class_obj = getattr(importlib.import_module(module_name), class_name)
-         return class_obj(**model_config) # get a model object
-
-    def save_model_config(model_config: Dict, path: str) -> None:
-        assert ('class' in model_config), "The model configuration should contain the class name"
-        json.dump(model_config, open(path, 'w'), indent=4)
-
-    def save_model_state_dict(model_state_dict: Dict, path: str) -> None:
-        model_state_dict_at_cpu = {k: v.cpu() for k, v in list(model_state_dict.items())}
-        torch.save(model_state_dict_at_cpu, path)
-
-    def save_options(options: Dict, path: str) -> None:
-        json.dump(options, open(path, 'w'), indent=4)
-
-    def save_model(model_name: str, model: nn.Module) -> None:
-        save_options(opts, os.path.join(opts['result'], f"{model_name}.opt"))
-        save_model_config(model.get_config(), os.path.join(opts['result'], f"{model_name}.conf"))
-        save_model_state_dict(model.state_dict(), os.path.join(opts['result'], f"{model_name}.mdl"))
-
-    def load_pretrained_model_with_config(model_path: str) -> nn.Module:
-        """ Given the path to the model, load the model ($dir/model_name.mdl)
-        along with its configuration ($dir/model_name.conf) at the same time. """
-        assert model_path.endswith(".mdl"), "model '{}' should end with '.mdl'".format(model_path)
-        config_path = os.path.splitext(model_path)[0] + ".conf"
-        model_config = yaml.load(open(config_path), Loader=yaml.FullLoader)
-        pretrained_model = load_model_config(model_config)
-        pretrained_model.load_state_dict(torch.load(model_path))
-        return pretrained_model
-
     first_batch = next(iter(dataloader['train']))
     feat_dim, vocab_size = first_batch['feat_dim'], first_batch['vocab_size'] # global config
 
@@ -1374,13 +1372,13 @@ def train_asr():
         logger.info("Epoch {} -- lrate {} -- time {:.2f}".format(epoch, optimizer.param_groups[0]['lr'], epoch_duration))
 
         if epoch % opts['save_interval'] == 0:
-            save_model("model_e{}".format(epoch), model)
+            save_model(model, opts['result'], "model_e{}".format(epoch))
 
         if best_dev_loss > mean_loss['dev']:
             best_dev_loss = mean_loss['dev']
             best_dev_epoch = epoch
             logger.info("Get the better dev loss {:.3f} at epoch {} ... saving the model".format(best_dev_loss, best_dev_epoch))
-            save_model("best_model", model)
+            save_model(model, opts['result'], "best_model")
 
         logger.info("\n" + tabulate.tabulate(info_table, headers=['epoch', 'dataset', 'loss', 'acc'], floatfmt='.3f', tablefmt='rst'))
 
