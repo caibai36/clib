@@ -1135,9 +1135,13 @@ def save_model_state_dict(model_state_dict: Dict, path: str) -> None:
 def save_options(options: Dict, path: str) -> None:
     json.dump(options, open(path, 'w'), indent=4)
 
-def save_model(model: nn.Module, dir_path: str, model_name: str) -> None:
-    save_model_config(model.get_config(), os.path.join(dir_path, f"{model_name}.conf"))
-    save_model_state_dict(model.state_dict(), os.path.join(dir_path, f"{model_name}.mdl"))
+def save_model_with_config(model: nn.Module, model_path: str) -> None:
+    """ Given the model and the path to the model, save the model ($dir/model_name.mdl)
+    along with its configuration ($dir/model_name.conf) at the same time. """
+    assert model_path.endswith(".mdl"), "model '{}' should end with '.mdl'".format(model_path)
+    config_path = os.path.splitext(model_path)[0] + ".conf"
+    save_model_config(model.get_config(), config_path)
+    save_model_state_dict(model.state_dict(), model_path)
 
 def load_pretrained_model_with_config(model_path: str) -> nn.Module:
     """ Given the path to the model, load the model ($dir/model_name.mdl)
@@ -1220,14 +1224,13 @@ def train_asr():
             overwrite_warning = "!!!Overwriting the result directory: '{}'".format(opts['result'])
         else: sys.exit(0) # overwrite_or_not in {'no', 'n'}
 
-    save_options(opts, os.path.join(opts['result'], "options.json"))
-
     logger = init_logger(os.path.join(opts['result'], "report.log"))
     if overwrite_warning: logger.warning(overwrite_warning)
     logger.info("python " + ' '.join([x for x in sys.argv])) # save current script command
     logger.info("Getting Options...")
     logger.info("\n" + pprint.pformat(opts))
     logger.info("Device: '{}'".format(device))
+
     ###########################
     logger.info("Loading Dataset...")
     data_config = yaml.load(open(opts['data_config']), Loader=yaml.FullLoader) # contains token2id map file and (train, dev, test) utterance json file
@@ -1398,13 +1401,13 @@ def train_asr():
         logger.info("Epoch {} -- lrate {} -- time {:.2f}".format(epoch, optimizer.param_groups[0]['lr'], epoch_duration))
 
         if epoch % opts['save_interval'] == 0:
-            save_model(model, opts['result'], "model_e{}".format(epoch))
+            save_model_with_config(model, os.path.join(opts['result'], "model_e{}.mdl".format(epoch)))
 
         if best_dev_loss > mean_loss['dev']:
             best_dev_loss = mean_loss['dev']
             best_dev_epoch = epoch
             logger.info("Get the better dev loss {:.3f} at epoch {} ... saving the model".format(best_dev_loss, best_dev_epoch))
-            save_model(model, opts['result'], "best_model")
+            save_model_with_config(model, os.path.join(opts['result'], "best_model.mdl"))
 
         logger.info("\n" + tabulate.tabulate(info_table, headers=['epoch', 'dataset', 'loss', 'acc'], floatfmt='.3f', tablefmt='rst'))
 
@@ -1413,7 +1416,7 @@ def train_asr():
         if epoch == num_epochs - 1 and not opts['exit']:
             command = "python " + ' '.join([x for x in sys.argv])
             message = "command: '{}'\nresult: '{}'\n".format(command, opts['result'])
-            continue_or_not, add_epochs = continue_train(message) # add python command and result directory to message
+            continue_or_not, add_epochs = continue_train(message) # add 'python command' and 'result directory' to message
             if continue_or_not and add_epochs:
                 num_epochs += add_epochs
                 logging.info("Add {} more epochs".format(add_epochs))
