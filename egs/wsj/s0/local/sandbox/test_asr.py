@@ -534,7 +534,7 @@ class DotProductAttention(nn.Module):
         """
         return torch.bmm(p_context.unsqueeze(-2), context).squeeze(-2)
 
-    def forward(self, input: torch.Tensor) -> Dict:
+    def forward(self, input: Dict) -> Dict:
         query = input['query'] # batch_size x query_size
         context = input['context'] # batch_size x context_length x context_size
         assert query.shape[-1] == context.shape[-1], \
@@ -546,7 +546,7 @@ class DotProductAttention(nn.Module):
         # score = dot_product(context,query) formula (8) of "Effective MNT".
         score = torch.bmm(context, query.unsqueeze(-1)).squeeze(-1) # batch_size x context_length
         if self.normalize: score = score / math.sqrt(query_size)
-        if mask is not None: score.masked_fill(mask==0, -1e9)
+        if mask is not None: score.masked_fill_(mask==0, -1e9)
         p_context = F.softmax(score, dim=-1)
         expected_context = self.compute_expected_context(p_context, context) if need_expected_context else None
         return {'p_context': p_context,
@@ -605,7 +605,7 @@ class MLPAttention(nn.Module):
         """
         return torch.bmm(p_context.unsqueeze(-2), context).squeeze(-2)
 
-    def forward(self, input: torch.Tensor) -> Dict:
+    def forward(self, input: Dict) -> Dict:
         query = input['query'] # batch_size x query_size
         batch_size, query_size = query.shape
         context = input['context'] # batch_size x context_length x context_size
@@ -617,7 +617,7 @@ class MLPAttention(nn.Module):
         concat = torch.cat([context, query.unsqueeze(-2).expand(batch_size, context_length, query_size)], dim=-1) # batch_size x context_length x (context_size + query_size)
         score = self.proj2score(self.att_act(self.concat2proj(concat))).squeeze(-1) # batch_size x context_length
 
-        if mask is not None: score.masked_fill(mask==0, -1e9)
+        if mask is not None: score.masked_fill_(mask==0, -1e9)
         p_context = F.softmax(score, dim=-1)
         expected_context = self.compute_expected_context(p_context, context) if need_expected_context else None # batch_size x context_size
         return {'p_context': p_context,
@@ -740,14 +740,14 @@ class LuongDecoder(nn.Module):
 
         self.output_size = context_proj_size
 
-    def set_context(self, context: torch.Tensor, context_mask: torch.Tensor = None) -> None:
+    def set_context(self, context: torch.Tensor, context_mask: Union[torch.Tensor, None] = None) -> None:
         self.context = context
         self.context_mask = context_mask
 
     def reset(self) -> None:
         self.attentional_vector_pre = None
 
-    def decode(self, input: torch.Tensor, dec_mask: torch.Tensor = None) -> Tuple[torch.Tensor, Dict]:
+    def decode(self, input: torch.Tensor, dec_mask: Union[torch.Tensor, None] = None) -> Tuple[torch.Tensor, Dict]:
         """
         input: batch_size x input_size
         dec_mask: batch_size
@@ -995,7 +995,7 @@ by concatenating both frames or taking the first frame every two frames.
 
     def decode(self,
                dec_input: torch.Tensor,
-               dec_mask: torch.Tensor = None) -> Tuple[torch.Tensor, Dict]:
+               dec_mask: Union[torch.Tensor, None] = None) -> Tuple[torch.Tensor, Dict]:
         """
         Paramters
         ---------
@@ -1224,6 +1224,8 @@ def train_asr():
             overwrite_warning = "!!!Overwriting the result directory: '{}'".format(opts['result'])
         else: sys.exit(0) # overwrite_or_not in {'no', 'n'}
 
+    save_options(opts, os.path.join(opts['result'], f"options.json"))
+
     logger = init_logger(os.path.join(opts['result'], "report.log"))
     if overwrite_warning: logger.warning(overwrite_warning)
     logger.info("python " + ' '.join([x for x in sys.argv])) # save current script command
@@ -1435,7 +1437,7 @@ def train_asr():
 
 subcommand = None
 subcommand = '1'
-# subcommand = 'skip'
+subcommand = 'skip'
 while subcommand not in {'1', 'train_asr', 'skip'}:
     subcommand = input("index name\n[1] train_asr\n[2] eval_asr\nEnter index or name (e.g. 1 or train_asr)\n").lower().strip()
 if subcommand in {'1', 'train_asr'}: train_asr()
