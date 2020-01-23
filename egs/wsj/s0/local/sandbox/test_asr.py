@@ -1007,7 +1007,7 @@ by concatenating both frames or taking the first frame every two frames.
 
         Returns
         -------
-        the dec_output with shape (batch_size x dec_output_size)
+        the dec_output(or presoftmax) with shape (batch_size x dec_output_size)
         the att_output of key 'p_context' with its value (batch_size x context_length)
             and key 'expected_context' with its value (batch_size x context_size).
 
@@ -1155,7 +1155,7 @@ def load_pretrained_model_with_config(model_path: str) -> nn.Module:
 
 def train_asr():
     data_config_default = "conf/data/test_small/data.yaml"
-    model_config_default = "conf/model/test_small/model.yaml"
+    model_config_default = "conf/data/test_small/model.yaml"
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=2020, help="seed")
@@ -1428,16 +1428,207 @@ def train_asr():
     logger.info("Result path: {}".format(opts['result']))
     logger.info("Get the best dev loss {:.3f} at the epoch {}".format(best_dev_loss, best_dev_epoch))
 
-# test_cross_entropy_label_smooth()
-# test_encoder()
-# test_attention()
-# test_luong_decoder()
-# test_EncRNNDecRNNAtt()
-# train_asr()
-
 subcommand = None
 subcommand = '1'
 subcommand = 'skip'
 while subcommand not in {'1', 'train_asr', 'skip'}:
     subcommand = input("index name\n[1] train_asr\n[2] eval_asr\nEnter index or name (e.g. 1 or train_asr)\n").lower().strip()
 if subcommand in {'1', 'train_asr'}: train_asr()
+
+def greedy_search_torch(model: nn.Module,
+                       source: torch.Tensor,
+                       source_lengths: torch.Tensor,
+                       sos_id: int,
+                       eos_id: int,
+                       max_dec_length: int) -> Tuple[torch.LongTensor, torch.LongTensor, torch.Tensor]:
+    """ Generate the hypothesis from source by greed search (beam search with beam_size 1)
+
+    Parameters
+    ----------
+    model: an attention sequence2sequence model
+    source: shape of [batch_size, source_max_length, source_size]
+    source_length: shape of [batch_size]
+    sos_id: id of the start of sentence token
+    eos_id: id of the end of sentence token
+    max_dec_length: the maximum length of the hypothesis (a sequence of tokens)
+        the decoder can generate, even if eos token does not occur.
+
+    Returns
+    -------
+    hypothesis: shape [batch_size, dec_length]; each hypothesis is a sequence of tokenid
+        (which has no sos_id, but with eos_id if its length is less than max_dec_length)
+    lengths of hypothesis: shape [batch_size]; length without sos_id but with eos_id
+    attentions of hypothesis: shape [batch_size, dec_length, context_size]
+    """
+    model.reset()
+    model.train(False)
+    model.encode(source, source_lengths)
+
+    batch_size = source.shape[0]
+
+    hypo_list = [] # list of different time steps
+    hypo_att_list = []
+    hypo_lengths = source.new_ones([batch_size]).long() * -1
+    pre_tokenids = source.new_ones([batch_size]).long() * sos_id
+    for time_step in range(max_dec_length):
+        presoftmax, dec_att = model.decode(pre_tokenids)
+        cur_tokenids = presoftmax.argmax(-1) # [batch_size]
+        hypo_list.append(cur_tokenids)
+        hypo_att_list.append(dec_att['p_context'])
+
+        for i in range(batch_size):
+            if cur_tokenids[i] == eos_id and hypo_lengths[i] == -1:
+                hypo_lengths[i] = time_step + 1
+        if all(hypo_lengths != -1): break
+        pre_tokenids = cur_tokenids
+
+    hypo = torch.stack(hypo_list, dim=1) # [batch_size, dec_length]
+    hypo_att = torch.stack(hypo_att_list, dim=1) # [batch_size, dec_length, context_size]
+    return hypo, hypo_lengths, hypo_att
+
+def greedy_search(model: nn.Module,
+                  source: torch.Tensor,
+                  source_lengths: torch.Tensor,
+                  sos_id: int,
+                  eos_id: int,
+                  max_dec_length: int) -> Tuple[List[torch.LongTensor], torch.LongTensor, List[torch.Tensor]]:
+    """ Generate the hypothesis from source by greed search (beam search with beam_size 1)
+
+    Parameters
+    ----------
+    model: an attention sequence2sequence model
+    source: shape of [batch_size, source_max_length, source_size]
+    source_length: shape of [batch_size]
+    sos_id: id of the start of sentence token
+    eos_id: id of the end of sentence token
+    max_dec_length: the maximum length of the hypothesis (a sequence of tokens)
+        the decoder can generate, even if eos token does not occur.
+
+    Returns
+    -------
+    cropped hypothesis: a list with length [batch_size]; each element size [hypo_lengths[i]]
+        each element in the batch is a sequence of tokenids excluding eos_id.
+    cropped lengths of hypothesis: shape [batch_size]; exluding sos_id and eos_id
+    cropped attentions of hypothesis: a list with length [batch_size], each element size [hypos_length[i], context_length[i]]
+
+    Example
+    -------
+    Input:
+    token2id, first_batch, model = get_token2id_firstbatch_model()
+    source, source_lengths = first_batch['feat'], first_batch['num_frames']
+    sos_id, eos_id = int(token2id['<sos>']), int(token2id['<eos>']) # 2, 3
+    max_dec_length = 5
+
+    model.to(device)
+    source, source_lengths = source.to(device), source_lengths.to(device)
+    print(greedy_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length))
+    print(greedy_search(model, source, source_lengths, sos_id, eos_id, max_dec_length))
+
+    Output:
+    # raw 'hypo, hypo_lengths, hypo_att'
+    (tensor([[5, 4, 3, 3],
+             [5, 4, 5, 4],
+             [5, 6, 3, 3]]),
+     tensor([ 3, -1,  3]),
+     tensor([[[0.0187, 0.9813],
+             [0.0210, 0.9790],
+             [0.0193, 0.9807],
+             [0.0201, 0.9799]]
+
+            [[0.0057, 0.9943],
+             [0.0056, 0.9944],
+             [0.0050, 0.9950],
+             [0.0056, 0.9944]]
+
+            [[1.0000, 0.0000],
+             [1.0000, 0.0000],
+             [1.0000, 0.0000],
+             [1.0000, 0.0000]], grad_fn=<StackBackward>))
+    # cropped 'hypo, hypo_lengths, hypo_att'
+   ([tensor([5, 4]), tensor([5, 4, 5, 4]), tensor([5, 6])],
+    tensor([2, 4, 2]),
+    [tensor([[0.0187, 0.9813], [0.0210, 0.9790]], grad_fn=<SliceBackward>),
+     tensor([[0.0057, 0.9943],
+            [0.0056, 0.9944],
+            [0.0050, 0.9950],
+            [0.0056, 0.9944]], grad_fn=<AliasBackward>),
+     tensor([[1.], [1.]], grad_fn=<SliceBackward>)])
+    """
+    batch_size = source.shape[0]
+    hypo, hypo_lengths, hypo_att = greedy_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length)
+
+    context_lengths = mask2length(model.decoder.context_mask)
+    cropped_hypo_lengths = crop_hypothesis_lengths(hypo_lengths, max_dec_length) # remove eos_id
+    cropped_hypo = [hypo[i][0:cropped_hypo_lengths[i]] for i in range(batch_size)]
+    cropped_hypo_att = [hypo_att[i][0:cropped_hypo_lengths[i], 0:context_lengths[i]] for i in range(batch_size)]
+
+    return cropped_hypo, cropped_hypo_lengths, cropped_hypo_att
+
+def crop_hypothesis_lengths(hypo_lengths, max_dec_length):
+    """ Remove the eos_id from lengths of the hypothesis
+
+    Parameters
+    ----------
+    hypo_lengths: shape [batch_size]
+    max_dec_length: the maximum length of the decoder hypothesis
+
+    Returns
+    -------
+    the lengths of hypothesis with eos_id cropped
+    """
+    cropped_hypo_lengths = torch.ones_like(hypo_lengths)
+
+    batch_size = hypo_lengths.shape[0]
+    for i in range(batch_size):
+        if hypo_lengths[i] == -1: # reach the max length of decoder without eos_id
+            cropped_hypo_lengths[i] = max_dec_length
+        else:
+            cropped_hypo_lengths[i] = hypo_lengths[i] - 1 # remove eos_id
+
+    return cropped_hypo_lengths
+
+def get_token2id_firstbatch_model():
+    """ for testing """
+    seed = 2020
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+    token2id_file = "conf/data/test_small/token2id.txt"
+    token2id = {}
+    with open(token2id_file, encoding='utf8') as f:
+        for line in f:
+            token, tokenid = line.strip().split()
+            token2id[token] = tokenid
+    padding_id = token2id['<pad>'] # 1
+
+    json_file = 'conf/data/test_small/utts.json'
+    utts_json = json.load(open(json_file, encoding='utf8'))
+    dataloader = KaldiDataLoader(dataset=KaldiDataset(list(utts_json.values())), batch_size=3, padding_tokenid=1)
+    first_batch = next(iter(dataloader))
+    feat_dim, vocab_size = first_batch['feat_dim'], first_batch['vocab_size'] # global config
+
+    pretrained_model = "conf/data/test_small/pretrained_model/model_e2000.mdl"
+    model = load_pretrained_model_with_config(pretrained_model)
+    return token2id, first_batch, model
+
+def test_greedy_search():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Device: '{}'".format(device))
+    token2id, first_batch, model = get_token2id_firstbatch_model()
+    source, source_lengths = first_batch['feat'], first_batch['num_frames']
+    sos_id, eos_id = int(token2id['<sos>']), int(token2id['<eos>']) # 2, 3
+    max_dec_length = 4
+
+    model.to(device)
+    source, source_lengths = source.to(device), source_lengths.to(device)
+    print(greedy_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length))
+    print(greedy_search(model, source, source_lengths, sos_id, eos_id, max_dec_length))
+
+# test_cross_entropy_label_smooth()
+# test_encoder()
+# test_attention()
+# test_luong_decoder()
+# test_EncRNNDecRNNAtt()
+# train_asr()
+# test_greedy_search()
