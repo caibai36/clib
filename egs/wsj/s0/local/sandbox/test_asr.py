@@ -13,16 +13,18 @@ import argparse
 import math
 import re # parser class name
 import json # for data files
-import yaml # for config files
 import pprint
-import tabulate
-import tqdm
 
 import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
 from torch.nn.utils.rnn import pack_padded_sequence as pack, pad_packed_sequence as unpack
+
+# pip install *
+import yaml # for config files
+import tabulate
+import tqdm
 
 from clib.kaldi.kaldi_data import KaldiDataLoader, KaldiDataset
 
@@ -134,8 +136,10 @@ def get_optim(name):
     if name.lower() in registered_optim:
         return registered_optim[name.lower()]
     else:
-        raise NotImplementedError("The optim module '{}' is not implemented\n".format(name) +
-                                  "Avaliable optim modules include {}".format(avaliable_optim))
+        #raise NotImplementedError("The optim module '{}' is not implemented\n".format(name) +
+        #                          "Avaliable optim modules include {}".format(avaliable_optim))
+        raise NotImplementedError(f"The optim module '{name}' is not implemented\n"
+                                  f"Avaliable optim modules include {avaliable_optim}")
 
 def length2mask(sequence_lengths: torch.Tensor, max_length: Union[int, None] = None) -> torch.Tensor:
     """
@@ -1462,14 +1466,14 @@ def greedy_search_torch(model: nn.Module,
     """
     model.reset()
     model.train(False)
-    model.encode(source, source_lengths)
+    model.encode(source, source_lengths) # set the context for decode at the same time
 
     batch_size = source.shape[0]
 
     hypo_list = [] # list of different time steps
     hypo_att_list = []
-    hypo_lengths = source.new_ones([batch_size]).long() * -1
-    pre_tokenids = source.new_ones([batch_size]).long() * sos_id
+    hypo_lengths = source.new_full([batch_size], -1).long()
+    pre_tokenids = source.new_full([batch_size], sos_id).long()
     for time_step in range(max_dec_length):
         presoftmax, dec_att = model.decode(pre_tokenids)
         cur_tokenids = presoftmax.argmax(-1) # [batch_size]
@@ -1506,10 +1510,11 @@ def greedy_search(model: nn.Module,
 
     Returns
     -------
-    cropped hypothesis: a list with length [batch_size]; each element size [hypo_lengths[i]]
+    cropped hypothesis: a list of [hypo_lengths[i]] tensors with the length batch_size.
         each element in the batch is a sequence of tokenids excluding eos_id.
     cropped lengths of hypothesis: shape [batch_size]; exluding sos_id and eos_id
-    cropped attentions of hypothesis: a list with length [batch_size], each element size [hypos_length[i], context_length[i]]
+    cropped attentions of hypothesis: a list of [hypos_length[i], context_length[i]] tensors
+        with the length batch_size
 
     Example
     -------
@@ -1555,6 +1560,7 @@ def greedy_search(model: nn.Module,
      tensor([[1.], [1.]], grad_fn=<SliceBackward>)])
     """
     batch_size = source.shape[0]
+    # shape: [batch_size, dec_length], [batch_size], [batch_size, dec_length, context_size]
     hypo, hypo_lengths, hypo_att = greedy_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length)
 
     context_lengths = mask2length(model.decoder.context_mask)
@@ -1622,7 +1628,10 @@ def test_greedy_search():
 
     model.to(device)
     source, source_lengths = source.to(device), source_lengths.to(device)
+    print("----------------------------\nhypo, hypo_lengths, hypo_att")
     print(greedy_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length))
+    print()
+    print("----------------------------\ncropped_hypo, cropped_hypo_lengths, cropped_hypo_att")
     print(greedy_search(model, source, source_lengths, sos_id, eos_id, max_dec_length))
 
 # test_cross_entropy_label_smooth()
@@ -1631,4 +1640,4 @@ def test_greedy_search():
 # test_luong_decoder()
 # test_EncRNNDecRNNAtt()
 # train_asr()
-# test_greedy_search()
+test_greedy_search()
