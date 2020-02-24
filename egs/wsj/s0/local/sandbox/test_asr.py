@@ -749,6 +749,12 @@ class LuongDecoder(nn.Module):
         self.context_mask = context_mask
 
     def reset(self) -> None:
+        """ Reset the the luong decoder
+        by setting the attentional vector of the previous time step to be None,
+        which means forgetting all the formation
+        accumulated in the history (by RNN) before the current time step
+        and forgetting the attention information of the previous time step.
+        """
         self.attentional_vector_pre = None
 
     def decode(self, input: torch.Tensor, dec_mask: Union[torch.Tensor, None] = None) -> Tuple[torch.Tensor, Dict]:
@@ -1025,7 +1031,12 @@ by concatenating both frames or taking the first frame every two frames.
         return self.dec_presoftmax(dec_output), att_output
 
     def reset(self):
-        """ Reset the decoder state. """
+        """ Reset the decoder state.
+        e.g. the luong decoder sets the attentional vector of the previous time step to be None,
+        which means forgetting all the formation accumulated
+        in the history (by RNN) before the current time step
+        and forgetting the attention information of the previous time step.
+        """
         self.decoder.reset()
 
 def test_EncRNNDecRNNAtt():
