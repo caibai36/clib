@@ -1484,18 +1484,18 @@ def greedy_search_torch(model: nn.Module,
     hypo_list = [] # list of different time steps
     hypo_att_list = []
     hypo_lengths = source.new_full([batch_size], -1).long()
-    pre_tokenids = source.new_full([batch_size], sos_id).long()
+    cur_tokenids = source.new_full([batch_size], sos_id).long()
     for time_step in range(max_dec_length):
-        presoftmax, dec_att = model.decode(pre_tokenids)
-        cur_tokenids = presoftmax.argmax(-1) # [batch_size]
-        hypo_list.append(cur_tokenids)
+        presoftmax, dec_att = model.decode(cur_tokenids)
+        next_tokenids = presoftmax.argmax(-1) # [batch_size]
+        hypo_list.append(next_tokenids)
         hypo_att_list.append(dec_att['p_context'])
 
         for i in range(batch_size):
-            if cur_tokenids[i] == eos_id and hypo_lengths[i] == -1:
+            if next_tokenids[i] == eos_id and hypo_lengths[i] == -1:
                 hypo_lengths[i] = time_step + 1
         if all(hypo_lengths != -1): break
-        pre_tokenids = cur_tokenids
+        cur_tokenids = next_tokenids
 
     hypo = torch.stack(hypo_list, dim=1) # [batch_size, dec_length]
     hypo_att = torch.stack(hypo_att_list, dim=1) # [batch_size, dec_length, context_size]
@@ -1651,4 +1651,19 @@ def test_greedy_search():
 # test_luong_decoder()
 # test_EncRNNDecRNNAtt()
 # train_asr()
-test_greedy_search()
+# test_greedy_search()
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Device: '{}'".format(device))
+token2id, first_batch, model = get_token2id_firstbatch_model()
+source, source_lengths = first_batch['feat'], first_batch['num_frames']
+sos_id, eos_id = int(token2id['<sos>']), int(token2id['<eos>']) # 2, 3
+max_dec_length = 4
+
+model.to(device)
+source, source_lengths = source.to(device), source_lengths.to(device)
+print("----------------------------\nhypo, hypo_lengths, hypo_att")
+print(greedy_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length))
+print()
+print("----------------------------\ncropped_hypo, cropped_hypo_lengths, cropped_hypo_att")
+print(greedy_search(model, source, source_lengths, sos_id, eos_id, max_dec_length))
