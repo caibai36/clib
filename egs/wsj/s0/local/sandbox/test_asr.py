@@ -748,6 +748,9 @@ class LuongDecoder(nn.Module):
         self.context = context
         self.context_mask = context_mask
 
+    def get_context_and_its_mask(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        return self.context, self.context_mask
+
     def reset(self) -> None:
         """ Reset the the luong decoder
         by setting the attentional vector of the previous time step to be None,
@@ -1456,7 +1459,7 @@ def greedy_search_torch(model: nn.Module,
                        sos_id: int,
                        eos_id: int,
                        max_dec_length: int) -> Tuple[torch.LongTensor, torch.LongTensor, torch.Tensor]:
-    """ Generate the hypothesis from source by greed search (beam search with beam_size 1)
+    """ Generate the hypothesis from source by greedy search (beam search with beam_size 1)
 
     Parameters
     ----------
@@ -1477,7 +1480,7 @@ def greedy_search_torch(model: nn.Module,
     """
     model.reset()
     model.train(False)
-    model.encode(source, source_lengths) # set the context for decode at the same time
+    model.encode(source, source_lengths) # set the context for decoding at the same time
 
     batch_size = source.shape[0]
 
@@ -1507,7 +1510,7 @@ def greedy_search(model: nn.Module,
                   sos_id: int,
                   eos_id: int,
                   max_dec_length: int) -> Tuple[List[torch.LongTensor], torch.LongTensor, List[torch.Tensor]]:
-    """ Generate the hypothesis from source by greed search (beam search with beam_size 1)
+    """ Generate the hypothesis from source by greedy search (beam search with beam_size 1)
 
     Parameters
     ----------
@@ -1653,6 +1656,63 @@ def test_greedy_search():
 # train_asr()
 # test_greedy_search()
 
+def beam_search_torch(model: nn.Module,
+                      source: torch.Tensor,
+                      source_lengths: torch.Tensor,
+                      sos_id: int,
+                      eos_id: int,
+                      max_dec_length: int,
+                      beam_size: int = 5) -> Tuple[torch.LongTensor, torch.LongTensor, torch.Tensor]:
+    """ Generate the hypothesis from source by beam search.
+
+    Parameters
+    ----------
+    model: an attention sequence2sequence model
+    source: shape of [batch_size, source_max_length, source_size]
+    source_length: shape of [batch_size]
+    sos_id: id of the start of sentence token
+    eos_id: id of the end of sentence token
+    max_dec_length: the maximum length of the hypothesis (a sequence of tokens)
+        the decoder can generate, even if eos token does not occur.
+    beam_size: the beam size
+
+    Returns
+    -------
+    hypothesis: shape [batch_size, dec_length]; each hypothesis is a sequence of tokenid
+        (which has no sos_id, but with eos_id if its length is less than max_dec_length)
+    lengths of hypothesis: shape [batch_size]; length without sos_id but with eos_id
+    attentions of hypothesis: shape [batch_size, dec_length, context_size]
+    """
+    model.reset()
+    model.train(False)
+    model.encode(source, source_lengths) # set the context for decoding at the same time
+    context, context_mask = model.decoder.get_context_and_its_mask()
+    print(context.shape)
+    print(context_mask)
+
+    batch_size = source.shape[0]
+
+    cur_tokenids = source.new_full([batch_size], sos_id).long()
+
+    hypo_list = [] # list of different time steps
+    hypo_att_list = []
+    hypo_lengths = source.new_full([batch_size], -1).long()
+    for time_step in range(max_dec_length):
+        presoftmax, dec_att = model.decode(cur_tokenids)
+        next_tokenids = presoftmax.argmax(-1) # [batch_size]
+        hypo_list.append(next_tokenids)
+        hypo_att_list.append(dec_att['p_context'])
+
+        for i in range(batch_size):
+            if next_tokenids[i] == eos_id and hypo_lengths[i] == -1:
+                hypo_lengths[i] = time_step + 1
+        if all(hypo_lengths != -1): break
+        cur_tokenids = next_tokenids
+
+    hypo = torch.stack(hypo_list, dim=1) # [batch_size, dec_length]
+    hypo_att = torch.stack(hypo_att_list, dim=1) # [batch_size, dec_length, context_size]
+    return hypo, hypo_lengths, hypo_att
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Device: '{}'".format(device))
 token2id, first_batch, model = get_token2id_firstbatch_model()
@@ -1663,7 +1723,7 @@ max_dec_length = 4
 model.to(device)
 source, source_lengths = source.to(device), source_lengths.to(device)
 print("----------------------------\nhypo, hypo_lengths, hypo_att")
-print(greedy_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length))
-print()
-print("----------------------------\ncropped_hypo, cropped_hypo_lengths, cropped_hypo_att")
-print(greedy_search(model, source, source_lengths, sos_id, eos_id, max_dec_length))
+print(beam_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length))
+# print()
+# print("----------------------------\ncropped_hypo, cropped_hypo_lengths, cropped_hypo_att")
+# print(greedy_search(model, source, source_lengths, sos_id, eos_id, max_dec_length))
