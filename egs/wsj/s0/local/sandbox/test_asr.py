@@ -768,7 +768,7 @@ class LuongDecoder(nn.Module):
         # Each time step corresponds to each column of the mask.
         # In time step 2, the second column [1, 0, 1] as the dec_mask
         # dec_mask with shape [batch_size]
-        # target * dec_mask.unsqueeze(-1).expend_as(target) will mask out
+        # target * dec_mask.unsqueeze(-1).expand_as(target) will mask out
         # the feature of the second element of batch at time step 2, while the element with length 1
         """
         batch_size, input_size = input.shape
@@ -1656,6 +1656,95 @@ def test_greedy_search():
 # train_asr()
 # test_greedy_search()
 
+class Node:
+    def __init__(self,
+                 state: List[int],
+                 tokenid_path: List[torch.LongTensor],
+                 log_prob: torch.Tensor,
+                 score: torch.Tensor,
+                 coeff_length_penalty: float = 1.0,
+                 active: bool = True):
+        """ The node of the search tree of the beam search.
+
+        Parameters
+        ----------
+        state: the path of the global indices of the active batch
+            (the active batch combines all active candidate nodes of the batch at current level).
+        tokenid_path: the path of tokenids of output to current node
+        log_prob: log probability of the path;  tensors with shape [1] (e.g. torch.Tensor([0.7]))
+        score: the score of the path; tensor with the shape [1], usually same as log_prob
+        active: current node hit the tokenid of end of sentence (<sos>) or not
+
+        Example
+        -------
+        init_node = Node(state=[4], tokenid_path=[torch.LongTensor([5])], log_prob = torch.FloatTensor([-11]), score = torch.FloatTensor([-11]))
+        expanded_nodes = init_node.expand(2, torch.Tensor([0, 0.25, 0.05, 0.3, 0.4]).log(), eos_id=3, expand_size=3)
+        print(init_node)
+        print("---")
+        for node in expanded_nodes: print(node)
+        # output:
+        # [score: -11.000, tokenid_path:[5], state: [4], active: True]
+        # ---
+        # [score: -11.916, tokenid_path:[5, 4], state: [4, 2], active: True]
+        # [score: -12.204, tokenid_path:[5, 3], state: [4, 2], active: False]
+        # [score: -12.386, tokenid_path:[5, 1], state: [4, 2], active: True]
+        """
+        self.state = state
+        self.tokenid_path = tokenid_path
+        self.log_prob = log_prob
+        self.score = score
+        self.coeff_length_penalty = coeff_length_penalty
+        self.active = active
+
+    def length_penalty(self, length:int, alpha:float=1.0, const:float=5) -> float:
+        """
+        Generating the long sequence will add more penalty.
+        Google NMT: https://arxiv.org/pdf/1609.08144.pdf
+        formula (14): lp(Y)=(5+|Y|)^alpha / (5+1)^alpha
+        """
+        return ((const + length)**alpha) / ((const + 1)**alpha)
+
+    def expand(self, state_t:int, log_prob_t:torch.Tensor, eos_id:int, expand_size:int=5) -> List['Node']:
+        """
+        Parameters
+        ----------
+        state_t: state (the global index) at time step t
+        log_prob_t: log probability at time step t. shape [vocab_size]
+        expand_size: limit number of the nodes allow to expand to next level.
+            Usually it is equals to beam_size.
+            Alternatively a number smaller than `beam_size` may give better results,
+            as it can introduce more diversity into the search.
+            See [Beam Search Strategies for Neural Machine Translation.
+            Freitag and Al-Onaizan, 2017](https://arxiv.org/abs/1702.01806).
+
+        Returns
+        -------
+        a list of candidate nodes expanded to the next level by the current node.
+        """
+        topk_log_prob_t, topk_log_prob_t_indices = log_prob_t.topk(expand_size, dim=0) # shape [expand_size], [expand_size]
+        log_seq_prob = self.log_prob + topk_log_prob_t # shape [expand_size]
+        scores = log_seq_prob
+
+        scores = scores / self.length_penalty(len(self.tokenid_path), alpha=self.coeff_length_penalty) # shape [expand_size]
+
+        expanded_nodes = []
+        for i in range(expand_size):
+            active = False if topk_log_prob_t_indices[i].item() == eos_id else True
+            expand_node = Node(self.state + [state_t], # e.g. [1, 3] + [4] = [1, 3, 4]
+                               self.tokenid_path + [topk_log_prob_t_indices[i].unsqueeze(-1)],
+                               log_seq_prob[i].unsqueeze(-1), # e.g. torch.Tensor([0.4])
+                               scores[i].unsqueeze(-1),
+                               coeff_length_penalty=self.coeff_length_penalty,
+                               active=active)
+            expanded_nodes.append(expand_node)
+
+        return expanded_nodes
+
+    def __repr__(self):
+        return "[score: {:.3f}, tokenid_path:{}, state: {}, active: {}]".format(self.score.item(), [x.item() for x in self.tokenid_path], self.state, self.active)
+
+
+
 def beam_search_torch(model: nn.Module,
                       source: torch.Tensor,
                       source_lengths: torch.Tensor,
@@ -1682,6 +1771,9 @@ def beam_search_torch(model: nn.Module,
         (which has no sos_id, but with eos_id if its length is less than max_dec_length)
     lengths of hypothesis: shape [batch_size]; length without sos_id but with eos_id
     attentions of hypothesis: shape [batch_size, dec_length, context_size]
+
+    Reference:
+    Wiki Beam search: https://en.wikipedia.org/wiki/Beam_search
     """
     model.reset()
     model.train(False)
@@ -1694,6 +1786,7 @@ def beam_search_torch(model: nn.Module,
 
     cur_tokenids = source.new_full([batch_size], sos_id).long()
 
+    ###########################################################
     hypo_list = [] # list of different time steps
     hypo_att_list = []
     hypo_lengths = source.new_full([batch_size], -1).long()
