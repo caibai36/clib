@@ -1663,13 +1663,15 @@ class Node:
                  log_prob: torch.Tensor,
                  score: torch.Tensor,
                  coeff_length_penalty: float = 1.0,
-                 active: bool = True):
+                 active: bool = True) -> None:
         """ The node of the search tree of the beam search.
 
         Parameters
         ----------
-        state: the path of the global indices of the active batch
-            (the active batch combines all active candidate nodes of the batch at current level).
+        state: the path of the global indices.
+            (we define a active batch as the group of all active nodes,
+             whose tokenid_paths are not ended with <eos>,
+             of a batch at one time step, indexed by global indices)
         tokenid_path: the path of tokenids of output to current node
         log_prob: log probability of the path;  tensors with shape [1] (e.g. torch.Tensor([0.7]))
         score: the score of the path; tensor with the shape [1], usually same as log_prob
@@ -1710,7 +1712,7 @@ class Node:
         ----------
         state_t: state (the global index) at time step t
         log_prob_t: log probability at time step t. shape [vocab_size]
-        expand_size: limit number of the nodes allow to expand to next level.
+        expand_size: the number of the nodes the current node allows to expand to next level.
             Usually it is equals to beam_size.
             Alternatively a number smaller than `beam_size` may give better results,
             as it can introduce more diversity into the search.
@@ -1743,7 +1745,106 @@ class Node:
     def __repr__(self):
         return "[score: {:.3f}, tokenid_path:{}, state: {}, active: {}]".format(self.score.item(), [x.item() for x in self.tokenid_path], self.state, self.active)
 
+class Level:
+    def __init__(self,
+                 beam_size: int  = 5,
+                 nbest: int = 1) -> None:
+        """ A level with a stack of nodes of one search tree at a certain time step.
 
+        Paramters
+        ---------
+        beam_size: the number of nodes at current level allows to expand to the next level
+        nbest: the number of best sequences needed to be searched.
+            The nbest should be smaller or equals to the beam size
+        stack: a set of nodes at current level. .
+            A node is active if its tokenid_path hasn't ended with <sos>, else the node is finished.
+            If the number of finished nodes is more than or equals to nbest, we think this level is finished.
+
+        Example
+        -------
+        print("---init---")
+        batch_size = 2
+        empty_nodes = [Node(state=[], tokenid_path=[], log_prob = torch.FloatTensor([0]), score = torch.FloatTensor([0])) for _ in range(batch_size)]
+        batch_level = [Level(beam_size=2, nbest=2) for _ in range(batch_size)]
+        for b in range(batch_size): batch_level[b].add_node(empty_nodes[b])
+        for b in range(batch_size): print(f"Tree {b}, level -1: {batch_level[b]}")
+        print("---time step 0---")
+        if not batch_level[0].is_finished(): batch_level[0].step([0], torch.Tensor([[0.4, 0.35, 0.25]]).log(), eos_id=0, expand_size=2) # find one sentence with <eos>;tree 0 finish if nbest=1
+        if not batch_level[1].is_finished(): batch_level[1].step([1], torch.Tensor([[0.2, 0.5, 0.3]]).log(), eos_id=0, expand_size=2)
+        for b in range(batch_size): print(f"Tree {b}, level 0: {batch_level[b]}")
+        print("---time step 1---")
+        if not batch_level[0].is_finished(): batch_level[0].step([0], torch.Tensor([[0.25, 0.35, 0.4]]).log(), eos_id=0, expand_size=2)
+        if not batch_level[1].is_finished(): batch_level[1].step([1, 2], torch.Tensor([[0.1, 0.8, 0.1],[0.9, 0.05, 0.05]]).log(), eos_id=0, expand_size=2)
+        for b in range(batch_size): print(f"Tree {b}, level 1: {batch_level[b]}")
+        # ---init---
+        # Tree 0, level -1: [score: 0.000, tokenid_path:[], state: [], active: True]
+        # Tree 1, level -1: [score: 0.000, tokenid_path:[], state: [], active: True]
+        # ---time step 0---
+        # Tree 0, level 0: [score: -1.100, tokenid_path:[0], state: [0], active: False],[score: -1.260, tokenid_path:[1], state: [0], active: True]
+        # Tree 1, level 0: [score: -0.832, tokenid_path:[1], state: [1], active: True],[score: -1.445, tokenid_path:[2], state: [1], active: True]
+        # ---time step 1---
+        # Tree 0, level 1: [score: -1.100, tokenid_path:[0], state: [0], active: False],[score: -1.966, tokenid_path:[1, 2], state: [0, 0], active: True]
+        # Tree 1, level 1: [score: -0.916, tokenid_path:[1, 1], state: [1, 1], active: True],[score: -1.309, tokenid_path:[2, 0], state: [1, 2], active: False]
+        """
+        assert beam_size >= nbest, "beam_size should be more or equals to nbest"
+        self.beam_size = beam_size
+        self.nbest = nbest
+        self.stack = []
+
+    def add_node(self, node: Node) -> None:
+        self.stack.append(node)
+
+    def get_active_nodes(self) -> List[Node]:
+        return [node for node in self.stack if node.active]
+
+    def get_finished_nodes(self) -> List[Node]:
+        return [node for node in self.stack if not node.active]
+
+    def is_finished(self) -> bool:
+        return all([not node.active for node in self.stack[0: self.nbest]])
+
+    def step(self, state_t:List[int], log_prob_t:torch.Tensor, eos_id:int, expand_size=5) -> List[Node]:
+        """
+        One step of a search tree from the previous level to the next level
+
+        Paramters
+        ---------
+        state_t: a list of the states of the active nodes at the previous level
+            len(state_t) = num_active_nodes_prev_level
+        log_prob_t: log probability vectors of active nodes at the previous level
+            shape [num_active_nodes_prev_level, dec_output_size]
+        eos_id: the tokenid of the <eos> (end of sentence)
+        expand_size: the number of the nodes one node at current level allows to expand to next level.
+
+        Returns
+        -------
+        A list nodes at next level with beam size sorted by the score,
+        including the active ones and finished ones.
+        """
+        nodes_next_level = []
+
+        # Collect the expanded nodes from active nodes of the previous level
+        active_nodes = self.get_active_nodes()
+        num_active_nodes = len(state_t)
+        assert(len(active_nodes) == num_active_nodes)
+        for i in range(num_active_nodes):
+            nodes_next_level.extend(active_nodes[i].expand(state_t[i], log_prob_t[i], eos_id, expand_size))
+
+        # Collect the finished nodes of the previous level
+        nodes_next_level.extend(self.get_finished_nodes())
+
+        # prune the stack to beam_size by preserving the nodes with highest score
+        self.stack = nodes_next_level
+        self.sort()
+
+        return nodes_next_level
+
+    def sort(self):
+        """ sort the nodes at current level and keep the nodes with highest score """
+        self.stack = sorted(self.stack, key = lambda node: node.score.item(), reverse=True)[0:self.beam_size]
+
+    def __repr__(self):
+        return ",".join(map(str, self.stack))
 
 def beam_search_torch(model: nn.Module,
                       source: torch.Tensor,
