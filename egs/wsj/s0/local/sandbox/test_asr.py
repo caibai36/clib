@@ -1669,9 +1669,12 @@ class Node:
         Parameters
         ----------
         state: the path of the input indices of different time steps
-        tokenid_path: the path of tokenids of output to current node
+        tokenid_path: the path of tokenids of output to current node; a list of LongTensors with shape [1]
         log_prob: log probability of the path;  tensors with shape [1] (e.g. torch.Tensor([0.7]))
         score: the score of the path; tensor with the shape [1], usually same as log_prob
+        coeff_length_penalty: large coefficient of length penalty will increase more penalty for long sentences.
+            Google NMT: https://arxiv.org/pdf/1609.08144.pdf
+            formula (14): length_penalty(seq)=(5+len(seq))^coeff/(5+1)^coeff
         active: current node hit the tokenid of end of sequence (<sos>) or not
 
         Example
@@ -1700,6 +1703,7 @@ class Node:
         Generating the long sequence will add more penalty.
         Google NMT: https://arxiv.org/pdf/1609.08144.pdf
         formula (14): lp(Y)=(5+|Y|)^alpha / (5+1)^alpha
+        alpha increases => length_penalty increases
         """
         return ((const + length)**alpha) / ((const + 1)**alpha)
 
@@ -1730,7 +1734,7 @@ class Node:
         for i in range(expand_size):
             active = False if topk_log_prob_t_indices[i].item() == eos_id else True
             expand_node = Node(self.state + [state_t], # e.g. [1, 3] + [4] = [1, 3, 4]
-                               self.tokenid_path + [topk_log_prob_t_indices[i].unsqueeze(-1)],
+                               self.tokenid_path + [topk_log_prob_t_indices[i].unsqueeze(-1)], # [tensor([1]),tensor([0])]+[tensor([2])]=[tensor([1]),tensor([0]),tensor([2])]
                                log_seq_prob[i].unsqueeze(-1), # e.g. torch.Tensor([0.4])
                                scores[i].unsqueeze(-1),
                                coeff_length_penalty=self.coeff_length_penalty,
@@ -1792,15 +1796,18 @@ class Level:
         self.stack.append(node)
 
     def get_active_nodes(self) -> List[Node]:
+        """ Get a list active node at the current level. """
         return [node for node in self.stack if node.active]
 
     def get_finished_nodes(self) -> List[Node]:
+        """ Get a list of finished nodes at the current level. """
         return [node for node in self.stack if not node.active]
 
     def is_finished(self) -> bool:
+        """ Check whether the nbest nodes finished """
         return all([not node.active for node in self.stack[0: self.nbest]])
 
-    def step(self, state_t:List[int], log_prob_t:torch.Tensor, eos_id:int, expand_size=5) -> List[Node]:
+    def step(self, state_t:List[int], log_prob_t:torch.Tensor, eos_id:int, expand_size=5) -> None:
         """
         One step of a search tree from the previous level to the current level
 
@@ -1812,11 +1819,6 @@ class Level:
             shape [num_active_nodes_prev_level_of_search_tree, dec_output_size]
         eos_id: the tokenid of the <eos> (end of sequence)
         expand_size: the number of the nodes one node of the previous level allows to expand to the current level.
-
-        Returns
-        -------
-        A list nodes at current level of the search tree with beam size sorted by the score,
-        including the active ones and finished ones.
         """
         nodes_next_level = []
 
@@ -1834,14 +1836,53 @@ class Level:
         self.stack = nodes_next_level
         self.sort()
 
-        return nodes_next_level
-
     def sort(self):
         """ sort the nodes at current level and keep the nodes with highest score """
         self.stack = sorted(self.stack, key = lambda node: node.score.item(), reverse=True)[0:self.beam_size]
 
     def __repr__(self):
         return ",".join(map(str, self.stack))
+
+    @staticmethod
+    def split_indices(batch_num_active_nodes: List[int]) -> Tuple[List, List]:
+        """ Split indices of active nodes of all trees of the previous time step (the current input indices) for each tree
+
+        Example
+        -------
+        batch_num_active_nodes: [1, 1, 1]
+        starts: [0, 1, 2]
+        ends:   [1, 2, 3]
+        batch_num_active_nodes: [2, 0, 4]
+        starts: [0, 2, 2]
+        ends:   [2, 2, 6]
+        """
+        starts, ends = [] , []
+        start = 0
+        for num_active_nodes in batch_num_active_nodes:
+            end = start + num_active_nodes
+            starts.append(start)
+            ends.append(end)
+            start = end
+        return starts, ends
+
+    @staticmethod
+    def repeat_indices(batch_num_active_nodes: List[int]) -> List[int]:
+        """ Repeat indices of active nodes of all trees of the previous time step to corresponding expaneded nodes.
+
+        Examples
+        --------
+        batch_num_active_nodes of [1, 1, 1] output [0, 1, 2]
+        batch_num_active_nodes of [2, 1, 4] output [0, 0, 1, 2, 2, 2, 2]
+        batch_num_active_nodes of [2, 0, 4] output [0, 0, 1, 1, 1, 1]
+        batch_num_active_nodes of [0, 1, 0] output [0]
+        """
+        result = []
+        batch_size = len(batch_num_active_nodes)
+        index = -1
+        for i in range(batch_size):
+            if batch_num_active_nodes[i] != 0: index += 1
+            result.extend([index]*batch_num_active_nodes[i])
+        return result
 
 def beam_search_torch(model: nn.Module,
                       source: torch.Tensor,
@@ -1850,14 +1891,15 @@ def beam_search_torch(model: nn.Module,
                       eos_id: int,
                       max_dec_length: int,
                       beam_size: int = 5,
-                      expand_size: int = 5) -> Tuple[torch.LongTensor, torch.LongTensor, torch.Tensor]:
+                      expand_size: int = 5,
+                      coeff_length_penalty: float = 1) -> Tuple[torch.LongTensor, torch.LongTensor, torch.Tensor]:
     """ Generate the hypothesis from source by beam search.
     The beam search is a greedy algorithm to explore the search tree by expanding
     the most promising `beam_size' nodes at each level of the tree (each time step)
     to get the most possible sequence.
     This is the batch version of the beam search. The searching strategy applies to a batch of search trees independently.
     However, at each time step, we combine the all active nodes (the nodes without hitting the <sos> token)
-    of the previous time step as the current input to the model for efficiency.
+    of the previous time step as the current input (or an active batch) to the model for efficiency.
 
     Parameters
     ----------
@@ -1875,6 +1917,9 @@ def beam_search_torch(model: nn.Module,
         as it can introduce more diversity into the search.
         See [Beam Search Strategies for Neural Machine Translation.
         Freitag and Al-Onaizan, 2017](https://arxiv.org/abs/1702.01806).
+    coeff_length_penalty: large coefficient of length penalty will increase more penalty for long sentences.
+        Google NMT: https://arxiv.org/pdf/1609.08144.pdf
+        formula (14): length_penalty(seq)=(5+len(seq))^coeff/(5+1)^coeff
 
     Returns
     -------
@@ -1889,13 +1934,6 @@ def beam_search_torch(model: nn.Module,
     ----
     Reference:
     Wiki Beam search: https://en.wikipedia.org/wiki/Beam_search
-
-    We define a active batch as the group of all active nodes of a batch at some level.
-    batch_num_active_nodes = [2, 0, 4]; active_batch_size = 6
-    start = [0, 2, 2]
-      end = [2, 2, 6]
-        global_state_index = [0, 0, 2, 2, 2, 2]
-
     Note: nbest of possible sequences can be implemented (hard to pad the attention)
     """
     model.reset()
@@ -1907,14 +1945,46 @@ def beam_search_torch(model: nn.Module,
 
     batch_size = source.shape[0]
 
-    cur_tokenids = source.new_full([batch_size], sos_id).long() # current input
+    cur_tokenids = source.new_full([batch_size], sos_id).long() # current input [active_batch_size]
 
     # initialize a batch of search trees
-    empty_nodes = [Node(state=[], tokenid_path=[], log_prob = torch.FloatTensor([0]), score = torch.FloatTensor([0])) for _ in range(batch_size)]
-    batch_level = [Level(beam_size=2, nbest=2) for _ in range(batch_size)]
-    for b in range(batch_size): batch_level[b].add_node(empty_nodes[b])
+    trees = []
+    for b in range(batch_size):
+        empty_node = Node(state=[], tokenid_path=[], log_prob = torch.FloatTensor([0]).to(source.device),
+                          score = torch.FloatTensor([0]).to(source.device), coeff_length_penalty=coeff_length_penalty, active=True)
+        level = Level(beam_size, nbest=1)
+        level.add_node(empty_node)
+        trees.append(level) # a tree represented by its level at each time step
+    batch_num_active_nodes = [1 for _ in range(batch_size)]
 
+    att_list = []
+    for time_step in range(max_dec_length):
+        presoftmax, dec_att = model.decode(cur_tokenids) # shape [active_batch_size, dec_output_size], [active_batch_size, context_length]
+        log_prob = F.log_softmax(presoftmax, dim=-1) # shape [active_batch_size, dec_output_size]
+        att_list.append(dec_att['p_context'])
 
+        # Expand previous active nodes independently for each tree in the batch.
+        starts, ends = Level.split_indices(batch_num_active_nodes) # previous global active indices for each tree: [2,0,4]=>starts:[0,2,2];ends:[2,2,6]
+        active_nodes_all_trees = []
+        for b in range(batch_size):
+            if trees[b].is_finished(): continue # batch_num_active_nodes[b] = 0 by default even skipped
+            state_t = list(range(starts[b], ends[b])) # length: [num_nodes_to_expand_curr_tree]
+            log_prob_t = log_prob[starts[b]: ends[b]] # shape: [num_nodes_to_expand_curr_tree, dec_output_size]
+            trees[b].step(state_t, log_prob_t, eos_id, expand_size=expand_size)
+            active_nodes = trees[b].get_active_nodes() # active nodes current level (current time step)
+            batch_num_active_nodes[b] = len(active_nodes) if not trees[b].is_finished() else 0
+            if not trees[b].is_finished(): active_nodes_all_trees.extend(active_nodes)
+
+        print(f"------{time_step}------")
+        print("\n\n".join(map(str, trees)))
+        if all([tree.is_finished() for tree in trees]): break
+
+        # Collect the active nodes of all trees at current level for the future expansion
+        cur_tokenids = torch.cat([node.tokenid_path[-1] for node in active_nodes_all_trees]) # shape [active_batch_size]
+        global_index = source.new(Level.repeat_indices(batch_num_active_nodes)).long() # global active index from the parent node: [2,0,4]=>[0,0,2,2,2,2]
+        model.decoder.set_context(context.index_select(dim=0, index=global_index), context_mask.index_select(dim=0, index=global_index))
+        if model.decoder.__class__.__name__ == 'LuongDecoder':
+            model.decoder.attentional_vector_pre = torch.index_select(model.decoder.attentional_vector_pre, dim=0, index=global_index)
 
     ###########################################################
     hypo_list = [] # list of different time steps
