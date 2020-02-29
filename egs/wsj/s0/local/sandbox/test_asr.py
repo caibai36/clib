@@ -1466,8 +1466,8 @@ def greedy_search_torch(model: nn.Module,
     model: an attention sequence2sequence model
     source: shape of [batch_size, source_max_length, source_size]
     source_length: shape of [batch_size]
-    sos_id: id of the start of sentence token
-    eos_id: id of the end of sentence token
+    sos_id: id of the start of sequence token
+    eos_id: id of the end of sequence token
     max_dec_length: the maximum length of the hypothesis (a sequence of tokens)
         the decoder can generate, even if eos token does not occur.
 
@@ -1517,8 +1517,8 @@ def greedy_search(model: nn.Module,
     model: an attention sequence2sequence model
     source: shape of [batch_size, source_max_length, source_size]
     source_length: shape of [batch_size]
-    sos_id: id of the start of sentence token
-    eos_id: id of the end of sentence token
+    sos_id: id of the start of sequence token
+    eos_id: id of the end of sequence token
     max_dec_length: the maximum length of the hypothesis (a sequence of tokens)
         the decoder can generate, even if eos token does not occur.
 
@@ -1668,14 +1668,11 @@ class Node:
 
         Parameters
         ----------
-        state: the path of the global indices.
-            (we define a active batch as the group of all active nodes,
-             whose tokenid_paths are not ended with <eos>,
-             of a batch at one time step, indexed by global indices)
+        state: the path of the input indices of different time steps
         tokenid_path: the path of tokenids of output to current node
         log_prob: log probability of the path;  tensors with shape [1] (e.g. torch.Tensor([0.7]))
         score: the score of the path; tensor with the shape [1], usually same as log_prob
-        active: current node hit the tokenid of end of sentence (<sos>) or not
+        active: current node hit the tokenid of end of sequence (<sos>) or not
 
         Example
         -------
@@ -1710,9 +1707,9 @@ class Node:
         """
         Parameters
         ----------
-        state_t: state (the global index) at time step t
-        log_prob_t: log probability at time step t. shape [vocab_size]
-        expand_size: the number of the nodes the current node allows to expand to next level.
+        state_t: a index of current input (input comes from active nodes of all trees of the previous time step).
+        log_prob_t: log probability for expansion of the given node. shape [vocab_size]
+        expand_size: the number of the nodes one node of the previous level allows to expand to the current level.
             Usually it is equals to beam_size.
             Alternatively a number smaller than `beam_size` may give better results,
             as it can introduce more diversity into the search.
@@ -1721,7 +1718,7 @@ class Node:
 
         Returns
         -------
-        a list of candidate nodes expanded to the next level by the current node.
+        a list of candidate nodes expanded from the given node
         """
         topk_log_prob_t, topk_log_prob_t_indices = log_prob_t.topk(expand_size, dim=0) # shape [expand_size], [expand_size]
         log_seq_prob = self.log_prob + topk_log_prob_t # shape [expand_size]
@@ -1753,10 +1750,10 @@ class Level:
 
         Paramters
         ---------
-        beam_size: the number of nodes at current level allows to expand to the next level
+        beam_size: the number of nodes at previous level allows to expand to the current level
         nbest: the number of best sequences needed to be searched.
             The nbest should be smaller or equals to the beam size
-        stack: a set of nodes at current level. .
+        stack: a set of nodes at current level.
             A node is active if its tokenid_path hasn't ended with <sos>, else the node is finished.
             If the number of finished nodes is more than or equals to nbest, we think this level is finished.
 
@@ -1769,7 +1766,7 @@ class Level:
         for b in range(batch_size): batch_level[b].add_node(empty_nodes[b])
         for b in range(batch_size): print(f"Tree {b}, level -1: {batch_level[b]}")
         print("---time step 0---")
-        if not batch_level[0].is_finished(): batch_level[0].step([0], torch.Tensor([[0.4, 0.35, 0.25]]).log(), eos_id=0, expand_size=2) # find one sentence with <eos>;tree 0 finish if nbest=1
+        if not batch_level[0].is_finished(): batch_level[0].step([0], torch.Tensor([[0.4, 0.35, 0.25]]).log(), eos_id=0, expand_size=2) # find one sequence with <eos>;tree 0 finish if nbest=1
         if not batch_level[1].is_finished(): batch_level[1].step([1], torch.Tensor([[0.2, 0.5, 0.3]]).log(), eos_id=0, expand_size=2)
         for b in range(batch_size): print(f"Tree {b}, level 0: {batch_level[b]}")
         print("---time step 1---")
@@ -1805,20 +1802,20 @@ class Level:
 
     def step(self, state_t:List[int], log_prob_t:torch.Tensor, eos_id:int, expand_size=5) -> List[Node]:
         """
-        One step of a search tree from the previous level to the next level
+        One step of a search tree from the previous level to the current level
 
         Paramters
         ---------
-        state_t: a list of the states of the active nodes at the previous level
-            len(state_t) = num_active_nodes_prev_level
-        log_prob_t: log probability vectors of active nodes at the previous level
-            shape [num_active_nodes_prev_level, dec_output_size]
-        eos_id: the tokenid of the <eos> (end of sentence)
-        expand_size: the number of the nodes one node at current level allows to expand to next level.
+        state_t: indices of current input (previous active nodes of all search trees) of the search tree.
+            len(state_t) = num_active_nodes_prev_level_of_search_tree
+        log_prob_t: log probability vectors of current output for the search tree
+            shape [num_active_nodes_prev_level_of_search_tree, dec_output_size]
+        eos_id: the tokenid of the <eos> (end of sequence)
+        expand_size: the number of the nodes one node of the previous level allows to expand to the current level.
 
         Returns
         -------
-        A list nodes at next level with beam size sorted by the score,
+        A list nodes at current level of the search tree with beam size sorted by the score,
         including the active ones and finished ones.
         """
         nodes_next_level = []
@@ -1852,29 +1849,54 @@ def beam_search_torch(model: nn.Module,
                       sos_id: int,
                       eos_id: int,
                       max_dec_length: int,
-                      beam_size: int = 5) -> Tuple[torch.LongTensor, torch.LongTensor, torch.Tensor]:
+                      beam_size: int = 5,
+                      expand_size: int = 5) -> Tuple[torch.LongTensor, torch.LongTensor, torch.Tensor]:
     """ Generate the hypothesis from source by beam search.
+    The beam search is a greedy algorithm to explore the search tree by expanding
+    the most promising `beam_size' nodes at each level of the tree (each time step)
+    to get the most possible sequence.
+    This is the batch version of the beam search. The searching strategy applies to a batch of search trees independently.
+    However, at each time step, we combine the all active nodes (the nodes without hitting the <sos> token)
+    of the previous time step as the current input to the model for efficiency.
 
     Parameters
     ----------
     model: an attention sequence2sequence model
     source: shape of [batch_size, source_max_length, source_size]
     source_length: shape of [batch_size]
-    sos_id: id of the start of sentence token
-    eos_id: id of the end of sentence token
+    sos_id: id of the start of sequence token, to create the start input
+    eos_id: id of the end of sequence token, to judge a node is active or not
     max_dec_length: the maximum length of the hypothesis (a sequence of tokens)
         the decoder can generate, even if eos token does not occur.
-    beam_size: the beam size
+    beam_size:   the number of the nodes all nodes of the previous level allows to expand to the current level
+    expand_size: the number of the nodes one node of the previous level allows to expand to the current level
+        Usually it is equals to beam_size.
+        Alternatively a number smaller than `beam_size` may give better results,
+        as it can introduce more diversity into the search.
+        See [Beam Search Strategies for Neural Machine Translation.
+        Freitag and Al-Onaizan, 2017](https://arxiv.org/abs/1702.01806).
 
     Returns
     -------
-    hypothesis: shape [batch_size, dec_length]; each hypothesis is a sequence of tokenid
-        (which has no sos_id, but with eos_id if its length is less than max_dec_length)
-    lengths of hypothesis: shape [batch_size]; length without sos_id but with eos_id
+    hypothesis: shape [batch_size, dec_length]
+        each hypothesis is a sequence of tokenid
+        (which has no sos_id, but with eos_id if its length <  max_dec_length)
+    lengths of hypothesis: shape [batch_size]
+        length without sos_id but with eos_id
     attentions of hypothesis: shape [batch_size, dec_length, context_size]
 
+    Note
+    ----
     Reference:
     Wiki Beam search: https://en.wikipedia.org/wiki/Beam_search
+
+    We define a active batch as the group of all active nodes of a batch at some level.
+    batch_num_active_nodes = [2, 0, 4]; active_batch_size = 6
+    start = [0, 2, 2]
+      end = [2, 2, 6]
+        global_state_index = [0, 0, 2, 2, 2, 2]
+
+    Note: nbest of possible sequences can be implemented (hard to pad the attention)
     """
     model.reset()
     model.train(False)
@@ -1885,7 +1907,14 @@ def beam_search_torch(model: nn.Module,
 
     batch_size = source.shape[0]
 
-    cur_tokenids = source.new_full([batch_size], sos_id).long()
+    cur_tokenids = source.new_full([batch_size], sos_id).long() # current input
+
+    # initialize a batch of search trees
+    empty_nodes = [Node(state=[], tokenid_path=[], log_prob = torch.FloatTensor([0]), score = torch.FloatTensor([0])) for _ in range(batch_size)]
+    batch_level = [Level(beam_size=2, nbest=2) for _ in range(batch_size)]
+    for b in range(batch_size): batch_level[b].add_node(empty_nodes[b])
+
+
 
     ###########################################################
     hypo_list = [] # list of different time steps
