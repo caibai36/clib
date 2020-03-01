@@ -1726,6 +1726,10 @@ class Node:
         """
         topk_log_prob_t, topk_log_prob_t_indices = log_prob_t.topk(expand_size, dim=0) # shape [expand_size], [expand_size]
         log_seq_prob = self.log_prob + topk_log_prob_t # shape [expand_size]
+        # print(f"state_t: {state_t}")
+        # print(f"tok_log_prob_t:{topk_log_prob_t}")
+        # print(f"topk_log_prob_t_indices: {topk_log_prob_t_indices}")
+        # print(f"self.log_prob: {self.log_prob}")
         scores = log_seq_prob
 
         scores = scores / self.length_penalty(len(self.tokenid_path), alpha=self.coeff_length_penalty) # shape [expand_size]
@@ -1866,6 +1870,23 @@ class Level:
         return starts, ends
 
     @staticmethod
+    def get_encoder_indices(batch_num_active_nodes: List[int]) -> List[int]:
+        """ Get the batch index of context for each active node.
+
+        Examples
+        --------
+        batch_num_active_nodes of [1, 1, 1] output [0, 1, 2]
+        batch_num_active_nodes of [2, 1, 4] output [0, 0, 1, 2, 2, 2, 2]
+        batch_num_active_nodes of [2, 0, 4] output [0, 0, 2, 2, 2, 2]
+        batch_num_active_nodes of [0, 1, 0] output [1]
+        """
+        result = []
+        batch_size = len(batch_num_active_nodes)
+        for i in range(batch_size):
+            result.extend([i]*batch_num_active_nodes[i])
+        return result
+
+    @staticmethod
     def repeat_indices(batch_num_active_nodes: List[int]) -> List[int]:
         """ Repeat indices of active nodes of all trees of the previous time step to corresponding expaneded nodes.
 
@@ -1940,8 +1961,8 @@ def beam_search_torch(model: nn.Module,
     model.train(False)
     model.encode(source, source_lengths) # set the context for decoding at the same time
     context, context_mask = model.decoder.get_context_and_its_mask()
-    print(context.shape)
-    print(context_mask)
+    # print(context.shape)
+    # print(context_mask)
 
     batch_size = source.shape[0]
 
@@ -1959,9 +1980,13 @@ def beam_search_torch(model: nn.Module,
 
     att_list = []
     for time_step in range(max_dec_length):
+        # print(f"pre_attention_before_model: {model.decoder.attentional_vector_pre}")
         presoftmax, dec_att = model.decode(cur_tokenids) # shape [active_batch_size, dec_output_size], [active_batch_size, context_length]
         log_prob = F.log_softmax(presoftmax, dim=-1) # shape [active_batch_size, dec_output_size]
+        # print(f"cur_tokenids:{cur_tokenids}")
+        # print(f"log_prob:{log_prob}")
         att_list.append(dec_att['p_context'])
+        # print(f"pre_attention_after_model: {model.decoder.attentional_vector_pre}")
 
         # Expand previous active nodes independently for each tree in the batch.
         starts, ends = Level.split_indices(batch_num_active_nodes) # previous global active indices for each tree: [2,0,4]=>starts:[0,2,2];ends:[2,2,6]
@@ -1977,14 +2002,20 @@ def beam_search_torch(model: nn.Module,
 
         print(f"------{time_step}------")
         print("\n\n".join(map(str, trees)))
+        print(f"------END--------")
         if all([tree.is_finished() for tree in trees]): break
 
         # Collect the active nodes of all trees at current level for the future expansion
         cur_tokenids = torch.cat([node.tokenid_path[-1] for node in active_nodes_all_trees]) # shape [active_batch_size]
-        global_index = source.new(Level.repeat_indices(batch_num_active_nodes)).long() # global active index from the parent node: [2,0,4]=>[0,0,2,2,2,2]
-        model.decoder.set_context(context.index_select(dim=0, index=global_index), context_mask.index_select(dim=0, index=global_index))
-        if model.decoder.__class__.__name__ == 'LuongDecoder':
-            model.decoder.attentional_vector_pre = torch.index_select(model.decoder.attentional_vector_pre, dim=0, index=global_index)
+        if model.decoder.__class__.__name__ == 'LuongDecoder': # collect the state of model (e.g. attentional_vector_pre for LuongDecoder) for active nodes
+            # Use input indices (indexed by all parent active nodes) for each active nodes
+            input_indices = source.new([node.state[-1] for node in active_nodes_all_trees]).long() # shape [active_batch_size]
+            model.decoder.attentional_vector_pre = torch.index_select(model.decoder.attentional_vector_pre, dim=0, index=input_indices)
+        context_indices = source.new(Level.get_encoder_indices(batch_num_active_nodes)).long() # get the batch index of context for each active node: [2,0,4]=>[0,0,2,2,2,2]
+        # print(f"cur_tokenids: {cur_tokenids}")
+        # print(f"context_indices: {context_indices}")
+        # print(f"input_index: {input_indices}")
+        model.decoder.set_context(context.index_select(dim=0, index=context_indices), context_mask.index_select(dim=0, index=context_indices))                                        
 
     ###########################################################
     hypo_list = [] # list of different time steps
@@ -2011,12 +2042,12 @@ print("Device: '{}'".format(device))
 token2id, first_batch, model = get_token2id_firstbatch_model()
 source, source_lengths = first_batch['feat'], first_batch['num_frames']
 sos_id, eos_id = int(token2id['<sos>']), int(token2id['<eos>']) # 2, 3
-max_dec_length = 4
+max_dec_length = 100
 
 model.to(device)
 source, source_lengths = source.to(device), source_lengths.to(device)
 print("----------------------------\nhypo, hypo_lengths, hypo_att")
-print(beam_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length))
+print(beam_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length, beam_size=2, expand_size=5))
 # print()
 # print("----------------------------\ncropped_hypo, cropped_hypo_lengths, cropped_hypo_att")
 # print(greedy_search(model, source, source_lengths, sos_id, eos_id, max_dec_length))
