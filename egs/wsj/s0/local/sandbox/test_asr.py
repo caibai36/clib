@@ -1762,6 +1762,8 @@ class Node:
         -------
         a list of candidate nodes expanded from the given node
         """
+        if expand_size >= len(log_prob_t):
+            expand_size = len(log_prob_t) # expand all possible active nodes
         topk_log_prob_t, topk_log_prob_t_indices = log_prob_t.topk(expand_size, dim=0) # shape [expand_size], [expand_size]
         log_seq_prob = self.log_prob + topk_log_prob_t # shape [expand_size]
         scores = log_seq_prob
@@ -1928,11 +1930,11 @@ def beam_search_torch(model: nn.Module,
                       max_dec_length: int,
                       beam_size: int = 5,
                       expand_size: int = 5,
-                      coeff_length_penalty: float = 1) -> Tuple[torch.LongTensor, torch.LongTensor, torch.Tensor]:
+                      coeff_length_penalty: float = 1,
+                      nbest: int = 1) -> Tuple[torch.LongTensor, torch.LongTensor, torch.Tensor]:
     """ Generate the hypothesis from source by beam search.
-    The beam search is a greedy algorithm to explore the search tree by expanding
-    the most promising `beam_size' nodes at each level of the tree (each time step)
-    to get the most possible sequence.
+    The beam search is a greedy algorithm to explore the search tree by expanding the most promising `beam_size' nodes
+    at each level of the tree (each time step) to get the most possible sequence.
     This is the batch version of the beam search. The searching strategy applies to a batch of search trees independently.
     However, at each time step, we combine the all active nodes (the nodes without hitting the <sos> token)
     of the previous time step as the current input (or an active batch) to the model for efficiency.
@@ -1957,21 +1959,22 @@ def beam_search_torch(model: nn.Module,
     coeff_length_penalty: large coefficient of length penalty will increase more penalty for long sentences.
         Google NMT: https://arxiv.org/pdf/1609.08144.pdf
         formula (14): length_penalty(seq)=(5+len(seq))^coeff/(5+1)^coeff
+    nbest: get nbest sequences by the beam search
 
     Returns
     -------
-    hypothesis: shape [batch_size, dec_length]
+    hypothesis: shape [batch_size * nbest, dec_length]
         each hypothesis is a sequence of tokenid
         (which has no sos_id, but with eos_id if its length <  max_dec_length)
-    lengths of hypothesis: shape [batch_size]
+    lengths of hypothesis: shape [batch_size * nbest]
         length without sos_id but with eos_id
-    attentions of hypothesis: shape [batch_size, dec_length, context_size]
+    attentions of hypothesis: shape [batch_size * nbest, dec_length, context_size]
+    presoftmax of hypothesis: shape [batch_size * nbest, dec_length, dec_output_size]
 
-    Note
-    ----
-    Reference:
-    Wiki Beam search: https://en.wikipedia.org/wiki/Beam_search
-    Note: nbest of possible sequences can be implemented (hard to pad the attention)
+    References
+    ----------
+    Wiki beam search: https://en.wikipedia.org/wiki/Beam_search
+    Basic beam search example: https://machinelearningmastery.com/beam-search-decoder-natural-language-processing/
     """
     model.reset()
     model.train(False)
@@ -1982,16 +1985,17 @@ def beam_search_torch(model: nn.Module,
 
     cur_tokenids = source.new_full([batch_size], sos_id).long() # current input [active_batch_size]
 
-    # initialize a batch of search trees
+    # Initialize a batch of search trees.
     trees = []
     for b in range(batch_size):
         empty_node = Node(state=[], tokenid_path=[], log_prob = torch.FloatTensor([0]).to(source.device),
                           score = torch.FloatTensor([0]).to(source.device), coeff_length_penalty=coeff_length_penalty, active=True)
-        level = Level(beam_size, nbest=1)
+        level = Level(beam_size, nbest)
         level.add_node(empty_node)
         trees.append(level) # a tree represented by its level at each time step
     batch_num_active_nodes = [1 for _ in range(batch_size)]
 
+    # Explore the nbest sequences of search trees.
     att_list = []
     presoftmax_list = []
     for time_step in range(max_dec_length):
@@ -2012,8 +2016,8 @@ def beam_search_torch(model: nn.Module,
             batch_num_active_nodes[b] = len(active_nodes) if not trees[b].is_finished() else 0
             if not trees[b].is_finished(): active_nodes_all_trees.extend(active_nodes)
 
-        print(f"------{time_step}------")
-        print("\n\n".join(map(str, trees)))
+        print(f"------time step {time_step}------")
+        print("\n".join(map(str, trees)))
         if all([tree.is_finished() for tree in trees]): break
 
         # Collect the active nodes of all trees at current level for the future expansion
@@ -2026,28 +2030,30 @@ def beam_search_torch(model: nn.Module,
         context_indices = source.new(Level.get_encoder_indices(batch_num_active_nodes)).long() # get the batch index of context for each active node: [2,0,4]=>[0,0,2,2,2,2]
         model.decoder.set_context(context.index_select(dim=0, index=context_indices), context_mask.index_select(dim=0, index=context_indices))
 
-    ###########################################################
+    # Generate the hypothesis from the last level of the tree
     hypo_list = [] # list of different time steps
+    hypo_length_list = []
     hypo_att_list = []
-    hypo_presoftmax = []
-    hypo_lengths = source.new_full([batch_size], -1).long()
-    cur_tokenids = source.new_full([batch_size], sos_id).long()
-    for time_step in range(max_dec_length):
-        presoftmax, dec_att = model.decode(cur_tokenids)
-        next_tokenids = presoftmax.argmax(-1) # [batch_size]
-        hypo_list.append(next_tokenids)
-        hypo_att_list.append(dec_att['p_context'])
-        hypo_presoftmax.append(presoftmax)
+    hypo_presoftmax_list = []
+    for b in range(batch_size):
+        for n in range(nbest):
+            node = trees[b].stack[n] # iterate over nbest all active nodes at the last level of the tree
+            hypo_list.append(torch.cat(node.tokenid_path))
+            hypo_length_list.append(len(node.tokenid_path) if node.tokenid_path[-1].item() == eos_id else -1) # -1 means not finished
 
-        for i in range(batch_size):
-            if next_tokenids[i] == eos_id and hypo_lengths[i] == -1:
-                hypo_lengths[i] = time_step + 1
-        if all(hypo_lengths != -1): break
-        cur_tokenids = next_tokenids
+            node_att_list = [att_list[t][node.state[t]] for t in range(len(node.state))]
+            node_att = torch.stack(node_att_list) # shape [dec_length, context_size]
+            hypo_att_list.append(node_att)
 
-    hypo = torch.stack(hypo_list, dim=1) # [batch_size, dec_length]
-    hypo_att = torch.stack(hypo_att_list, dim=1) # [batch_size, dec_length, context_size]
-    hypo_presoftmax = torch.stack(hypo_presoftmax, dim=1) # [batch_size, dec_length, dec_output_size]
+            node_presoftmax_list = [presoftmax_list[t][node.state[t]] for t in range(len(node.state))]
+            node_presoftmax = torch.stack(node_presoftmax_list) # shape [dec_length, dec_output_size]
+            hypo_presoftmax_list.append(node_presoftmax)
+
+    hypo = pad_sequence(hypo_list, batch_first=True, padding_value=eos_id)
+    hypo_lengths = source.new(hypo_length_list).long()
+    hypo_att = pad_sequence(hypo_att_list, batch_first=True, padding_value=0)
+    hypo_presoftmax = pad_sequence(hypo_presoftmax_list, batch_first=True, padding_value=0)
+
     return hypo, hypo_lengths, hypo_att, hypo_presoftmax
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -2059,7 +2065,7 @@ max_dec_length = 4
 
 model.to(device)
 source, source_lengths = source.to(device), source_lengths.to(device)
-hypo, hypo_lengths, hypo_att, hypo_presoftmax = beam_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length)
+hypo, hypo_lengths, hypo_att, hypo_presoftmax = beam_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length, beam_size=2, expand_size=2, nbest=2)
 print(f"---hypo---\n{hypo}\n---hypo_lengths---\n{hypo_lengths}\n---hypo_att---\n{hypo_att}\n---hypo_presoftmax---\n{hypo_presoftmax}")
 # print()
 # cropped_hypo, cropped_hypo_lengths, cropped_hypo_att, cropped_hypo_presoftmax = greedy_search(model, source, source_lengths, sos_id, eos_id, max_dec_length)
