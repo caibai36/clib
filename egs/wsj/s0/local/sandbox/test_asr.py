@@ -1458,7 +1458,7 @@ def greedy_search_torch(model: nn.Module,
                        source_lengths: torch.Tensor,
                        sos_id: int,
                        eos_id: int,
-                       max_dec_length: int) -> Tuple[torch.LongTensor, torch.LongTensor, torch.Tensor]:
+                       max_dec_length: int) -> Tuple[torch.LongTensor, torch.LongTensor, torch.Tensor, torch.Tensor]:
     """ Generate the hypothesis from source by greedy search (beam search with beam_size 1)
 
     Parameters
@@ -1530,7 +1530,7 @@ def greedy_search(model: nn.Module,
     -------
     cropped hypothesis: a list of [hypo_lengths[i]] tensors with the length batch_size.
         each element in the batch is a sequence of tokenids excluding eos_id.
-    cropped lengths of hypothesis: shape [batch_size]; exluding sos_id and eos_id
+    cropped lengths of hypothesis: shape [batch_size]; excluding sos_id and eos_id
     cropped attentions of hypothesis: a list of [hypos_length[i], context_length[i]] tensors
         with the length batch_size
     cropped presoftmax of hypothesis: a list of [hypo_lengths[i], dec_output_size] tensors
@@ -1685,14 +1685,6 @@ def test_greedy_search():
     cropped_hypo, cropped_hypo_lengths, cropped_hypo_att, cropped_hypo_presoftmax = greedy_search(model, source, source_lengths, sos_id, eos_id, max_dec_length)
     print(f"---cropped_hypo---\n{cropped_hypo}\n---cropped_hypo_lengths---\n{cropped_hypo_lengths}")
     print(f"---cropped_hypo_att---\n{cropped_hypo_att}\n---cropped_hypo_presoftmax---\n{cropped_hypo_presoftmax}")
-
-# test_cross_entropy_label_smooth()
-# test_encoder()
-# test_attention()
-# test_luong_decoder()
-# test_EncRNNDecRNNAtt()
-# train_asr()
-# test_greedy_search()
 
 class Node:
     def __init__(self,
@@ -1878,7 +1870,9 @@ class Level:
 
     def sort(self):
         """ sort the nodes at current level and keep the nodes with highest score """
-        self.stack = sorted(self.stack, key = lambda node: node.score.item(), reverse=True)[0:self.beam_size]
+        # take all possible nodes if beam_size is very large
+        beam_size = self.beam_size if self.beam_size <= len(self.stack) else len(self.stack)
+        self.stack = sorted(self.stack, key = lambda node: node.score.item(), reverse=True)[0:beam_size]
 
     def __repr__(self):
         return ",".join(map(str, self.stack))
@@ -1951,7 +1945,7 @@ def beam_search_torch(model: nn.Module,
         the decoder can generate, even if eos token does not occur.
     beam_size:   the number of the nodes all nodes of the previous level allows to expand to the current level
     expand_size: the number of the nodes one node of the previous level allows to expand to the current level
-        Usually it is equals to beam_size.
+        Usually expand_size equals beam_size.
         Alternatively a number smaller than `beam_size` may give better results,
         as it can introduce more diversity into the search.
         See [Beam Search Strategies for Neural Machine Translation.
@@ -1964,7 +1958,8 @@ def beam_search_torch(model: nn.Module,
     Returns
     -------
     hypothesis: shape [batch_size * nbest, dec_length]
-        each hypothesis is a sequence of tokenid
+        each hypothesis is a sequence of tokenid, ordered as the first nbest chunk,
+        the second nbest chunk, ... the batch_size-th nbest chunk
         (which has no sos_id, but with eos_id if its length <  max_dec_length)
     lengths of hypothesis: shape [batch_size * nbest]
         length without sos_id but with eos_id
@@ -2016,8 +2011,8 @@ def beam_search_torch(model: nn.Module,
             batch_num_active_nodes[b] = len(active_nodes) if not trees[b].is_finished() else 0
             if not trees[b].is_finished(): active_nodes_all_trees.extend(active_nodes)
 
-        print(f"------time step {time_step}------")
-        print("\n".join(map(str, trees)))
+        # print(f"------time step {time_step}------")
+        # print("\n".join(map(str, trees)))
         if all([tree.is_finished() for tree in trees]): break
 
         # Collect the active nodes of all trees at current level for the future expansion
@@ -2028,7 +2023,8 @@ def beam_search_torch(model: nn.Module,
             model.decoder.attentional_vector_pre = torch.index_select(model.decoder.attentional_vector_pre, dim=0, index=input_indices)
         # Update the state of encoder (the context) for active nodes
         context_indices = source.new(Level.get_encoder_indices(batch_num_active_nodes)).long() # get the batch index of context for each active node: [2,0,4]=>[0,0,2,2,2,2]
-        model.decoder.set_context(context.index_select(dim=0, index=context_indices), context_mask.index_select(dim=0, index=context_indices))
+        model.decoder.set_context(context.index_select(dim=0, index=context_indices), \
+                                  context_mask.index_select(dim=0, index=context_indices) if context_mask is not None else None)
 
     # Generate the hypothesis from the last level of the tree
     hypo_list = [] # list of different time steps
@@ -2054,20 +2050,203 @@ def beam_search_torch(model: nn.Module,
     hypo_att = pad_sequence(hypo_att_list, batch_first=True, padding_value=0)
     hypo_presoftmax = pad_sequence(hypo_presoftmax_list, batch_first=True, padding_value=0)
 
+    # recover the state of the model
+    model.decoder.set_context(context, context_mask)
+    model.reset()
     return hypo, hypo_lengths, hypo_att, hypo_presoftmax
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("Device: '{}'".format(device))
-token2id, first_batch, model = get_token2id_firstbatch_model()
-source, source_lengths = first_batch['feat'], first_batch['num_frames']
-sos_id, eos_id = int(token2id['<sos>']), int(token2id['<eos>']) # 2, 3
-max_dec_length = 4
+def beam_search(model: nn.Module,
+                source: torch.Tensor,
+                source_lengths: torch.Tensor,
+                sos_id: int,
+                eos_id: int,
+                max_dec_length: int,
+                beam_size: int = 5,
+                expand_size: int = 5,
+                coeff_length_penalty: float = 1,
+                nbest: int = 1) -> Tuple[List[torch.LongTensor], torch.LongTensor, List[torch.Tensor], List[torch.Tensor]]:
+    """ Generate the hypothesis from source by beam search.
+    The beam search is a greedy algorithm to explore the search tree by expanding the most promising `beam_size' nodes
+    at each level of the tree (each time step) to get the most possible sequence.
+    This is the batch version of the beam search. The searching strategy applies to a batch of search trees independently.
+    However, at each time step, we combine the all active nodes (the nodes without hitting the <sos> token)
+    of the previous time step as the current input (or an active batch) to the model for efficiency.
+    Note that the decoder (model state) is indexed by the active batch, the encoder (context) is indexed by the batch.
 
-model.to(device)
-source, source_lengths = source.to(device), source_lengths.to(device)
-hypo, hypo_lengths, hypo_att, hypo_presoftmax = beam_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length, beam_size=2, expand_size=2, nbest=2)
-print(f"---hypo---\n{hypo}\n---hypo_lengths---\n{hypo_lengths}\n---hypo_att---\n{hypo_att}\n---hypo_presoftmax---\n{hypo_presoftmax}")
-# print()
-# cropped_hypo, cropped_hypo_lengths, cropped_hypo_att, cropped_hypo_presoftmax = greedy_search(model, source, source_lengths, sos_id, eos_id, max_dec_length)
-# print(f"---cropped_hypo---\n{cropped_hypo}\n---cropped_hypo_lengths---\n{cropped_hypo_lengths}")
-# print(f"---cropped_hypo_att---\n{cropped_hypo_att}\n---cropped_hypo_presoftmax---\n{cropped_hypo_presoftmax}")
+    Parameters
+    ----------
+    model: an attention sequence2sequence model
+    source: shape of [batch_size, source_max_length, source_size]
+    source_length: shape of [batch_size]
+    sos_id: id of the start of sequence token, to create the start input
+    eos_id: id of the end of sequence token, to judge a node is active or not
+    max_dec_length: the maximum length of the hypothesis (a sequence of tokens)
+        the decoder can generate, even if eos token does not occur.
+    beam_size:   the number of the nodes all nodes of the previous level allows to expand to the current level
+    expand_size: the number of the nodes one node of the previous level allows to expand to the current level
+        Usually expand_size equals beam_size.
+        Alternatively a number smaller than `beam_size` may give better results,
+        as it can introduce more diversity into the search.
+        See [Beam Search Strategies for Neural Machine Translation.
+            Freitag and Al-Onaizan, 2017](https://arxiv.org/abs/1702.01806).
+    coeff_length_penalty: large coefficient of length penalty will increase more penalty for long sentences.
+        Google NMT: https://arxiv.org/pdf/1609.08144.pdf
+        formula (14): length_penalty(seq)=(5+len(seq))^coeff/(5+1)^coeff
+    nbest: get nbest sequences by the beam search
+
+    Returns
+    -------
+    cropped hypothesis: a list of [hypo_lengths[i]] tensors with the length batch_size*nbest
+        each element in the batch is a sequence of tokenids excluding eos_id.
+        ordered as the first nbest chunk, the second nbest chunk, ... the batch_size-th nbest chunk
+    cropped lengths of hypothesis: shape [batch_size]; excluding sos_id and eos_id
+    cropped attentions of hypothesis: a list of [hypos_length[i], context_length[i]] tensors
+        with the length batch_size*nbest
+    cropped presoftmax of hypothesis: a list of [hypo_lengths[i], dec_output_size] tensors
+        with the lenght batch_size*nbest (hypo can not back propagate, but hypo presoftmax can)
+
+    References
+    ----------
+    Wiki beam search: https://en.wikipedia.org/wiki/Beam_search
+    Basic beam search example: https://machinelearningmastery.com/beam-search-decoder-natural-language-processing/
+
+    Example
+    -------
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Device: '{}'".format(device))
+    token2id, first_batch, model = get_token2id_firstbatch_model()
+    source, source_lengths = first_batch['feat'], first_batch['num_frames']
+    sos_id, eos_id = int(token2id['<sos>']), int(token2id['<eos>']) # 2, 3
+    max_dec_length = 4
+
+    model.to(device)
+    source, source_lengths = source.to(device), source_lengths.to(device)
+    hypo, hypo_lengths, hypo_att, hypo_presoftmax = beam_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length, beam_size=2, expand_size=2, nbest=1)
+    cropped_hypo, cropped_hypo_lengths, cropped_hypo_att, cropped_hypo_presoftmax = beam_search(model, source, source_lengths, sos_id, eos_id, max_dec_length, beam_size=2, expand_size=2, nbest=1)
+
+    # # Each level of the search tree
+    # ------time step 0------
+    # [score: -0.026, tokenid_path:[5], state: [0], active: True],[score: -5.436, tokenid_path:[6], state: [0], active: True]
+    # [score: -0.010, tokenid_path:[5], state: [1], active: True],[score: -7.122, tokenid_path:[6], state: [1], active: True]
+    # [score: -0.044, tokenid_path:[5], state: [2], active: True],[score: -4.565, tokenid_path:[6], state: [2], active: True]
+    # ------time step 1------
+    # [score: -1.033, tokenid_path:[5, 4], state: [0, 0], active: True],[score: -1.087, tokenid_path:[5, 6], state: [0, 0], active: True]
+    # [score: -1.117, tokenid_path:[5, 4], state: [1, 2], active: True],[score: -1.516, tokenid_path:[5, 7], state: [1, 2], active: True]
+    # [score: -0.727, tokenid_path:[5, 6], state: [2, 4], active: True],[score: -1.198, tokenid_path:[5, 4], state: [2, 4], active: True]
+    # ------time step 2------
+    # [score: -1.316, tokenid_path:[5, 6, 3], state: [0, 0, 1], active: False],[score: -1.822, tokenid_path:[5, 4, 3], state: [0, 0, 0], active: False]
+    # [score: -1.118, tokenid_path:[5, 4, 5], state: [1, 2, 2], active: True],[score: -2.382, tokenid_path:[5, 7, 4], state: [1, 2, 3], active: True]
+    # [score: -0.962, tokenid_path:[5, 6, 3], state: [2, 4, 4], active: False],[score: -1.764, tokenid_path:[5, 4, 6], state: [2, 4, 5], active: True]
+    # ------time step 3------
+    # [score: -1.316, tokenid_path:[5, 6, 3], state: [0, 0, 1], active: False],[score: -1.822, tokenid_path:[5, 4, 3], state: [0, 0, 0], active: False]
+    # [score: -1.823, tokenid_path:[5, 4, 5, 4], state: [1, 2, 2, 0], active: True],[score: -2.097, tokenid_path:[5, 4, 5, 7], state: [1, 2, 2, 0], active: True]
+    # [score: -0.962, tokenid_path:[5, 6, 3], state: [2, 4, 4], active: False],[score: -1.764, tokenid_path:[5, 4, 6], state: [2, 4, 5], active: True]
+    # ---hypo---
+    # tensor([[5, 6, 3, 3],
+    #         [5, 4, 5, 4],
+    #         [5, 6, 3, 3]], device='cuda:0')
+    # ---hypo_lengths---
+    # tensor([ 3, -1,  3], device='cuda:0')
+    # ---hypo_att---
+    # tensor([[[0.0187, 0.9813],
+    #          [0.0210, 0.9790],
+    #          [0.0212, 0.9788],
+    #          [0.0000, 0.0000]],
+
+    #         [[0.0057, 0.9943],
+    #          [0.0056, 0.9944],
+    #          [0.0050, 0.9950],
+    #          [0.0056, 0.9944]],
+
+    #         [[1.0000, 0.0000],
+    #          [1.0000, 0.0000],
+    #          [1.0000, 0.0000],
+    #          [0.0000, 0.0000]]], device='cuda:0', grad_fn=<CopySlices>)
+    # ---hypo_presoftmax---
+    # tensor([[[-2.0391e+00, -2.4686e+00, -3.3696e+00, -1.2013e+00, -1.9056e+00, 4.6328e+00,  1.2401e-01, -9.1314e-01],
+    #          [-4.5584e+00, -5.5560e+00, -1.8747e+00,  2.1036e-03,  1.0197e+00, -3.7233e+00,  9.6586e-01,  2.8960e-02],
+    #          [-2.8887e+00, -4.3951e+00, -2.3741e+00,  1.8658e+00, -2.3473e-01, -3.5218e+00,  2.5737e-01,  3.2377e-01],
+    #          [ 0.0000e+00,  0.0000e+00,  0.0000e+00,  0.0000e+00,  0.0000e+00, 0.0000e+00,  0.0000e+00,  0.0000e+00]],
+
+    #         [[-1.0977e+00, -1.8111e+00, -3.2346e+00, -9.9084e-01, -2.3206e+00, 5.5821e+00, -3.4452e-01, -7.9397e-01],
+    #          [-3.1162e+00, -4.4986e+00, -1.2099e+00, -6.0075e-02,  6.6851e-01, -2.0799e+00,  2.1094e-01,  2.7038e-01],
+    #          [-1.5080e+00, -2.7002e+00, -2.3081e+00, -2.9946e-01, -1.3555e+00, 2.6545e+00, -4.2277e-01, -1.3397e-01],
+    #          [-3.0643e+00, -4.4616e+00, -1.1970e+00, -2.8974e-02,  6.4926e-01, -2.0641e+00,  1.8507e-01,  2.8324e-01]],
+
+    #         [[-2.2006e+00, -2.2896e+00, -3.6796e+00, -1.0538e+00, -1.8577e+00, 4.2987e+00,  5.3117e-01, -1.2819e+00],
+    #          [-4.5086e+00, -4.8001e+00, -2.4802e+00, -1.3172e-01,  9.3378e-01, -3.6198e+00,  1.4054e+00, -6.8509e-01],
+    #          [-2.6262e+00, -3.4670e+00, -2.7019e+00,  1.9906e+00, -3.1856e-01, -3.5389e+00,  6.1016e-01, -2.3925e-01],
+    #          [ 0.0000e+00,  0.0000e+00,  0.0000e+00,  0.0000e+00,  0.0000e+00, 0.0000e+00,  0.0000e+00,  0.0000e+00]]],
+    #          device='cuda:0', grad_fn=<CopySlices>)
+
+    # ---cropped_hypo---
+    # [tensor([5, 6], device='cuda:0'),
+    #  tensor([5, 4, 5, 4], device='cuda:0'),
+    #  tensor([5, 6], device='cuda:0')]
+    # ---cropped_hypo_lengths---
+    # tensor([2, 4, 2], device='cuda:0')
+    # ---cropped_hypo_att---
+    # [tensor([[0.0187, 0.9813],
+    #          [0.0210, 0.9790]], device='cuda:0', grad_fn=<SliceBackward>),
+    #  tensor([[0.0057, 0.9943],
+    #          [0.0056, 0.9944],
+    #          [0.0050, 0.9950],
+    #          [0.0056, 0.9944]], device='cuda:0', grad_fn=<AliasBackward>),
+    #  tensor([[1.],
+    #          [1.]], device='cuda:0', grad_fn=<SliceBackward>)]
+    # ---cropped_hypo_presoftmax---
+    # [tensor([[-2.0391e+00, -2.4686e+00, -3.3696e+00, -1.2013e+00, -1.9056e+00, 4.6328e+00,  1.2401e-01, -9.1314e-01],
+    #          [-4.5584e+00, -5.5560e+00, -1.8747e+00,  2.1036e-03,  1.0197e+00, -3.7233e+00,  9.6586e-01,  2.8960e-02]],
+    #          device='cuda:0', grad_fn=<SliceBackward>),
+    #  tensor([[-1.0977, -1.8111, -3.2346, -0.9908, -2.3206,  5.5821, -0.3445, -0.7940],
+    #          [-3.1162, -4.4986, -1.2099, -0.0601,  0.6685, -2.0799,  0.2109,  0.2704],
+    #          [-1.5080, -2.7002, -2.3081, -0.2995, -1.3555,  2.6545, -0.4228, -0.1340],
+    #          [-3.0643, -4.4616, -1.1970, -0.0290,  0.6493, -2.0641,  0.1851,  0.2832]],
+    #          device='cuda:0', grad_fn=<SliceBackward>),
+    #  tensor([[-2.2006, -2.2896, -3.6796, -1.0538, -1.8577,  4.2987,  0.5312, -1.2819],
+    #          [-4.5086, -4.8001, -2.4802, -0.1317,  0.9338, -3.6198,  1.4054, -0.6851]],
+    #          device='cuda:0', grad_fn=<SliceBackward>)]
+    """
+    batch_size = source.shape[0]
+    # [batch_size*nbest, dec_length], [batch_size*best], [batch_size*nbest, dec_length, context_size] [batch_size*nbest, dec_length, dec_output_size]
+    hypo, hypo_lengths, hypo_att, hypo_presoftmax = beam_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length,
+                                                                      beam_size, expand_size, coeff_length_penalty, nbest)
+
+    batch_size = len(source)
+    index = []
+    for i in range(batch_size): # [0, 1, 2] => [0, 0, 1, 1, 2, 2] if nbest = 2
+        index += [i] * nbest
+    context_lengths = mask2length(model.decoder.context_mask) # [batch_size]
+    context_lengths = context_lengths.index_select(dim=0, index=source.new(index).long()) # [batch_size * nbest]; [3, 4, 2] => [3, 3, 4, 4, 2, 2]
+    cropped_hypo_lengths = crop_hypothesis_lengths(hypo_lengths, max_dec_length) # remove eos_id
+    cropped_hypo = [hypo[i][0:cropped_hypo_lengths[i]] for i in range(batch_size * nbest)]
+    cropped_hypo_att = [hypo_att[i][0:cropped_hypo_lengths[i], 0:context_lengths[i]] for i in range(batch_size * nbest)]
+    cropped_hypo_presoftmax = [hypo_presoftmax[i][0:cropped_hypo_lengths[i], :] for i in range(batch_size * nbest)]
+
+    return cropped_hypo, cropped_hypo_lengths, cropped_hypo_att, cropped_hypo_presoftmax
+
+def test_beam_search():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Device: '{}'".format(device))
+    token2id, first_batch, model = get_token2id_firstbatch_model()
+    source, source_lengths = first_batch['feat'], first_batch['num_frames']
+    sos_id, eos_id = int(token2id['<sos>']), int(token2id['<eos>']) # 2, 3
+    max_dec_length = 4
+
+    model.to(device)
+    source, source_lengths = source.to(device), source_lengths.to(device)
+    hypo, hypo_lengths, hypo_att, hypo_presoftmax = beam_search_torch(model, source, source_lengths, sos_id, eos_id, max_dec_length, beam_size=2, expand_size=2, nbest=1)
+    print(f"---hypo---\n{hypo}\n---hypo_lengths---\n{hypo_lengths}\n---hypo_att---\n{hypo_att}\n---hypo_presoftmax---\n{hypo_presoftmax}")
+    print()
+    cropped_hypo, cropped_hypo_lengths, cropped_hypo_att, cropped_hypo_presoftmax = beam_search(model, source, source_lengths, sos_id, eos_id, max_dec_length, beam_size=2, expand_size=2, nbest=1)
+    print(f"---cropped_hypo---\n{cropped_hypo}\n---cropped_hypo_lengths---\n{cropped_hypo_lengths}")
+    print(f"---cropped_hypo_att---\n{cropped_hypo_att}\n---cropped_hypo_presoftmax---\n{cropped_hypo_presoftmax}")
+
+# test_cross_entropy_label_smooth()
+# test_encoder()
+# test_attention()
+# test_luong_decoder()
+# test_EncRNNDecRNNAtt()
+# train_asr()
+# test_greedy_search()
+test_beam_search()
