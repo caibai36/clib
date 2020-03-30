@@ -78,6 +78,39 @@ class KaldiDataset(Dataset):
         return fstring
 
     @staticmethod
+    def subset_instances(instances: List[Instance], key_set_file: str, key: str = 'uttid') -> List[Instance]:
+        """ Filter the instances according to the key set.
+
+            e.g.
+            =========
+            $ cat key_set
+            02c
+            22c
+            22b
+            ========
+            instances = [{'uttid': '02c', 'spk': 'spk1', 'feat_dim': '83', 'num_frames': '840', 'tokenid': '27'},
+                         {'uttid': '011', 'spk': 'spk1', 'feat_dim': '83', 'num_frames': '845', 'tokenid': '20 38 18'},
+                         {'uttid': '22b', 'spk': 'spk2', 'feat_dim': '83', 'num_frames': '783', 'tokenid': '20 54'},
+                         {'uttid': '22c', 'spk': 'spk3', 'feat_dim': '83', 'num_frames': '783', 'tokenid': '20 54'}]
+            subset_instances(instances, key_set_file='key_set', key='uttid')
+            # [{'uttid': '02c', 'spk': 'spk1', 'feat_dim': '83', 'num_frames': '840', 'tokenid': '27'},
+            #  {'uttid': '22b', 'spk': 'spk2', 'feat_dim': '83', 'num_frames': '783', 'tokenid': '20 54'},
+            #  {'uttid': '22c', 'spk': 'spk3', 'feat_dim': '83', 'num_frames': '783', 'tokenid': '20 54'}]
+            =========
+            $ cat key_set
+            spk1
+            spk3
+            =========
+            subset_instances(instances, key_set_file='key_set', key='spk')
+            [{'uttid': '02c', 'spk': 'spk1', 'feat_dim': '83', 'num_frames': '840', 'tokenid': '27'},
+             {'uttid': '011', 'spk': 'spk1', 'feat_dim': '83', 'num_frames': '845', 'tokenid': '20 38 18'},
+             {'uttid': '22c', 'spk': 'spk3', 'feat_dim': '83', 'num_frames': '783', 'tokenid': '20 54'}]
+        """
+        with open(key_set_file) as f:
+            key_set = [line.strip() for line in f]
+            return [instance for instance in instances if instance[key] in key_set]
+
+    @staticmethod
     def cutoff_long_instances(instances: List[Instance], cutoff: int, save_excluded_utts_to: str = None,
                               dataset: str = "", verbose: bool = False, logger: logging.RootLogger = None,
                               field_to_cutoff: int = 'num_frames') -> Tuple[Dict, Dict]:
