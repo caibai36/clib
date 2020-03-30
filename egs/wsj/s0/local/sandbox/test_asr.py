@@ -2283,8 +2283,6 @@ parser.add_argument('--max_target', type=int, default=4, help="the maximum lengt
 # beam search
 parser.add_argument('--beam_size', type=int, default=2,
                     help="the number of nodes all nodes totally allowed to the next time step (beam_search)")
-parser.add_argument('--expand_size', type=int, default=2,
-                    help="the number of nodes one node allowed to the next time step (beam search)")
 parser.add_argument("--coeff_length_penalty", type=float, default=1,
                     help="coefficient to add penalty for decoding the long sequence (beam_search)")
 
@@ -2362,7 +2360,7 @@ for batch in tqdm.tqdm(loader, ascii=True, ncols=50):
                                                          eos_id=eos_id,
                                                          max_dec_length=opts['max_target'],
                                                          beam_size=opts['beam_size'],
-                                                         expand_size=opts['expand_size'],
+                                                         expand_size=opts['beam_size'],
                                                          coeff_length_penalty=opts['coeff_length_penalty'],
                                                          nbest=1)
     else:
