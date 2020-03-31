@@ -6,8 +6,6 @@ import shutil
 import glob
 import time
 import logging
-# Add clib package at current directory to the binary searching path.
-sys.path.append(os.getcwd())
 
 import argparse
 import math
@@ -26,6 +24,8 @@ import yaml # for config files
 import tabulate
 import tqdm
 
+# Add clib package at current directory to path.
+sys.path.append(os.getcwd())
 from clib.kaldi.kaldi_data import KaldiDataLoader, KaldiDataset
 
 def get_rnn(name):
@@ -1189,7 +1189,7 @@ def greedy_search(model: nn.Module,
     cropped hypothesis: a list of [hypo_lengths[i]] tensors with the length batch_size.
         each element in the batch is a sequence of tokenids excluding eos_id.
     cropped lengths of hypothesis: shape [batch_size]; excluding sos_id and eos_id
-    cropped attentions of hypothesis: a list of [hypos_length[i], context_length[i]] tensors
+    cropped attentions of hypothesis: a list of [hypo_lengths[i], context_length[i]] tensors
         with the length batch_size
     cropped presoftmax of hypothesis: a list of [hypo_lengths[i], dec_output_size] tensors
 
@@ -1758,7 +1758,7 @@ def beam_search(model: nn.Module,
         each element in the batch is a sequence of tokenids excluding eos_id.
         ordered as the first nbest chunk, the second nbest chunk, ... the batch_size-th nbest chunk
     cropped lengths of hypothesis: shape [batch_size]; excluding sos_id and eos_id
-    cropped attentions of hypothesis: a list of [hypos_length[i], context_length[i]] tensors
+    cropped attentions of hypothesis: a list of [hypo_lengths[i], context_length[i]] tensors
         with the length batch_size*nbest
     cropped presoftmax of hypothesis: a list of [hypo_lengths[i], dec_output_size] tensors
         with the lenght batch_size*nbest (hypo can not back propagate, but hypo presoftmax can)
@@ -2338,6 +2338,7 @@ for dset in {'test'}:
     shuffle_batch = True if dset == 'train' else False # shuffle the batch when training, with each batch has instances with similar lengths.
     dataloader[dset] = KaldiDataLoader(dataset=dataset, batch_size=opts['batch_size'], shuffle_batch=shuffle_batch, padding_tokenid=padding_tokenid)
 
+###########################
 logger.info("Loading Model...")
 model = load_pretrained_model_with_config(opts['model']).to(device)
 model.train(False)
@@ -2346,12 +2347,16 @@ logger.info("Loading the trained model '{}'".format(opts['model']))
 ###########################
 logger.info("Start Evaluating...")
 
+metainfo = []
 loader = dataloader['test']
 for batch in tqdm.tqdm(loader, ascii=True, ncols=50):
+    uttids = batch['uttid']
     feat, feat_len = batch['feat'].to(device), batch['num_frames'].to(device)
     # text, text_len = batch['tokenid'].to(device), batch['num_tokens'].to(device)
 
-    print("----------------")
+    print("--------------")
+    cur_best_hypo = None # a list with the length batch_size (element: tensor with shape [hypo_lengths[i]]), excluding <sos> and <eos>.
+    cur_best_att = None  # a list with the length batch_size (element: tensor with shape [hypo_lengths[i], context_length[i]])
     if opts['search'] == 'beam':
         cur_best_hypo, _ , cur_best_att, _ = beam_search(model,
                                                          source=feat,
@@ -2370,6 +2375,14 @@ for batch in tqdm.tqdm(loader, ascii=True, ncols=50):
                                                            sos_id=sos_id,
                                                            eos_id=eos_id,
                                                            max_dec_length=opts['max_target'])
-    print(cur_best_hypo)
-    print(cur_best_att)
-    print("~~~~~~~~~~~~~~")
+
+    for i in range(len(cur_best_hypo)):
+        uttid = uttids[i]
+        hypo = cur_best_hypo[i].detach().cpu().numpy() # shape [hypo_length]
+        att = cur_best_att[i].detach().cpu().numpy() # shape [hypo_length, context_length]
+        text = [id2token[tokenid] for tokenid in hypo] # length [hypo_length]
+        info = {'uttid': uttid, 'text': ' '.join(text), 'att': att}
+        metainfo.append(info)
+
+pprint.pprint(metainfo)
+print("~~~~~~~~~~~~~~")
