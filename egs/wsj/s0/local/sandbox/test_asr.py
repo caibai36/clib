@@ -1978,8 +1978,8 @@ def train_asr():
                         help="configuration for dataset (e.g., train, dev and test jsons; \
                         see: conf/data/test_small/data.yaml or conf/data/test_small/create_simple_utts_json.py)")
     parser.add_argument('--cutoff', type=int, default=-1, help="cut off the utterances with the frames more than x.")
-    parser.add_argument('--const_token', type=json.loads, default=dict(unk='<unk>', pad='<pad>', sos='<sos>', eos='<eos>'),
-                        help="constant token dict used in text, default as '{\"unk\":\"<unk>\", \"pad\":\"<pad>\", \"sos\":\"<sos>\", \"eos\":\"<eos>\"}'")
+    parser.add_argument('--const_token', type=json.loads, default=dict(unk='<unk>', pad='<pad>', sos='<sos>', eos='<eos>', spc='<space>'),
+                        help="constant token dict used in text, default as '{\"unk\":\"<unk>\", \"pad\":\"<pad>\", \"sos\":\"<sos>\", \"eos\":\"<eos>\", \"spc\": \"<space>\"}'")
     parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
 
     parser.add_argument('--model_config', type=str, default=model_config_default,
@@ -2240,12 +2240,247 @@ def train_asr():
     logger.info("Result path: {}".format(opts['result']))
     logger.info("Get the best dev loss {:.3f} at the epoch {}".format(best_dev_loss, best_dev_epoch))
 
+def eval_asr():
+    data_config_default = "conf/data/test_small/data.yaml"
+    # set_uttid_default = "conf/data/test_small/set_uttid.txt"
+    set_uttid_default = None
+
+    exp_dir="exp/tmp"
+    model_name = "test_small_att"
+    result_dir = os.path.join(exp_dir, model_name, "eval")
+    # model_path = os.path.join(exp_dir, model_name, "train/best_model.mdl")
+    model_path = "conf/data/test_small/pretrained_model/model_e2000.mdl"
+
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--gpu', type=str, default="0",
+                        help="e.g., '--gpu 2' for using 'cuda:2'; '--gpu auto' for using the device with least gpu memory ")
+    parser.add_argument('--result', type=str, default=result_dir, help="result directory")
+    parser.add_argument('--data_config', type=str, default=data_config_default,
+                        help="configuration for dataset (e.g., train, dev and test jsons; \
+                        see: conf/data/test_small/data.yaml or conf/data/test_small/create_simple_utts_json.py)")
+    parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
+    parser.add_argument('--model', type=str, default=model_path,
+                        help="the path of model from training. \
+                        e.g., exp/test/train/best_model.mdl; assume best_model.conf is at same directory.")
+
+    parser.add_argument('--search', type=str, choices=['greedy', 'beam'], default='greedy', help="beam search or greedy search")
+    parser.add_argument('--max_target', type=int, default=4, help="the maximum length of decoded sequences")
+    parser.add_argument('--save_att', action='store_true', default=False, help="save and plot attention")
+    # beam search
+    parser.add_argument('--beam_size', type=int, default=2,
+                        help="the number of nodes all nodes totally allowed to the next time step (beam_search)")
+    parser.add_argument("--coeff_length_penalty", type=float, default=1,
+                        help="coefficient to add penalty for decoding the long sequence (beam_search)")
+
+    parser.add_argument('--set_uttid', type=str, default=set_uttid_default, help="a list of uttids of the subset of utterances for testing")
+    parser.add_argument('--const_token', type=json.loads, default=dict(unk='<unk>', pad='<pad>', sos='<sos>', eos='<eos>', spc='<space>'),
+                            help="constant token dict used in text, default as '{\"unk\":\"<unk>\", \"pad\":\"<pad>\", \"sos\":\"<sos>\", \"eos\":\"<eos>\", \"spc\": \"<space>\"}'")
+    args = parser.parse_args()
+
+    ###########################
+    opts = vars(args)
+
+    if opts['gpu'] != 'auto':
+        device = torch.device("cuda:{}".format(opts['gpu']) if torch.cuda.is_available() else "cpu")
+    else:
+        import GPUtil # Get the device using the least GPU memory.
+        device = torch.device("cuda:{}".format(GPUtil.getAvailable(order='memory')[0]) if torch.cuda.is_available() and \
+                              GPUtil.getAvailable(order='memory') else "cpu")
+
+    if not os.path.exists(opts['result']): os.makedirs(opts['result'])
+    save_options(opts, os.path.join(opts['result'], f"options.json"))
+    logger = init_logger(os.path.join(opts['result'], "report.log"))
+
+    logger.info("python " + ' '.join([x for x in sys.argv])) # save current script command
+    logger.info("Getting Options...")
+    logger.info("\n" + pprint.pformat(opts))
+    logger.info("Device: '{}'".format(device))
+
+    ###########################
+    logger.info("Loading Dataset...")
+    data_config = yaml.load(open(opts['data_config']), Loader=yaml.FullLoader) # contains token2id map file and (train, dev, test) utterance json file
+    logger.info("\n" + pprint.pformat(data_config))
+
+    token2id, id2token = {}, {}
+    with open(data_config['token2id'], encoding='utf8') as ft2d:
+        for line in ft2d:
+            token, token_id = line.split()
+            token2id[token] = int(token_id)
+            id2token[int(token_id)] = token
+    assert len(token2id) == len(id2token), \
+        "token and id in token2id file '{}' should be one-to-one correspondence".format(data_config['token2id'])
+    assert opts['const_token']['pad'] in token2id, \
+        "Required token {} by option const_token, for padding the token sequence, not found in '{}' file".format(opts['padding_token'], data_config['token2id'])
+    padding_tokenid = token2id[opts['const_token']['pad']] # global config.
+    sos_id = token2id[opts['const_token']['sos']]
+    eos_id = token2id[opts['const_token']['eos']]
+
+    dataloader = {}
+    for dset in {'test'}:
+        # OrderedDict to keep the order the key
+        uttid2instance = json.load(open(data_config[dset], encoding='utf8'), object_pairs_hook=OrderedDict) # json file mapping utterance id to instance (e.g., {'02c': {'uttid': '02c', 'num_frames': 20}, ...})
+        ordered_uttids = uttid2instance.keys()
+        instances = uttid2instance.values()
+        if opts['set_uttid'] is not None:
+            instances = KaldiDataset.subset_instances(instances, key_set_file=opts['set_uttid'], key='uttid') # Only the utterance id in the set_uttid file will be used for testing
+            logger.info(f"Get subset of instances according to uttids at '{opts['set_uttid']}'")
+        dataset = KaldiDataset(instances, field_to_sort='num_frames') # Every batch has instances with similar lengths, thus less padded elements; required by pad_packed_sequence (pytorch < 1.3)
+        shuffle_batch = True if dset == 'train' else False # shuffle the batch when training, with each batch has instances with similar lengths.
+        dataloader[dset] = KaldiDataLoader(dataset=dataset, batch_size=opts['batch_size'], shuffle_batch=shuffle_batch, padding_tokenid=padding_tokenid)
+
+    ###########################
+    logger.info("Loading Model...")
+    model = load_pretrained_model_with_config(opts['model']).to(device)
+    model.train(False)
+    logger.info("Loading the trained model '{}'".format(opts['model']))
+
+    ###########################
+    logger.info("Start Evaluating...")
+
+    metainfo_list = []
+    loader = dataloader['test']
+    for batch in tqdm.tqdm(loader, ascii=True, ncols=50):
+        uttids = batch['uttid']
+        feat, feat_len = batch['feat'].to(device), batch['num_frames'].to(device)
+        # text, text_len = batch['tokenid'].to(device), batch['num_tokens'].to(device)
+
+        print("--------------")
+        cur_best_hypo = None # a list with the length batch_size (element: tensor with shape [hypo_lengths[i]]), excluding <sos> and <eos>.
+        cur_best_att = None  # a list with the length batch_size (element: tensor with shape [hypo_lengths[i], context_length[i]])
+        if opts['search'] == 'beam':
+            cur_best_hypo, _ , cur_best_att, _ = beam_search(model,
+                                                             source=feat,
+                                                             source_lengths=feat_len,
+                                                             sos_id=sos_id,
+                                                             eos_id=eos_id,
+                                                             max_dec_length=opts['max_target'],
+                                                             beam_size=opts['beam_size'],
+                                                             expand_size=opts['beam_size'],
+                                                             coeff_length_penalty=opts['coeff_length_penalty'],
+                                                             nbest=1)
+        else:
+            cur_best_hypo, _ , cur_best_att, _ = greedy_search(model,
+                                                               source=feat,
+                                                               source_lengths=feat_len,
+                                                               sos_id=sos_id,
+                                                               eos_id=eos_id,
+                                                               max_dec_length=opts['max_target'])
+
+        for i in range(len(cur_best_hypo)):
+            uttid = uttids[i]
+            hypo = cur_best_hypo[i].detach().cpu().numpy() # shape [hypo_length]
+            att = cur_best_att[i].detach().cpu().numpy() # shape [hypo_length, context_length]
+            text = [id2token[tokenid] for tokenid in hypo] # length [hypo_length]
+            info = {'uttid': uttid, 'text': ' '.join(text), 'att': att}
+            metainfo_list.append(info)
+
+
+    ###########################
+    logger.info("Saving result of metainfo...")
+
+    # meta_dir = os.path.join(opts['result'], "meta")
+    meta_dir = opts['result']
+    att_dir = opts['result']
+    if not os.path.exists(meta_dir): os.makedirs(meta_dir)
+
+    # metainfo of instances back to original order in the json file
+    metainfo = []
+    for uttid in ordered_uttids:
+        for info in metainfo_list:
+            if info['uttid'] == uttid:
+                metainfo.append(info)
+    assert len(metainfo) == len(instances), "Every instance should have its metainfo."
+
+    # save the text of hypothesis characters
+    # generate the ref_char if possible (make sure the keys shared by hypothesis and reference, avoiding the subset instance confilict.)
+    space_token = opts['const_token']['spc']
+    has_ref_char = 'token' in list(instances)[0].keys() # instances [{'uttid': '02c', 'num_frames': 20, 'text', 'token', '<sos> A B <eos>'}, ...]
+    with open(os.path.join(meta_dir, "hypo_char.txt"), 'w', encoding='utf8') as hypo_char, \
+         open(os.path.join(meta_dir, "ref_char.txt"), 'w', encoding='utf8') as ref_char, \
+         open(os.path.join(meta_dir, "hypo_word.txt"), 'w', encoding='utf8') as hypo_word, \
+         open(os.path.join(meta_dir, "ref_word.txt"), 'w', encoding='utf8') as ref_word:
+        for info in metainfo:
+            uttid, text_char = info['uttid'], info['text']
+            hypo_char.write(f"{uttid} {text_char}\n")
+            text_word = text_char.replace(' ', '').replace(space_token, ' ') # 'A B <space> C' => 'AB C'
+            hypo_word.write(f"{uttid} {text_word}\n")
+            if has_ref_char:
+                text_char = re.sub("<sos>\s+(.+)\s+<eos>", "\\1", uttid2instance[uttid]['token']) # '<sos> A B <eos>' => 'A B'
+                ref_char.write(f"{uttid} {text_char}\n")
+                text_word = text_char.replace(' ', '').replace(space_token, ' ') # 'A B <space> C' => 'AB C'
+                ref_word.write(f"{uttid} {text_word}\n")
+
+    # save and plot attentions
+    def save_att_plot(att: np.array, label: List = None, path: str ="att.png") -> None:
+        """
+        Plot the softmax attention and save the plot.
+
+        Parameters
+        ----------
+        att: a numpy array with shape [num_decoder_steps, context_length]
+        label: a list of labels with length of num_decoder_steps.
+        path: the path to save the attention picture
+        att = np.array([[0.00565603, 0.994344 ], [0.00560927, 0.9943908 ],
+                        [0.00501599, 0.99498403], [0.90557455, 0.1 ]])
+        label = ['a', 'b', 'c', 'd']
+        save_att_plot(att, label, path='att.png')
+        """
+
+        import matplotlib
+        matplotlib.use('Agg') # without using x server
+        import matplotlib.pyplot as plt
+
+        decoder_length, encoder_length = att.shape # num_decoder_time_steps, context_length
+
+        fig, ax = plt.subplots()
+        ax.imshow(att, aspect='auto', origin='lower', cmap='Greys')
+        plt.gca().invert_yaxis()
+        plt.xlabel("Encoder timestep")
+        plt.ylabel("Decoder timestep")
+        plt.xticks(range(encoder_length))
+        plt.yticks(range(decoder_length))
+        if label: ax.set_yticklabels(label)
+
+        plt.tight_layout()
+        plt.savefig(path, format='png')
+        plt.close()
+
+    def save_att(info: Dict, att_dir: str) -> Tuple[str, str]:
+        """
+        Save the metainfo of attention named by its uttid.
+        The info is a dict with key of 'att' and 'uttid'.
+
+        The image and npz_file of attention matrix
+        with its uttid will be save at att_dir
+
+        The path of the image and npz file is returned.
+
+        attention is a matrix with shape [decoder_length, encoder_length]
+        """
+        att, uttid = info['att'], info['uttid']
+        att_image_path = os.path.join(att_dir, f"{uttid}_att.png")
+        save_att_plot(att, label=None, path=att_image_path)
+        att_npz_path = os.path.join(att_dir, f"{uttid}_att.npz")
+        np.savez(att_npz_path, key=uttid, feat=att)
+        return att_image_path, att_npz_path
+
+    if opts['save_att']:
+        with open(os.path.join(att_dir, "att_mat.scp"), 'w') as f_att_mat, \
+             open(os.path.join(att_dir, "att_mat_len.scp"), 'w') as f_att_mat_len:
+            for info in metainfo:
+                _, att_mat_path = save_att(info, att_dir)
+                f_att_mat.write(f"{info['uttid']} {att_mat_path}\n")
+                f_att_mat_len.write(f"{info['uttid']} {len(info['att'])}\n")
+
+    logger.info("Result path: {}".format(opts['result']))
+
 subcommand = None
 subcommand = '1'
 subcommand = 'skip'
-while subcommand not in {'1', 'train_asr', 'skip'}:
+while subcommand not in {'1', 'train_asr', '2', 'eval_asr', 'skip'}:
     subcommand = input("index name\n[1] train_asr\n[2] eval_asr\nEnter index or name (e.g. 1 or train_asr)\n").lower().strip()
 if subcommand in {'1', 'train_asr'}: train_asr()
+if subcommand in {'2', 'eval_asr'}: eval_asr()
 
 # test_cross_entropy_label_smooth()
 # test_encoder()
@@ -2255,223 +2490,4 @@ if subcommand in {'1', 'train_asr'}: train_asr()
 # train_asr()
 # test_greedy_search()
 # test_beam_search()
-
-data_config_default = "conf/data/test_small/data.yaml"
-set_uttid_default = "conf/data/test_small/set_uttid.txt"
-# set_uttid_default = None
-
-exp_dir="exp/tmp"
-model_name = "test_small_att"
-result_dir = os.path.join(exp_dir, model_name, "eval")
-model_path = os.path.join(exp_dir, model_name, "train/best_model.mdl")
-model_path = "conf/data/test_small/pretrained_model/model_e2000.mdl"
-
-parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--gpu', type=str, default="0",
-                    help="e.g., '--gpu 2' for using 'cuda:2'; '--gpu auto' for using the device with least gpu memory ")
-parser.add_argument('--result', type=str, default=result_dir, help="result directory")
-parser.add_argument('--data_config', type=str, default=data_config_default,
-                    help="configuration for dataset (e.g., train, dev and test jsons; \
-                    see: conf/data/test_small/data.yaml or conf/data/test_small/create_simple_utts_json.py)")
-parser.add_argument('--batch_size', type=int, default=3, help="batch size for the dataloader")
-parser.add_argument('--model', type=str, default=model_path,
-                    help="the path of model from training. \
-                    e.g., exp/test/train/best_model.mdl; assume best_model.conf is at same directory.")
-
-parser.add_argument('--search', type=str, choices=['greedy', 'beam'], default='greedy', help="beam search or greedy search")
-parser.add_argument('--max_target', type=int, default=4, help="the maximum length of decoded sequences")
-parser.add_argument('--save_att', action='store_true', default=False, help="save and plot attention")
-# beam search
-parser.add_argument('--beam_size', type=int, default=2,
-                    help="the number of nodes all nodes totally allowed to the next time step (beam_search)")
-parser.add_argument("--coeff_length_penalty", type=float, default=1,
-                    help="coefficient to add penalty for decoding the long sequence (beam_search)")
-
-parser.add_argument('--set_uttid', type=str, default=set_uttid_default, help="a list of uttids of the subset of utterances for testing")
-parser.add_argument('--const_token', type=json.loads, default=dict(unk='<unk>', pad='<pad>', sos='<sos>', eos='<eos>'),
-                        help="constant token dict used in text, default as '{\"unk\":\"<unk>\", \"pad\":\"<pad>\", \"sos\":\"<sos>\", \"eos\":\"<eos>\"}'")
-args = parser.parse_args()
-
-###########################
-opts = vars(args)
-
-if opts['gpu'] != 'auto':
-    device = torch.device("cuda:{}".format(opts['gpu']) if torch.cuda.is_available() else "cpu")
-else:
-    import GPUtil # Get the device using the least GPU memory.
-    device = torch.device("cuda:{}".format(GPUtil.getAvailable(order='memory')[0]) if torch.cuda.is_available() and \
-                          GPUtil.getAvailable(order='memory') else "cpu")
-
-if not os.path.exists(opts['result']): os.makedirs(opts['result'])
-save_options(opts, os.path.join(opts['result'], f"options.json"))
-logger = init_logger(os.path.join(opts['result'], "report.log"))
-
-logger.info("python " + ' '.join([x for x in sys.argv])) # save current script command
-logger.info("Getting Options...")
-logger.info("\n" + pprint.pformat(opts))
-logger.info("Device: '{}'".format(device))
-
-###########################
-logger.info("Loading Dataset...")
-data_config = yaml.load(open(opts['data_config']), Loader=yaml.FullLoader) # contains token2id map file and (train, dev, test) utterance json file
-logger.info("\n" + pprint.pformat(data_config))
-
-token2id, id2token = {}, {}
-with open(data_config['token2id'], encoding='utf8') as ft2d:
-    for line in ft2d:
-        token, token_id = line.split()
-        token2id[token] = int(token_id)
-        id2token[int(token_id)] = token
-assert len(token2id) == len(id2token), \
-    "token and id in token2id file '{}' should be one-to-one correspondence".format(data_config['token2id'])
-assert opts['const_token']['pad'] in token2id, \
-    "Required token {} by option const_token, for padding the token sequence, not found in '{}' file".format(opts['padding_token'], data_config['token2id'])
-padding_tokenid = token2id[opts['const_token']['pad']] # global config.
-sos_id = token2id[opts['const_token']['sos']]
-eos_id = token2id[opts['const_token']['eos']]
-
-dataloader = {}
-for dset in {'test'}:
-    # OrderedDict to keep the order the key
-    uttid2instance = json.load(open(data_config[dset], encoding='utf8'), object_pairs_hook=OrderedDict) # json file mapping utterance id to instance (e.g., {'02c': {'uttid': '02c', 'num_frames': 20}, ...})
-    ordered_uttids = uttid2instance.keys()
-    instances = uttid2instance.values()
-    if opts['set_uttid'] is not None:
-        instances = KaldiDataset.subset_instances(instances, key_set_file=opts['set_uttid'], key='uttid') # Only the utterance id in the set_uttid file will be used for testing
-        logger.info(f"Get subset of instances according to uttids at '{opts['set_uttid']}'")
-    dataset = KaldiDataset(instances, field_to_sort='num_frames') # Every batch has instances with similar lengths, thus less padded elements; required by pad_packed_sequence (pytorch < 1.3)
-    shuffle_batch = True if dset == 'train' else False # shuffle the batch when training, with each batch has instances with similar lengths.
-    dataloader[dset] = KaldiDataLoader(dataset=dataset, batch_size=opts['batch_size'], shuffle_batch=shuffle_batch, padding_tokenid=padding_tokenid)
-
-###########################
-logger.info("Loading Model...")
-model = load_pretrained_model_with_config(opts['model']).to(device)
-model.train(False)
-logger.info("Loading the trained model '{}'".format(opts['model']))
-
-###########################
-logger.info("Start Evaluating...")
-
-metainfo_list = []
-loader = dataloader['test']
-for batch in tqdm.tqdm(loader, ascii=True, ncols=50):
-    uttids = batch['uttid']
-    feat, feat_len = batch['feat'].to(device), batch['num_frames'].to(device)
-    # text, text_len = batch['tokenid'].to(device), batch['num_tokens'].to(device)
-
-    print("--------------")
-    cur_best_hypo = None # a list with the length batch_size (element: tensor with shape [hypo_lengths[i]]), excluding <sos> and <eos>.
-    cur_best_att = None  # a list with the length batch_size (element: tensor with shape [hypo_lengths[i], context_length[i]])
-    if opts['search'] == 'beam':
-        cur_best_hypo, _ , cur_best_att, _ = beam_search(model,
-                                                         source=feat,
-                                                         source_lengths=feat_len,
-                                                         sos_id=sos_id,
-                                                         eos_id=eos_id,
-                                                         max_dec_length=opts['max_target'],
-                                                         beam_size=opts['beam_size'],
-                                                         expand_size=opts['beam_size'],
-                                                         coeff_length_penalty=opts['coeff_length_penalty'],
-                                                         nbest=1)
-    else:
-        cur_best_hypo, _ , cur_best_att, _ = greedy_search(model,
-                                                           source=feat,
-                                                           source_lengths=feat_len,
-                                                           sos_id=sos_id,
-                                                           eos_id=eos_id,
-                                                           max_dec_length=opts['max_target'])
-
-    for i in range(len(cur_best_hypo)):
-        uttid = uttids[i]
-        hypo = cur_best_hypo[i].detach().cpu().numpy() # shape [hypo_length]
-        att = cur_best_att[i].detach().cpu().numpy() # shape [hypo_length, context_length]
-        text = [id2token[tokenid] for tokenid in hypo] # length [hypo_length]
-        info = {'uttid': uttid, 'text': ' '.join(text), 'att': att}
-        metainfo_list.append(info)
-
-
-###########################
-logger.info("Saving result of metainfo...")
-
-# meta_dir = os.path.join(opts['result'], "meta")
-meta_dir = opts['result']
-att_dir = opts['result']
-if not os.path.exists(meta_dir): os.makedirs(meta_dir)
-
-# metainfo of instances back to original order in the json file
-metainfo = []
-for uttid in ordered_uttids:
-    for info in metainfo_list:
-        if info['uttid'] == uttid:
-            metainfo.append(info)
-assert len(metainfo) == len(instances), "Every instance should have its metainfo."
-
-# save the text of hypothesis characters
-with open(os.path.join(meta_dir, "hypo_char.txt"), 'w', encoding='utf8') as hypo_char:
-    for info in metainfo:
-        uttid, text = info['uttid'], info['text']
-        hypo_char.write(f"{uttid} {text}\n")
-
-# save and plot attentions
-def save_att_plot(att: np.array, label: List = None, path: str ="att.png") -> None:
-    """
-    Plot the softmax attention and save the plot.
-
-    Parameters
-    ----------
-    att: a numpy array with shape [num_decoder_steps, context_length]
-    label: a list of labels with length of num_decoder_steps.
-    path: the path to save the attention picture
-    att = np.array([[0.00565603, 0.994344 ], [0.00560927, 0.9943908 ],
-                    [0.00501599, 0.99498403], [0.90557455, 0.1 ]])
-    label = ['a', 'b', 'c', 'd']
-    save_att_plot(att, label, path='att.png')
-    """
-
-    import matplotlib
-    matplotlib.use('Agg') # without using x server
-    import matplotlib.pyplot as plt
-
-    decoder_length, encoder_length = att.shape # num_decoder_time_steps, context_length
-
-    fig, ax = plt.subplots()
-    ax.imshow(att, aspect='auto', origin='lower', cmap='Greys')
-    plt.xlabel("Encoder timestep")
-    plt.ylabel("Decoder timestep")
-    plt.xticks(range(encoder_length))
-    plt.yticks(range(decoder_length))
-    if label: ax.set_yticklabels(label)
-
-    plt.tight_layout()
-    plt.gca().invert_yaxis()
-    plt.savefig(path, format='png')
-    plt.close()
-
-def save_att(info: Dict, att_dir: str) -> Tuple[str, str]:
-    """
-    Save the metainfo of attention named by its uttid.
-    The info is a dict with key of 'att' and 'uttid'.
-
-    The image and npz_file of attention matrix
-    with its uttid will be save at att_dir
-
-    The path of the image and npz file is returned.
-
-    attention is a matrix with shape [decoder_length, encoder_length]
-    """
-    att, uttid = info['att'], info['uttid']
-    att_image_path = os.path.join(att_dir, f"{uttid}_att.png")
-    save_att_plot(att, label=None, path=att_image_path)
-    att_npz_path = os.path.join(att_dir, f"{uttid}_att.npz")
-    np.savez(att_npz_path, key=uttid, feat=att)
-    return att_image_path, att_npz_path
-
-if opts['save_att']:
-    with open(os.path.join(att_dir, "att_mat.scp"), 'w') as f_att_mat, \
-         open(os.path.join(att_dir, "att_mat_len.scp"), 'w') as f_att_mat_len:
-        for info in metainfo:
-            _, att_mat_path = save_att(info, att_dir)
-            f_att_mat.write(f"{info['uttid']} {att_mat_path}\n")
-            f_att_mat_len.write(f"{info['uttid']} {len(info['att'])}\n")
-
-logger.info("Result path: {}".format(opts['result']))
+# eval_asr()
