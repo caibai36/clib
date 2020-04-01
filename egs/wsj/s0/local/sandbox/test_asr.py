@@ -12,6 +12,7 @@ import math
 import re # parser class name
 import json # for data files
 import pprint
+from collections import OrderedDict
 
 import numpy as np
 import torch
@@ -2063,7 +2064,7 @@ def train_asr():
 
     dataloader = {}
     for dset in {'train', 'dev', 'test'}:
-        instances = json.load(open(data_config[dset], encoding='utf8')).values() # the json file mapping utterance id to instance (e.g., {'02c': {'uttid': '02c' 'num_frames': 20}, ...})
+        instances = json.load(open(data_config[dset], encoding='utf8')).values() # the json file mapping utterance id to instance (e.g., {'02c': {'uttid': '02c', 'num_frames': 20}, ...})
 
         save_json_path = os.path.join(opts['result'], "excluded_utts_" + dset + ".json") # json file (e.g., '$result_dir/excluded_utts_train.json') to save the excluded long utterances
         if (opts['cutoff'] > 0):
@@ -2257,7 +2258,7 @@ if subcommand in {'1', 'train_asr'}: train_asr()
 
 data_config_default = "conf/data/test_small/data.yaml"
 set_uttid_default = "conf/data/test_small/set_uttid.txt"
-set_uttid_default = None
+# set_uttid_default = None
 
 exp_dir="exp/tmp"
 model_name = "test_small_att"
@@ -2279,7 +2280,7 @@ parser.add_argument('--model', type=str, default=model_path,
 
 parser.add_argument('--search', type=str, choices=['greedy', 'beam'], default='greedy', help="beam search or greedy search")
 parser.add_argument('--max_target', type=int, default=4, help="the maximum length of decoded sequences")
-
+parser.add_argument('--save_att', action='store_true', default=False, help="save and plot attention")
 # beam search
 parser.add_argument('--beam_size', type=int, default=2,
                     help="the number of nodes all nodes totally allowed to the next time step (beam_search)")
@@ -2331,9 +2332,13 @@ eos_id = token2id[opts['const_token']['eos']]
 
 dataloader = {}
 for dset in {'test'}:
-    instances = json.load(open(data_config[dset], encoding='utf8')).values() # the json file mapping utterance id to instance (e.g., {'02c': {'uttid': '02c' 'num_frames': 20}, ...})
+    # OrderedDict to keep the order the key
+    uttid2instance = json.load(open(data_config[dset], encoding='utf8'), object_pairs_hook=OrderedDict) # json file mapping utterance id to instance (e.g., {'02c': {'uttid': '02c', 'num_frames': 20}, ...})
+    ordered_uttids = uttid2instance.keys()
+    instances = uttid2instance.values()
     if opts['set_uttid'] is not None:
         instances = KaldiDataset.subset_instances(instances, key_set_file=opts['set_uttid'], key='uttid') # Only the utterance id in the set_uttid file will be used for testing
+        logger.info(f"Get subset of instances according to uttids at '{opts['set_uttid']}'")
     dataset = KaldiDataset(instances, field_to_sort='num_frames') # Every batch has instances with similar lengths, thus less padded elements; required by pad_packed_sequence (pytorch < 1.3)
     shuffle_batch = True if dset == 'train' else False # shuffle the batch when training, with each batch has instances with similar lengths.
     dataloader[dset] = KaldiDataLoader(dataset=dataset, batch_size=opts['batch_size'], shuffle_batch=shuffle_batch, padding_tokenid=padding_tokenid)
@@ -2347,7 +2352,7 @@ logger.info("Loading the trained model '{}'".format(opts['model']))
 ###########################
 logger.info("Start Evaluating...")
 
-metainfo = []
+metainfo_list = []
 loader = dataloader['test']
 for batch in tqdm.tqdm(loader, ascii=True, ncols=50):
     uttids = batch['uttid']
@@ -2382,7 +2387,91 @@ for batch in tqdm.tqdm(loader, ascii=True, ncols=50):
         att = cur_best_att[i].detach().cpu().numpy() # shape [hypo_length, context_length]
         text = [id2token[tokenid] for tokenid in hypo] # length [hypo_length]
         info = {'uttid': uttid, 'text': ' '.join(text), 'att': att}
-        metainfo.append(info)
+        metainfo_list.append(info)
 
-pprint.pprint(metainfo)
-print("~~~~~~~~~~~~~~")
+
+###########################
+logger.info("Saving result of metainfo...")
+
+# meta_dir = os.path.join(opts['result'], "meta")
+meta_dir = opts['result']
+att_dir = opts['result']
+if not os.path.exists(meta_dir): os.makedirs(meta_dir)
+
+# metainfo of instances back to original order in the json file
+metainfo = []
+for uttid in ordered_uttids:
+    for info in metainfo_list:
+        if info['uttid'] == uttid:
+            metainfo.append(info)
+assert len(metainfo) == len(instances), "Every instance should have its metainfo."
+
+# save the text of hypothesis characters
+with open(os.path.join(meta_dir, "hypo_char.txt"), 'w', encoding='utf8') as hypo_char:
+    for info in metainfo:
+        uttid, text = info['uttid'], info['text']
+        hypo_char.write(f"{uttid} {text}\n")
+
+# save and plot attentions
+def save_att_plot(att: np.array, label: List = None, path: str ="att.png") -> None:
+    """
+    Plot the softmax attention and save the plot.
+
+    Parameters
+    ----------
+    att: a numpy array with shape [num_decoder_steps, context_length]
+    label: a list of labels with length of num_decoder_steps.
+    path: the path to save the attention picture
+    att = np.array([[0.00565603, 0.994344 ], [0.00560927, 0.9943908 ],
+                    [0.00501599, 0.99498403], [0.90557455, 0.1 ]])
+    label = ['a', 'b', 'c', 'd']
+    save_att_plot(att, label, path='att.png')
+    """
+
+    import matplotlib
+    matplotlib.use('Agg') # without using x server
+    import matplotlib.pyplot as plt
+
+    decoder_length, encoder_length = att.shape # num_decoder_time_steps, context_length
+
+    fig, ax = plt.subplots()
+    ax.imshow(att, aspect='auto', origin='lower', cmap='Greys')
+    plt.xlabel("Encoder timestep")
+    plt.ylabel("Decoder timestep")
+    plt.xticks(range(encoder_length))
+    plt.yticks(range(decoder_length))
+    if label: ax.set_yticklabels(label)
+
+    plt.tight_layout()
+    plt.gca().invert_yaxis()
+    plt.savefig(path, format='png')
+    plt.close()
+
+def save_att(info: Dict, att_dir: str) -> Tuple[str, str]:
+    """
+    Save the metainfo of attention named by its uttid.
+    The info is a dict with key of 'att' and 'uttid'.
+
+    The image and npz_file of attention matrix
+    with its uttid will be save at att_dir
+
+    The path of the image and npz file is returned.
+
+    attention is a matrix with shape [decoder_length, encoder_length]
+    """
+    att, uttid = info['att'], info['uttid']
+    att_image_path = os.path.join(att_dir, f"{uttid}_att.png")
+    save_att_plot(att, label=None, path=att_image_path)
+    att_npz_path = os.path.join(att_dir, f"{uttid}_att.npz")
+    np.savez(att_npz_path, key=uttid, feat=att)
+    return att_image_path, att_npz_path
+
+if opts['save_att']:
+    with open(os.path.join(att_dir, "att_mat.scp"), 'w') as f_att_mat, \
+         open(os.path.join(att_dir, "att_mat_len.scp"), 'w') as f_att_mat_len:
+        for info in metainfo:
+            _, att_mat_path = save_att(info, att_dir)
+            f_att_mat.write(f"{info['uttid']} {att_mat_path}\n")
+            f_att_mat_len.write(f"{info['uttid']} {len(info['att'])}\n")
+
+logger.info("Result path: {}".format(opts['result']))
