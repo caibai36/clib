@@ -71,15 +71,18 @@ if [ ${stage} -le 3 ]; then
     echo "make a non-linguistic symbol list"
     # Note that the first column of text is the uttid.
     # assume that speakers not confused between upper and lower case; all non_ling_syms with <...> format
-    cat data/${train_set}/text | tr [A-Z] [a-z] | \
-	python local/script/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
-	tr [A-Z] [a-z] | cut -f 2-  | tr " " "\n" | sort | uniq | grep "<" > ${non_ling_syms}
+    python local/script/replace_str.py \
+	   --text_in data/${train_set}/text \
+	   --rep_in=conf/str_rep.txt \
+	   --sep='#' \
+	   --str2lower | \
+	cut -f 2-  | tr " " "\n" | sort | uniq | grep "<" > ${non_ling_syms}
     cat ${non_ling_syms}
 
     echo "make a dictionary"
     echo -ne "<unk> 0\n<pad> 1\n<sos> 2\n<eos> 3\n" > ${dict} # index convention of torchtext
     # text2token.py converts every sentence of the text as a sequence of characters.
-    cat data/${train_set}/text | tr [A-Z] [a-z] | \
+    python local/script/replace_str.py --text_in data/${train_set}/text --rep_in=conf/str_rep.txt --sep='#' --str2lower | \
 	python local/script/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
 	local/script/text2token.py --skip-ncols=1 --non-ling-syms=${non_ling_syms} --chars-delete=conf/chars_del.txt --chars-replace=conf/chars_rep.txt | \
 	tr [A-Z] [a-z] | cut -f 2- -d" " | tr " " "\n" | sort | uniq | grep -v -e '^\s*$' | grep -vE "<unk>|<pad>|<sos>|<eos>" | awk '{print $0 " " NR + 3}' >> ${dict}
