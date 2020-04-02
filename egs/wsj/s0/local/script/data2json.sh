@@ -2,7 +2,7 @@
 
 # Copyright 2017 Johns Hopkins University (Shinji Watanabe)
 #  Apache 2.0  (http://www.apache.org/licenses/LICENSE-2.0)
-# Last modified at 18:16 on 06 December 2019 by WuBin. 
+# Last modified at 18:16 on 06 December 2019 by WuBin.
 . ./path.sh
 
 # Get the num_frames.scp, feat_dim.scp, num_tokens.scp, tokenid.scp, vocab_size.scp, feat.scp, token.scp and etc.
@@ -37,17 +37,21 @@ if [ ! -z ${feat} ]; then
     feat-to-dim scp:${feat} ark,t:${tmpdir}/feat_dim.scp 1>&2
 fi
 
-# Get token.scp, tokenid.scp, num_tokens.scp and vocab_size.scp 
+# Get token.scp, tokenid.scp, num_tokens.scp and vocab_size.scp
 # Add <sos> and <eos> at the beginning and ending of the sentences (token.scp)
 # Count how many tokens for each sentence (num_tokens.scp)
 # Convert token sequence to tokenid sequence (tokenid.scp)
-cat ${dir}/text | tr [A-Z] [a-z] | \
-    python local/script/replace_str.py --rep_in=conf/str_rep.txt --sep='#' | \
-    local/script/text2token.py --skip-ncols=1 --non-ling-syms=${non_ling_syms} --chars-delete=conf/chars_del.txt --chars-replace=conf/chars_rep.txt | \
-    tr [A-Z] [a-z] | sed -r -e 's/^(\w*) /\1 <sos> /' -e 's/$/ <eos>/' > ${tmpdir}/token.scp
+local/script/text2token.py --text ${dir}/text \
+			   --strs-replace-in=conf/str_rep.txt \
+			   --strs-replace-sep='#' \
+			   --chars-delete=conf/chars_del.txt \
+			   --chars-replace=conf/chars_rep.txt \
+			   --non-ling-syms=${non_ling_syms} \
+			   --skip-ncols=1 \
+			   --str2lower | sed -r -e 's/^(\w*) /\1 <sos> /' -e 's/$/ <eos>/' > ${tmpdir}/token.scp
 cat ${tmpdir}/token.scp | utils/sym2int.pl --map-oov ${oov} -f 2- ${dict} > ${tmpdir}/tokenid.scp
 cat ${tmpdir}/tokenid.scp | awk '{print $1 " " NF-1}' > ${tmpdir}/num_tokens.scp # -1 for uncounting first field: the uttid
-vocsize=`tail -n 1 ${dict} | awk '{print $2}'` # Get the index of the last word, assuming the largest index starting from 0 (the $vocab_size -1 ). 
+vocsize=`tail -n 1 ${dict} | awk '{print $2}'` # Get the index of the last word, assuming the largest index starting from 0 (vocsize=$vocab_size-1).
 odim=`echo "$vocsize + 1" | bc`
 awk -v odim=${odim} '{print $1 " " odim}' ${dir}/text > ${tmpdir}/vocab_size.scp
 
