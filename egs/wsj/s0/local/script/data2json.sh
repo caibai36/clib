@@ -41,23 +41,30 @@ fi
 # Add <sos> and <eos> at the beginning and ending of the sentences (token.scp)
 # Count how many tokens for each sentence (num_tokens.scp)
 # Convert token sequence to tokenid sequence (tokenid.scp)
-local/script/text2token.py --text ${dir}/text \
-			   --strs-replace-in=conf/str_rep.txt \
-			   --strs-replace-sep='#' \
-			   --chars-delete=conf/chars_del.txt \
-			   --chars-replace=conf/chars_rep.txt \
-			   --non-ling-syms=${non_ling_syms} \
-			   --skip-ncols=1 \
-			   --str2lower | sed -r -e 's/^(\w*) /\1 <sos> /' -e 's/$/ <eos>/' > ${tmpdir}/token.scp
-cat ${tmpdir}/token.scp | utils/sym2int.pl --map-oov ${oov} -f 2- ${dict} > ${tmpdir}/tokenid.scp
-cat ${tmpdir}/tokenid.scp | awk '{print $1 " " NF-1}' > ${tmpdir}/num_tokens.scp # -1 for uncounting first field: the uttid
-vocsize=`tail -n 1 ${dict} | awk '{print $2}'` # Get the index of the last word, assuming the largest index starting from 0 (vocsize=$vocab_size-1).
-odim=`echo "$vocsize + 1" | bc`
-awk -v odim=${odim} '{print $1 " " odim}' ${dir}/text > ${tmpdir}/vocab_size.scp
+if [ -f $dir/text ]; then
+    local/script/text2token.py --text ${dir}/text \
+			       --strs-replace-in=conf/str_rep.txt \
+			       --strs-replace-sep='#' \
+			       --chars-delete=conf/chars_del.txt \
+			       --chars-replace=conf/chars_rep.txt \
+			       --non-ling-syms=${non_ling_syms} \
+			       --skip-ncols=1 \
+			       --str2lower | sed -r -e 's/^(\w*) /\1 <sos> /' -e 's/$/ <eos>/' > ${tmpdir}/token.scp
+    cat ${tmpdir}/token.scp | utils/sym2int.pl --map-oov ${oov} -f 2- ${dict} > ${tmpdir}/tokenid.scp
+    cat ${tmpdir}/tokenid.scp | awk '{print $1 " " NF-1}' > ${tmpdir}/num_tokens.scp # -1 for uncounting first field: the uttid
+    vocsize=`tail -n 1 ${dict} | awk '{print $2}'` # Get the index of the last word, assuming the largest index starting from 0 (vocsize=$vocab_size-1).
+    odim=`echo "$vocsize + 1" | bc`
+    awk -v odim=${odim} '{print $1 " " odim}' ${dir}/text > ${tmpdir}/vocab_size.scp
+    cp ${dir}/text ${tmpdir}/text.scp
+fi
+
+if [ -f $dir/utt2spk ]; then
+    cp ${dir}/utt2spk ${tmpdir}/utt2spk.scp
+fi
 
 # Merge all the information of scp files to create utts_json file.
 rm -f ${tmpdir}/*.json
-for x in ${dir}/text ${dir}/utt2spk ${tmpdir}/*.scp; do
+for x in ${tmpdir}/*.scp; do
     k=`basename ${x} .scp`
     cat ${x} | local/script/scp2json.py --key ${k} > ${tmpdir}/${k}.json
 done
