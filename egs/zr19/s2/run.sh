@@ -42,3 +42,13 @@ if [ $stage -le 2 ]; then
     ./local/script/feat_extract.sh --dataset train_en_hires80 --cmvn true --vtln false --delta_order 0 --mfcc_conf conf/mfcc_hires80.conf --min_segment_length 0.001 # 5 min
     date
 fi
+
+if [ $stage -le 3 ]; then
+    date
+    for dataset in $(ls data/); do
+	echo "Make json files for $dataset..."
+	local/script/data2json.sh --feat data/$dataset/feats.scp --output-utts-json data/$dataset/utts.json data/$dataset
+	local/script/data2json.sh --feat data/$dataset/raw.scp --output-utts-json data/$dataset/utts_raw.json data/$dataset
+    done
+    date
+fi
