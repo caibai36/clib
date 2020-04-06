@@ -86,27 +86,28 @@ def main():
     # input  attributes: feat.json num_frames.json feat_dim.json
     # output attributes: num_tokens.json vocab_size.json text.json  token.json  tokenid.json
     # other  attributes: utt2spk.json
-    merged_json = {"utts": dict()}
-    for utt_id in comm_utt_ids:
-        all_attrs_dict = all_attrs_json["utts"][utt_id]
-        input_attrs_dict: Dict = {'name': 'input1',
-                                  'feat': all_attrs_dict['feat'],
-                                  'shape': [int(all_attrs_dict['num_frames']), int(all_attrs_dict['feat_dim'])]}
-        output_attrs_dict: Dict = {'name': 'target1',
-                                   'text': all_attrs_dict['text'],
-                                   'token': all_attrs_dict['token'],
-                                   'tokenid': all_attrs_dict['tokenid'],
-                                   'shape': [int(all_attrs_dict['num_tokens']), int(all_attrs_dict['vocab_size'])]}
-        merged_json['utts'][utt_id] = {'input': [input_attrs_dict],
-                                       'output': [output_attrs_dict],
-                                       'utt2spk': all_attrs_dict['utt2spk']}
+    if args.output_json:
+        merged_json = {"utts": dict()}
+        for utt_id in comm_utt_ids:
+            all_attrs_dict = all_attrs_json["utts"][utt_id]
+            input_attrs_dict: Dict = {'name': 'input1',
+                                      'feat': all_attrs_dict['feat'],
+                                      'shape': [int(all_attrs_dict['num_frames']), int(all_attrs_dict['feat_dim'])]}
+            output_attrs_dict: Dict = {'name': 'target1',
+                                       'text': all_attrs_dict['text'],
+                                       'token': all_attrs_dict['token'],
+                                       'tokenid': all_attrs_dict['tokenid'],
+                                       'shape': [int(all_attrs_dict['num_tokens']), int(all_attrs_dict['vocab_size'])]}
+            merged_json['utts'][utt_id] = {'input': [input_attrs_dict],
+                                           'output': [output_attrs_dict],
+                                           'utt2spk': all_attrs_dict['utt2spk']}
 
     if args.output_utts_json:
         with open(args.output_utts_json, 'w', encoding='utf-8') as fuo:
             json.dump(all_attrs_json['utts'], fp=fuo, indent=4, sort_keys=True, ensure_ascii=False)
     else:
         json.dump(all_attrs_json['utts'], fp=io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8'), indent=4, sort_keys=True, ensure_ascii=False)
-    
+
     if args.output_json:
         with open(args.output_json, 'w', encoding='utf-8') as fo:
             json.dump(merged_json, fp=fo, indent=4, sort_keys=True, ensure_ascii=False)

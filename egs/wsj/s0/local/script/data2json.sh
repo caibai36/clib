@@ -16,13 +16,13 @@ oov="<unk>"
 
 . utils/parse_options.sh
 
-if [ $# != 2 ]; then
+if [[ $# != 1 && $# != 2 ]]; then
     echo "Usage: $0 <data-dir> <dict> [--output_dir_of_scps <scps_dir>]"
     exit 1;
 fi
 
 dir=$1
-dict=$2
+[ $# == 2 ] && dict=$2
 
 tmpdir=`mktemp -d ${dir}/tmp-XXXXX`
 trap 'rm -rf ${tmpdir}' EXIT
