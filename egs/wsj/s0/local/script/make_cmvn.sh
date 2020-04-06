@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Copyright 2012-2014  Brno University of Technology (Author: Karel Vesely),
-#                 
+#
 # Apache 2.0.
 #
 # This script dumps features after CMVN in a new data directory.
@@ -61,10 +61,10 @@ feats="ark,s,cs:apply-cmvn $cmvn_opts --utt2spk=ark:$sdata/JOB/utt2spk scp:$sdat
 $cmd JOB=1:$nj $featdir/make_cmvn.JOB.log \
   copy-feats "$feats" \
   ark,scp:$featdir/feats_cmvn.JOB.ark,$featdir/feats_cmvn.JOB.scp || exit 1;
-   
+
 # Merge the scp,
 for n in $(seq 1 $nj); do
-  cat $featdir/feats_cmvn.$n.scp 
+  cat $featdir/feats_cmvn.$n.scp
 done > $datadir/feats.scp
 
 echo "$0: Done!"

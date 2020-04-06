@@ -10,7 +10,7 @@
 ubm_nj=10
 # the number of jobs for warp factors estimation
 train_vtln_nj=10
-# the number of jobs for estimating the warp factors 
+# the number of jobs for estimating the warp factors
 get_vtln_nj=10
 
 if [ $# != 3 ]; then

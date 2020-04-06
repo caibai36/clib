@@ -11,13 +11,14 @@ cmd=run.pl
 mfcc_config=conf/mfcc.conf
 compress=true
 write_utt2num_frames=false  # if true writes utt2num_frames
-min_segment_length=0.001    # Minimum segment length in seconds (reject shorter segments) (float, default = 0.1)
+min_segment_length=0.1    # Minimum segment length in seconds (reject shorter segments) (float, default = 0.1)
 # End configuration section.
 
 echo "$0 $@"  # Print the command line for logging
 
 if [ -f path.sh ]; then . ./path.sh; fi
 . parse_options.sh || exit 1;
+echo "min_segment_length: $min_segment_length"
 
 if [ $# -lt 1 ] || [ $# -gt 3 ]; then
    echo "Usage: $0 [options] <data-dir> [<log-dir> [<mfcc-dir>] ]";
