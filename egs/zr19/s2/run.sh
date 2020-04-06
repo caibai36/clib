@@ -29,7 +29,7 @@ fi
 if [ $stage -le 2 ]; then
     date
     echo "Feature extraction..."
-    [ ! -d data/test_en_hires]  && cp -r data/test_en data/test_en_hires
+    [ ! -d data/test_en_hires ]  && cp -r data/test_en data/test_en_hires
     [ ! -d data/train_en_hires ] && cp -r data/train_en data/train_en_hires
     [ ! -d data/test_en_hires80 ] && cp -r data/test_en data/test_en_hires80
     [ ! -d data/train_en_hires80 ] && cp -r data/train_en data/train_en_hires80

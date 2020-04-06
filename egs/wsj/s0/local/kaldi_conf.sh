@@ -23,6 +23,7 @@ ln -sf $KALDI_ROOT/egs/wsj/s5/utils/ utils
 # configuration files for mfcc and etc.
 [ -d conf ] || mkdir conf
 cp $KALDI_ROOT/egs/wsj/s5/conf/* conf/
+sed 's/40 /80 /g' conf/mfcc_hires.conf > conf/mfcc_hires80.conf
 # Task dependent. You have to check non-linguistic symbols used in the corpus.
 # These operations have priorities. First replacing string, then deleting characters and then replacing characters.
 [ -f conf/str_rep.txt ] || touch conf/str_rep.txt      # replace the special strings in original text
@@ -40,7 +41,8 @@ cp $KALDI_ROOT/egs/wsj/s5/local/find_transcripts.pl local
 sed -i -e '/# Next, for each type/, /done/ d' -e'/tmp/ d' -e '/lm/ d' local/wsj_format_data.sh 
 
 # make local directories for private scripts
-mkdir -p local/{script,src,bin}
+# mkdir -p local/{script,src,bin}
+mkdir -p local/script
 
 ##################################################################################
 # Other options
