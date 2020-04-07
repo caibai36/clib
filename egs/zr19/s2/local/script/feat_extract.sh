@@ -95,7 +95,7 @@ if [ $stage -le 2 ]; then
 	# Do Mel-frequency cepstral coefficients (mfcc) feature extraction. (utt2num-frames already copied)
 	local/script/make_mfcc.sh --mfcc-config $mfcc_conf \
 				  --nj $feat_nj \
-				  --min_segment_length $min_segment_length
+				  --min_segment_length $min_segment_length \
 				  data/${dataset}_vtln exp/make_mfcc/${dataset}_vtln $mfcc_vtln_dir
 	steps/compute_cmvn_stats.sh data/${dataset}_vtln exp/make_mfcc/${dataset}_vtln $mfcc_vtln_dir
 	utils/fix_data_dir.sh data/${dataset}_vtln || exit 1 # remove segments with problems
