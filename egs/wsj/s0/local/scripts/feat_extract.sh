@@ -64,7 +64,7 @@ if [ $stage -le 1 ]; then
 
     # Do Mel-frequency cepstral coefficients (mfcc) feature extraction.
     # Differ from step/make_mfcc.sh  (extract-segments => set --min-segment-length=0.001)
-    local/script/make_mfcc.sh --mfcc-config $mfcc_conf \
+    local/scripts/make_mfcc.sh --mfcc-config $mfcc_conf \
 			      --nj $feat_nj \
 			      --write-utt2num-frames true \
 			      --min_segment_length $min_segment_length \
@@ -81,7 +81,7 @@ if [ $stage -le 2 ]; then
 	# Train the linear Vocal Tract Length Normalization (lVTLN) to get the warping factors.
 	# This script does not require to start with a trained model.
 	# There is another script (steps/train_lvtln.sh) that requires an initial model.
-	./local/script/train_lvtln.sh $num_gauss_ubm data/${dataset} exp/${dataset}_vtln
+	./local/scripts/train_lvtln.sh $num_gauss_ubm data/${dataset} exp/${dataset}_vtln
 
 	# Prepare the data files for vtln. We copy it because the following scripts may change the data files.
 	mkdir -p data/${dataset}_vtln
@@ -93,7 +93,7 @@ if [ $stage -le 2 ]; then
 	echo "---------------------------------------------------"
 
 	# Do Mel-frequency cepstral coefficients (mfcc) feature extraction. (utt2num-frames already copied)
-	local/script/make_mfcc.sh --mfcc-config $mfcc_conf \
+	local/scripts/make_mfcc.sh --mfcc-config $mfcc_conf \
 				  --nj $feat_nj \
 				  --min_segment_length $min_segment_length \
 				  data/${dataset}_vtln exp/make_mfcc/${dataset}_vtln $mfcc_vtln_dir
@@ -108,9 +108,9 @@ if [ $stage -le 3 ]; then
 	echo "Dump the features after CMVN."
 	echo "---------------------------------------------------"
 	# Dump the features after CMVN.
-	local/script/make_cmvn.sh --nj $feat_nj --delta_order $delta_order data/${dataset} $mfcc_dir
+	local/scripts/make_cmvn.sh --nj $feat_nj --delta_order $delta_order data/${dataset} $mfcc_dir
 	if $vtln; then
-	    local/script/make_cmvn.sh --nj $feat_nj --delta_order $delta_order data/${dataset}_vtln $mfcc_vtln_dir
+	    local/scripts/make_cmvn.sh --nj $feat_nj --delta_order $delta_order data/${dataset}_vtln $mfcc_vtln_dir
 	fi
     fi
 fi

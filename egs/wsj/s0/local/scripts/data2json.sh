@@ -42,7 +42,7 @@ fi
 # Count how many tokens for each sentence (num_tokens.scp)
 # Convert token sequence to tokenid sequence (tokenid.scp)
 if [ -f $dir/text ]; then
-    local/script/text2token.py --text ${dir}/text \
+    local/scripts/text2token.py --text ${dir}/text \
 			       --strs-replace-in=conf/str_rep.txt \
 			       --strs-replace-sep='#' \
 			       --chars-delete=conf/chars_del.txt \
@@ -66,9 +66,9 @@ fi
 rm -f ${tmpdir}/*.json
 for x in ${tmpdir}/*.scp; do
     k=`basename ${x} .scp`
-    cat ${x} | local/script/scp2json.py --key ${k} > ${tmpdir}/${k}.json
+    cat ${x} | local/scripts/scp2json.py --key ${k} > ${tmpdir}/${k}.json
 done
-local/script/mergejson.py --output-utts-json=${output_utts_json} ${tmpdir}/*.json
+local/scripts/mergejson.py --output-utts-json=${output_utts_json} ${tmpdir}/*.json
 
 if [ ! -z ${output_dir_of_scps} ]; then
     rm -rf ${output_dir_of_scps}

@@ -54,7 +54,7 @@ if [ $stage -le 2 ]; then
     date
     echo "Stage 2: Dump Features after CMVN"
     for x in test_eval92 test_eval93 test_dev93 train_si284 train_si84 train_si84_2kshort; do
-	local/script/make_cmvn.sh data/$x mfcc/$x
+	local/scripts/make_cmvn.sh data/$x mfcc/$x
     done
     date
 fi
@@ -71,7 +71,7 @@ if [ ${stage} -le 3 ]; then
     echo "make a non-linguistic symbol list"
     # Note that the first column of text is the uttid.
     # assume that speakers not confused between upper and lower case; all non_ling_syms with <...> format
-    local/script/replace_str.py --text_in data/${train_set}/text \
+    local/scripts/replace_str.py --text_in data/${train_set}/text \
 				--rep_in=conf/str_rep.txt \
 				--sep='#' \
 				--str2lower | \
@@ -81,7 +81,7 @@ if [ ${stage} -le 3 ]; then
     echo "make a dictionary"
     echo -ne "<unk> 0\n<pad> 1\n<sos> 2\n<eos> 3\n" > ${dict} # index convention of torchtext
     # text2token.py converts every sentence of the text as a sequence of characters.
-    local/script/text2token.py --text data/${train_set}/text \
+    local/scripts/text2token.py --text data/${train_set}/text \
 			       --strs-replace-in=conf/str_rep.txt \
 			       --strs-replace-sep='#' \
 			       --chars-delete=conf/chars_del.txt \
@@ -100,7 +100,7 @@ if [ ${stage} -le 4 ]; then
     # If you want to add more information, just create more scp files in data2json.sh
 
     for x in test_eval92 test_eval93 test_dev93 train_si284 train_si84 train_si84_2kshort; do
-	local/script/data2json.sh --feat data/$x/feats.scp \
+	local/scripts/data2json.sh --feat data/$x/feats.scp \
     		     --non-ling-syms ${non_ling_syms} \
     	             --output-utts-json data/$x/utts.json \
     		     --output-dir-of-scps data/$x/scps \
