@@ -42,7 +42,7 @@ sed -i -e '/# Next, for each type/, /done/ d' -e'/tmp/ d' -e '/lm/ d' local/wsj_
 
 # make local directories for private scripts
 # mkdir -p local/{script,src,bin}
-mkdir -p local/script
+mkdir -p local/scripts
 
 ##################################################################################
 # Other options
