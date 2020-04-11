@@ -108,9 +108,9 @@ if [ $stage -le 3 ]; then
 	echo "Dump the features after CMVN."
 	echo "---------------------------------------------------"
 	# Dump the features after CMVN.
-	local/scripts/make_cmvn.sh --delta_order $delta_order data/${dataset} $mfcc_dir
+	local/scripts/make_cmvn.sh --nj $feat_nj --delta_order $delta_order data/${dataset} $mfcc_dir
 	if $vtln; then
-	    local/scripts/make_cmvn.sh --delta_order $delta_order data/${dataset}_vtln $mfcc_vtln_dir
+	    local/scripts/make_cmvn.sh --nj $feat_nj --delta_order $delta_order data/${dataset}_vtln $mfcc_vtln_dir
 	fi
     fi
 fi
