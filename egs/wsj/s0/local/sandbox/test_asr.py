@@ -1,3 +1,14 @@
+# Implemented by bin-wu at 10:20 on 12 April 2020
+# Heavily inspired by andros's code
+
+# # Training
+# train_asr()
+# # Evaluation
+# recog_asr()
+# # Compute WER
+# /project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/test_small_att/eval/ref_char.txt ark,t:exp/tmp/test_small_att/eval/hypo_char.txt
+# /project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/test_small_att/eval/ref_word.txt ark,t:exp/tmp/test_small_att/eval/hypo_word.txt
+
 from typing import List, Dict, Tuple, Union, Any
 
 import sys
@@ -2240,7 +2251,7 @@ def train_asr():
     logger.info("Result path: {}".format(opts['result']))
     logger.info("Get the best dev loss {:.3f} at the epoch {}".format(best_dev_loss, best_dev_epoch))
 
-def eval_asr():
+def recog_asr():
     data_config_default = "conf/data/test_small/data.yaml"
     # set_uttid_default = "conf/data/test_small/set_uttid.txt"
     set_uttid_default = None
@@ -2474,14 +2485,12 @@ def eval_asr():
 
     logger.info("Result path: {}".format(opts['result']))
 
-subcommand = None
-subcommand = '1'
-subcommand = 'skip'
-while subcommand not in {'1', 'train_asr', '2', 'eval_asr', 'skip'}:
-    subcommand = input("index name\n[1] train_asr\n[2] eval_asr\nEnter index or name (e.g. 1 or train_asr)\n").lower().strip()
-if subcommand in {'1', 'train_asr'}: train_asr()
-if subcommand in {'2', 'eval_asr'}: eval_asr()
+print("ASR training...")
+train_asr()
+print("ASR recognizing...")
+recog_asr()
 
+# # Test functions
 # test_cross_entropy_label_smooth()
 # test_encoder()
 # test_attention()
@@ -2490,4 +2499,12 @@ if subcommand in {'2', 'eval_asr'}: eval_asr()
 # train_asr()
 # test_greedy_search()
 # test_beam_search()
-# eval_asr()
+# recog_asr()
+#
+# subcommand = None
+# subcommand = '1'
+# subcommand = 'skip'
+# while subcommand not in {'1', 'train_asr', '2', 'recog_asr', 'skip'}:
+#     subcommand = input("index name\n[1] train_asr\n[2] recog_asr\nEnter index or name (e.g. 1 or train_asr)\n").lower().strip()
+# if subcommand in {'1', 'train_asr'}: train_asr()
+# if subcommand in {'2', 'recog_asr'}: recog_asr()
