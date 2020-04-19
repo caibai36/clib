@@ -2000,7 +2000,7 @@ def train_asr():
     parser.add_argument('--label_smoothing', type=float, default=0, help="label smoothing for loss function")
     parser.add_argument('--optim', type=str, default='Adam', help="optimizer")
     parser.add_argument('--lr', type=float, default=0.001, help="learning rate for optimizer")
-    parser.add_argument('--reducelr', type=dict, default={'factor':0.5, 'patience':3},
+    parser.add_argument('--reducelr', type=json.loads, default={'factor':0.5, 'patience':3},
                         help="None or a dict with keys of 'factor' and 'patience'. \
                         If performance keeps bad more than 'patience' epochs, \
                         reduce the lr by lr = lr * 'factor'")
