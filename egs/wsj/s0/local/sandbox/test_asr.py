@@ -2332,7 +2332,7 @@ def recog_asr():
         uttid2instance = json.load(open(data_config[dset], encoding='utf8'), object_pairs_hook=OrderedDict) # json file mapping utterance id to instance (e.g., {'02c': {'uttid': '02c', 'num_frames': 20}, ...})
         ordered_uttids = uttid2instance.keys()
         instances = uttid2instance.values()
-        if opts['set_uttid'] is not None:
+        if opts['set_uttid'] is not None and opts['set_uttid'] != "None":
             instances = KaldiDataset.subset_instances(instances, key_set_file=opts['set_uttid'], key='uttid') # Only the utterance id in the set_uttid file will be used for testing
             logger.info(f"Get subset of instances according to uttids at '{opts['set_uttid']}'")
         dataset = KaldiDataset(instances, field_to_sort='num_frames') # Every batch has instances with similar lengths, thus less padded elements; required by pad_packed_sequence (pytorch < 1.3)
