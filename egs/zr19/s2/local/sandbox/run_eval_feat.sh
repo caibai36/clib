@@ -19,7 +19,7 @@ if [ $stage -le 5 ]; then
 	source activate eval
 	./local/eval.sh --DIST 'cos' --EMB $abx_embedding --RES $abx_result_cos
 	./local/eval.sh --DIST 'kl' --EMB $abx_embedding --RES $abx_result_kl
-	./local/eval.sh --DIST 'kl' --EMB $abx_embedding --RES $abx_result_edit
+	./local/eval.sh --DIST 'edit' --EMB $abx_embedding --RES $abx_result_edit
 	date
     done
 fi
