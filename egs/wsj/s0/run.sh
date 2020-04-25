@@ -11,7 +11,7 @@ sh local/kaldi_conf.sh
 . path.sh
 
 # general configuration
-stage=3  # start from 0 if you need to start from data preparation
+stage=5  # start from 0 if you need to start from data preparation
 mfcc_dir=mfcc # Directory contains mfcc features and cmvn statistics.
 mfcc_config=conf/mfcc_hires.conf  # use the high-resolution mfcc for training the neurnal network;
                              # 40 dimensional mfcc feature used by Google and kaldi wsj network training.
@@ -106,4 +106,19 @@ if [ ${stage} -le 4 ]; then
     		     --output-dir-of-scps data/$x/scps \
     		     data/$x ${dict}
     done
+fi
+
+if [ ${stage} -le 5 ]; then
+    date
+    echo "Making 80-dimensional mfcc feature"
+    for dataset in test_eval92 train_si284 train_si84 test_dev93; do
+	x=${dataset}_mfcc80
+	cp -rf data/${dataset} data/${x}
+	./local/scripts/feat_extract.sh --dataset ${x} --cmvn true --mfcc_conf conf/mfcc_hires80.conf
+	local/scripts/data2json.sh --feat data/${x}/feats.scp \
+				   --non-ling-syms ${non_ling_syms} \
+				   --output-utts-json data/${x}/utts.json \
+				   data/${x} ${dict}
+    done
+    date
 fi
