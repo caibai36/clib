@@ -99,7 +99,7 @@ def get_optim(name):
     """
     registered_optim = {"adam": torch.optim.Adam,
                         "sgd": torch.optim.SGD,
-                        "adamw": torch.optim.AdamW,
+                        # "adamw": torch.optim.AdamW,
                         "sparse_adam": torch.optim.SparseAdam,
                         "adagrad": torch.optim.Adagrad,
                         "adadelta": torch.optim.Adadelta,
