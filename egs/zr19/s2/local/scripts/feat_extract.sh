@@ -18,7 +18,7 @@ delta_order=0 # if mfcc+delta+delta then delta_order=2
 
 min_segment_length=0.1 # Minimum segment length in seconds (reject shorter segments) (float, default = 0.1)
 num_gauss_ubm=400 # for an ubm model when training vtln (timit defaultnumGaussUBM=400)
-feat_nj=10 # num_jobs for feature extraction
+feat_nj=4 # num_jobs for feature extraction
 
 echo "$0 $@"  # Print the command line for logging
 
@@ -56,11 +56,12 @@ mfcc_vtln_dir=feat/${dataset}_mfcc${mfcc_dim}_vtln_delta${delta_order}
 mkdir -p $mfcc_dir
 if $vtln; then mkdir -p $mfcc_vtln_dir; fi
 
-
 if [ $stage -le 1 ]; then
     echo "---------------------------------------------------"
     echo "MFCC feature extration and compute CMVN of data set"
     echo "---------------------------------------------------"
+
+    rm -rf data/${dataset}/{feats,raw}.scp # avoid confusion of scp files in make_cmvn.sh
 
     # Do Mel-frequency cepstral coefficients (mfcc) feature extraction.
     # Differ from step/make_mfcc.sh  (extract-segments => set --min-segment-length=0.001)
