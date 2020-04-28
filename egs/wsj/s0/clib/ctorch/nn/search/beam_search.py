@@ -343,6 +343,11 @@ def beam_search_torch(model: nn.Module,
         if model.decoder.__class__.__name__ == 'LuongDecoder':
             input_indices = source.new([node.state[-1] for node in active_nodes_all_trees]).long() # shape [active_batch_size] input indices for active nodes
             model.decoder.attentional_vector_pre = torch.index_select(model.decoder.attentional_vector_pre, dim=0, index=input_indices)
+            for i in range(len(model.decoder.rnn_hidden_cell_states)):
+                hidden, cell = model.decoder.rnn_hidden_cell_states[i]
+                hidden = torch.index_select(hidden, dim=0, index=input_indices)
+                cell = torch.index_select(cell, dim=0, index=input_indices)
+                model.decoder.rnn_hidden_cell_states[i] = (hidden, cell)
         # Update the state of encoder (the context) for active nodes
         context_indices = source.new(Level.get_encoder_indices(batch_num_active_nodes)).long() # get the batch index of context for each active node: [2,0,4]=>[0,0,2,2,2,2]
         model.decoder.set_context(context.index_select(dim=0, index=context_indices), \

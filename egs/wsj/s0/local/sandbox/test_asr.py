@@ -135,7 +135,7 @@ def get_optim(name):
     """
     registered_optim = {"adam": torch.optim.Adam,
                         "sgd": torch.optim.SGD,
-                        "adamw": torch.optim.AdamW,
+#                        "adamw": torch.optim.AdamW,
                         "sparse_adam": torch.optim.SparseAdam,
                         "adagrad": torch.optim.Adagrad,
                         "adadelta": torch.optim.Adadelta,
@@ -742,10 +742,14 @@ class LuongDecoder(nn.Module):
 
         # Initialize attentional vector of previous time step
         self.attentional_vector_pre = None
+
+        # Initialize stacked rnn layers with their hidden states and cell states
         self.rnn_layers = nn.ModuleList()
+        self.rnn_hidden_cell_states = []
         pre_size = input_size + context_proj_size # input feeding
         for i in range(num_rnn_layers):
             self.rnn_layers.append(get_rnn(rnn_config['type'])(pre_size, rnn_sizes[i]))
+            self.rnn_hidden_cell_states.append(None) # initialize (hidden state, cell state) of each layer as Nones.
             pre_size = rnn_sizes[i]
 
         # Get expected context vector from attention
@@ -771,6 +775,8 @@ class LuongDecoder(nn.Module):
         and forgetting the attention information of the previous time step.
         """
         self.attentional_vector_pre = None
+        for i in range(self.num_rnn_layers):
+            self.rnn_hidden_cell_states[i] = None
 
     def decode(self, input: torch.Tensor, dec_mask: Union[torch.Tensor, None] = None) -> Tuple[torch.Tensor, Dict]:
         """
@@ -790,7 +796,8 @@ class LuongDecoder(nn.Module):
         # Input feeding: initialize the input of LSTM with previous attentional vector information
         output = torch.cat([input, self.attentional_vector_pre], dim=-1)
         for i in range(self.num_rnn_layers):
-            output, _ = self.rnn_layers[i](output) # LSTM cell return (h, c)
+            output, cell = self.rnn_layers[i](output, self.rnn_hidden_cell_states[i]) # LSTM cell return (h, c)
+            self.rnn_hidden_cell_states[i] = (output, cell) # store the hidden state and cell state of current layer for next time step.
             if dec_mask is not None: output = output * dec_mask.unsqueeze(-1).expand_as(output)
 
             output = F.dropout(output, p=self.rnn_dropout[i], training=self.training)
@@ -1691,6 +1698,11 @@ def beam_search_torch(model: nn.Module,
         if model.decoder.__class__.__name__ == 'LuongDecoder':
             input_indices = source.new([node.state[-1] for node in active_nodes_all_trees]).long() # shape [active_batch_size] input indices for active nodes
             model.decoder.attentional_vector_pre = torch.index_select(model.decoder.attentional_vector_pre, dim=0, index=input_indices)
+            for i in range(len(model.decoder.rnn_hidden_cell_states)):
+                hidden, cell = model.decoder.rnn_hidden_cell_states[i]
+                hidden = torch.index_select(hidden, dim=0, index=input_indices)
+                cell = torch.index_select(cell, dim=0, index=input_indices)
+                model.decoder.rnn_hidden_cell_states[i] = (hidden, cell)
         # Update the state of encoder (the context) for active nodes
         context_indices = source.new(Level.get_encoder_indices(batch_num_active_nodes)).long() # get the batch index of context for each active node: [2,0,4]=>[0,0,2,2,2,2]
         model.decoder.set_context(context.index_select(dim=0, index=context_indices), \

@@ -84,10 +84,14 @@ class LuongDecoder(nn.Module):
 
         # Initialize attentional vector of previous time step
         self.attentional_vector_pre = None
+
+        # Initialize stacked rnn layers with their hidden states and cell states
         self.rnn_layers = nn.ModuleList()
+        self.rnn_hidden_cell_states = []
         pre_size = input_size + context_proj_size # input feeding
         for i in range(num_rnn_layers):
             self.rnn_layers.append(get_rnn(rnn_config['type'])(pre_size, rnn_sizes[i]))
+            self.rnn_hidden_cell_states.append(None) # initialize (hidden state, cell state) of each layer as Nones.
             pre_size = rnn_sizes[i]
 
         # Get expected context vector from attention
@@ -113,6 +117,8 @@ class LuongDecoder(nn.Module):
         and forgetting the attention information of the previous time step.
         """
         self.attentional_vector_pre = None
+        for i in range(self.num_rnn_layers):
+            self.rnn_hidden_cell_states[i] = None
 
     def decode(self, input: torch.Tensor, dec_mask: Union[torch.Tensor, None] = None) -> Tuple[torch.Tensor, Dict]:
         """
@@ -132,7 +138,8 @@ class LuongDecoder(nn.Module):
         # Input feeding: initialize the input of LSTM with previous attentional vector information
         output = torch.cat([input, self.attentional_vector_pre], dim=-1)
         for i in range(self.num_rnn_layers):
-            output, _ = self.rnn_layers[i](output) # LSTM cell return (h, c)
+            output, cell = self.rnn_layers[i](output, self.rnn_hidden_cell_states[i]) # LSTM cell return (h, c)
+            self.rnn_hidden_cell_states[i] = (output, cell) # store the hidden state and cell state of current layer for next time step.
             if dec_mask is not None: output = output * dec_mask.unsqueeze(-1).expand_as(output)
 
             output = F.dropout(output, p=self.rnn_dropout[i], training=self.training)
