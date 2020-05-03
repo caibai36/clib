@@ -19,6 +19,7 @@ from collections import OrderedDict
 import numpy as np
 import torch
 from torch import nn
+from torch.utils.tensorboard import SummaryWriter
 
 # pip install *
 import yaml # for config files
@@ -247,6 +248,9 @@ best_dev_epoch = 0
 
 epoch = 0
 num_epochs = opts['num_epochs']
+tensorboard_logdir=os.path.join(opts['result'], "runs")
+writer = SummaryWriter(log_dir=tensorboard_logdir)
+
 while epoch < num_epochs:
     start_time = time.time()
     # take mean over statistics of utterances
@@ -287,6 +291,12 @@ while epoch < num_epochs:
         save_model_with_config(model, os.path.join(opts['result'], "best_model.mdl"))
 
     logger.info("\n" + tabulate.tabulate(info_table, headers=['epoch', 'dataset', 'loss', 'acc'], floatfmt='.3f', tablefmt='rst'))
+    writer.add_scalar("Loss/train", mean_loss['train'], epoch)
+    writer.add_scalar("Loss/dev", mean_loss['dev'], epoch)
+    writer.add_scalar("Loss/test", mean_loss['test'], epoch)
+    writer.add_scalar("Accuracy/train", mean_acc['train'], epoch)
+    writer.add_scalar("Accuracy/dev", mean_acc['dev'], epoch)
+    writer.add_scalar("Accuracy/test", mean_acc['test'], epoch)
 
     if opts['reducelr']: scheduler.step(mean_loss['dev'], epoch)
 
