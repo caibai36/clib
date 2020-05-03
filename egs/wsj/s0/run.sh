@@ -11,10 +11,37 @@ sh local/kaldi_conf.sh
 . path.sh
 
 # general configuration
-stage=5  # start from 0 if you need to start from data preparation
+stage=7  # start from 0 if you need to start from data preparation
 mfcc_dir=mfcc # Directory contains mfcc features and cmvn statistics.
 mfcc_config=conf/mfcc_hires.conf  # use the high-resolution mfcc for training the neurnal network;
                              # 40 dimensional mfcc feature used by Google and kaldi wsj network training.
+
+# Data and model options
+run=run0
+feat=mfcc40
+dataset_name=wsj
+# data_name=wsj0  # train:si84;dev:dev93;test:eval92
+# data_name=wsj1  # train:si284;dev:dev93;test:eval92
+model_name=EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp
+exp_dir=exp/tmp
+
+# options for training ASR
+gpu=auto
+batch_size=32
+cutoff=1600 # cut off long sentences
+label_smoothing=0.05
+lr=0.001
+num_epochs=70
+grad_clip=5
+factor=0.5 # for lr scheduler
+patience=3 # for lr scheduler
+
+# options for evaluating ASR
+set_uttid=None # subset of testing data (e.g. set_uttid=conf/data/test_small/set_uttid.txt)
+
+search=beam
+max_target=250 # the maximum length of the decoded sequence
+beam_size=10
 
 # Parse the options. (eg. ./run.sh --stage 1)
 # Note that the options should be defined as shell variable before parsing
@@ -121,4 +148,78 @@ if [ ${stage} -le 5 ]; then
 				   data/${x} ${dict}
     done
     date
+fi
+
+# # or run one by one
+# if [ ${stage} -le 0 ]; then
+#     ./local/train_asr_wsj0.sh # train:si84;dev:dev93;test:eval92
+#     ./local/eval_asr_wsj0.sh
+#     ./local/train_asr_wsj1.sh # train:si284;dev:dev93;test:eval92
+#     ./local/eval_asr_wsj1.sh
+# fi
+
+if [ ${stage} -le 6 ]; then
+    echo "Training ASR..."
+    # data_name=wsj0  # train:si84;dev:dev93;test:eval92
+    # data_name=wsj1  # train:si284;dev:dev93;test:eval92
+
+    for data_name in wsj0 wsj1; do
+	data_config=conf/data/${dataset_name}/${data_name}/asr_tts/data_${feat}.yaml
+	model_config=conf/model/asr/seq2seq/${model_name}.yaml
+
+	reducelr={\"factor\":$factor,\"patience\":$patience}
+
+	exp_setting=${feat}_batchsize${batch_size}_cutoff${cutoff}_labelsmoothing${label_smoothing}_lr${lr}_gradclip${grad_clip}_factor${factor}_patience${patience}
+	result_dir=${exp_dir}/${dataset_name}/${data_name}/${model_name}-${run}/${exp_setting}/train
+
+	# comment out this line if you are not sure how many epochs to run
+	# comment out overwrite when you do not want to overwrite the previous runs
+	python local/scripts/train_asr.py \
+	       --gpu $gpu \
+	       --data_config $data_config \
+	       --batch_size $batch_size \
+	       --cutoff $cutoff \
+	       --model_config $model_config \
+	       --label_smoothing $label_smoothing \
+	       --lr $lr \
+	       --reducelr $reducelr \
+	       --num_epochs $num_epochs \
+	       --grad_clip $grad_clip \
+	       --result $result_dir \
+	       --exit \
+	       --overwrite
+    done
+fi
+
+if [ ${stage} -le 7 ]; then
+    echo "Evaluating ASR..."
+    # data_name=wsj0  # train:si84;dev:dev93;test:eval92
+    # data_name=wsj1  # train:si284;dev:dev93;test:eval92
+
+    for data_name in wsj0 wsj1; do
+	exp_setting=${feat}_batchsize${batch_size}_cutoff${cutoff}_labelsmoothing${label_smoothing}_lr${lr}_gradclip${grad_clip}_factor${factor}_patience${patience}
+	model_path=${exp_dir}/${dataset_name}/${data_name}/${model_name}-${run}/${exp_setting}/train/best_model.mdl
+
+	data_config=conf/data/${dataset_name}/${data_name}/asr_tts/data_${feat}.yaml
+	result_dir=${model_path%/train/*}/eval/beamsize${beam_size} # ${string%substring} # Deletes shortest match of $substring from back of $string.
+
+	python local/scripts/eval_asr.py \
+	       --gpu $gpu \
+	       --data_config $data_config \
+	       --set_uttid $set_uttid \
+	       --batch_size 2 \
+	       --model $model_path \
+	       --max_target $max_target \
+	       --search $search \
+	       --beam_size $beam_size \
+	       --result $result_dir
+
+	echo
+	echo "Computing character error rate (CER)..."
+	COMPUTE_WER=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer
+	$COMPUTE_WER --mode=present ark,t:${result_dir}/ref_char.txt ark,t:${result_dir}/hypo_char.txt |& tee ${result_dir}/cer.txt
+	echo
+	echo "Computing word error rate (WER)..."
+	$COMPUTE_WER --mode=present ark,t:${result_dir}/ref_word.txt ark,t:${result_dir}/hypo_word.txt |& tee ${result_dir}/wer.txt
+    done
 fi
