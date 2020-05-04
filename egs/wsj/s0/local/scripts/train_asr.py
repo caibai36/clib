@@ -39,7 +39,7 @@ from clib.ctorch.utils.module_util import get_optim
 from clib.ctorch.utils.training_util import continue_train
 from clib.ctorch.nn.modules.loss import CrossEntropyLossLabelSmoothing
 from clib.ctorch.models.asr.seq2seq.encrnn_decrnn_att_asr import EncRNNDecRNNAtt # needed when loading model
-from clib.comm.util import init_logger
+from clib.common.utils.log_util import init_logger
 from clib.ctorch.utils.model_util import save_options, save_model_with_config, load_pretrained_model_with_config, load_model_config
 
 parser = argparse.ArgumentParser(description="asr training", formatter_class=argparse.ArgumentDefaultsHelpFormatter)

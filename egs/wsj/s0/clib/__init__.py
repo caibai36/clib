@@ -1,3 +1,3 @@
 from . import kaldi
 from . import ctorch
-from . import comm
+from . import common

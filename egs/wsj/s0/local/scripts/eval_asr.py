@@ -39,7 +39,7 @@ else:
 from clib.kaldi.kaldi_data import KaldiDataLoader, KaldiDataset
 from clib.ctorch.nn.search import beam_search, greedy_search
 from clib.ctorch.models.asr.seq2seq.encrnn_decrnn_att_asr import EncRNNDecRNNAtt # needed when loading model
-from clib.comm.util import init_logger
+from clib.common.utils.log_util import init_logger
 from clib.ctorch.utils.model_util import save_options, load_pretrained_model_with_config
 from clib.ctorch.utils.attention_util import save_att
 

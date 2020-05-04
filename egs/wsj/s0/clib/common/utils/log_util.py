@@ -1,5 +1,3 @@
-from typing import List, Dict, Tuple, Union, Any
-
 import sys
 import logging
 
@@ -21,6 +19,3 @@ def init_logger(file_name="", stream="stdout"):
         logger.addHandler(file_handler)
 
     return logger
-
-def save_options(options: Dict, path: str) -> None:
-    json.dump(options, open(path, 'w'), indent=4)
