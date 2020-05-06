@@ -35,6 +35,7 @@ num_epochs=70
 grad_clip=5
 factor=0.5 # for lr scheduler
 patience=3 # for lr scheduler
+save_interval=1 # save the model every x epoch
 
 # options for evaluating ASR
 set_uttid=None # subset of testing data (e.g. set_uttid=conf/data/test_small/set_uttid.txt)
@@ -186,6 +187,7 @@ if [ ${stage} -le 6 ]; then
 	       --num_epochs $num_epochs \
 	       --grad_clip $grad_clip \
 	       --result $result_dir \
+	       --save_interval $save_interval \
 	       --exit \
 	       --overwrite
     done
