@@ -58,7 +58,7 @@ if $vtln; then mkdir -p $mfcc_vtln_dir; fi
 
 if [ $stage -le 1 ]; then
     echo "---------------------------------------------------"
-    echo "MFCC feature extration and compute CMVN of data set"
+    echo "MFCC feature extraction and compute CMVN of data set"
     echo "---------------------------------------------------"
 
     rm -rf data/${dataset}/{feats,raw}.scp # avoid confusion of scp files in make_cmvn.sh
