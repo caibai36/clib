@@ -11,7 +11,7 @@ sh local/kaldi_conf.sh
 . path.sh
 
 # general configuration
-stage=7  # start from 0 if you need to start from data preparation
+stage=8  # start from 0 if you need to start from data preparation
 mfcc_dir=mfcc # Directory contains mfcc features and cmvn statistics.
 mfcc_config=conf/mfcc_hires.conf  # use the high-resolution mfcc for training the neurnal network;
                              # 40 dimensional mfcc feature used by Google and kaldi wsj network training.
@@ -136,23 +136,8 @@ if [ ${stage} -le 4 ]; then
     done
 fi
 
-if [ ${stage} -le 5 ]; then
-    date
-    echo "Making 80-dimensional mfcc feature"
-    for dataset in test_eval92 train_si284 train_si84 test_dev93; do
-	x=${dataset}_mfcc80
-	cp -rf data/${dataset} data/${x}
-	./local/scripts/feat_extract.sh --dataset ${x} --cmvn true --mfcc_conf conf/mfcc_hires80.conf
-	local/scripts/data2json.sh --feat data/${x}/feats.scp \
-				   --non-ling-syms ${non_ling_syms} \
-				   --output-utts-json data/${x}/utts.json \
-				   data/${x} ${dict}
-    done
-    date
-fi
-
-# # or run one by one
-# if [ ${stage} -le 0 ]; then
+# # run one by one
+# if [ ${stage} -le 5 ]; then
 #     ./local/train_asr_wsj0.sh # train:si84;dev:dev93;test:eval92
 #     ./local/eval_asr_wsj0.sh
 #     ./local/train_asr_wsj1.sh # train:si284;dev:dev93;test:eval92
@@ -224,4 +209,51 @@ if [ ${stage} -le 7 ]; then
 	echo "Computing word error rate (WER)..."
 	$COMPUTE_WER --mode=present ark,t:${result_dir}/ref_word.txt ark,t:${result_dir}/hypo_word.txt |& tee ${result_dir}/wer.txt
     done
+fi
+
+######################################################################################################
+# Additional scripts
+if [ ${stage} -le 0 ]; then
+    date
+    echo "Making 80-dimensional mfcc feature"
+    for dataset in test_eval92 train_si284 train_si84 test_dev93; do
+	x=${dataset}_mfcc80
+	cp -rf data/${dataset} data/${x}
+	./local/scripts/feat_extract.sh --dataset ${x} --cmvn true --mfcc_conf conf/mfcc_hires80.conf
+	local/scripts/data2json.sh --feat data/${x}/feats.scp \
+				   --non-ling-syms ${non_ling_syms} \
+				   --output-utts-json data/${x}/utts.json \
+				   data/${x} ${dict}
+    done
+    date
+fi
+
+if [ ${stage} -le 0 ]; then
+    date
+    echo "Making 80-dimensional mel feature (tacotron style)"
+    for dataset in test_eval92 train_si284 train_si84 test_dev93; do
+	x=${dataset}_mel80
+	cp -rf data/${dataset} data/${x}
+	./local/scripts/feat_extract_taco.sh --dataset ${x} --cmvn true --mel_conf conf/feat/taco_mel_f80.json
+	local/scripts/data2json.sh --feat data/${x}/feats.scp \
+				   --non-ling-syms ${non_ling_syms} \
+				   --output-utts-json data/${x}/utts.json \
+				   data/${x} ${dict}
+    done
+    date
+fi
+
+if [ ${stage} -le 0 ]; then
+    date
+    echo "Making 80-dimensional mel feature without cmvn (tacotron style)"
+    for dataset in test_eval92 train_si284 train_si84 test_dev93; do
+	x=${dataset}_mel80_raw
+	cp -rf data/${dataset} data/${x}
+	./local/scripts/feat_extract_taco.sh --dataset ${x} --cmvn false --mel_conf conf/feat/taco_mel_f80.json
+	local/scripts/data2json.sh --feat data/${x}/feats.scp \
+				   --non-ling-syms ${non_ling_syms} \
+				   --output-utts-json data/${x}/utts.json \
+				   data/${x} ${dict}
+    done
+    date
 fi
