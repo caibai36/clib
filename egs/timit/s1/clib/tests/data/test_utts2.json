@@ -1,0 +1,38 @@
+{
+    "011c0201": {
+        "feat": "/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s0/mfcc/train_si284/feats_cmvn.1.ark:9",
+        "feat_dim": "40",
+        "num_frames": "652",
+        "num_tokens": "112",
+        "text": "THE SALE OF THE HOTELS IS PART OF HOLIDAY'S STRATEGY TO SELL OFF ASSETS AND CONCENTRATE ON PROPERTY MANAGEMENT",
+        "token": "<sos> t h e <space> s a l e <space> o f <space> t h e <space> h o t e l s <space> i s <space> p a r t <space> o f <space> h o l i d a y <apostrophe> s <space> s t r a t e g y <space> t o <space> s e l l <space> o f f <space> a s s e t s <space> a n d <space> c o n c e n t r a t e <space> o n <space> p r o p e r t y <space> m a n a g e m e n t <eos>",
+        "tokenid": "2 27 15 12 7 26 8 19 12 7 22 13 7 27 15 12 7 15 22 27 12 19 26 7 16 26 7 23 8 25 27 7 22 13 7 15 22 19 16 11 8 32 4 26 7 26 27 25 8 27 12 14 32 7 27 22 7 26 12 19 19 7 22 13 13 7 8 26 26 12 27 26 7 8 21 11 7 10 22 21 10 12 21 27 25 8 27 12 7 22 21 7 23 25 22 23 12 25 27 32 7 20 8 21 8 14 12 20 12 21 27 3",
+        "utt2spk": "011",
+        "uttid": "011c0201",
+        "vocab_size": "34"
+    },
+    "011c0202": {
+        "feat": "/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s0/mfcc/train_si284/feats_cmvn.1.ark:104353",
+        "feat_dim": "40",
+        "num_frames": "693",
+        "num_tokens": "107",
+        "text": "THE HOTEL OPERATOR'S EMBASSY SUITES HOTELS INCORPORATED SUBSIDIARY WILL CONTINUE TO MANAGE THE PROPERTIES",
+        "token": "<sos> t h e <space> h o t e l <space> o p e r a t o r <apostrophe> s <space> e m b a s s y <space> s u i t e s <space> h o t e l s <space> i n c o r p o r a t e d <space> s u b s i d i a r y <space> w i l l <space> c o n t i n u e <space> t o <space> m a n a g e <space> t h e <space> p r o p e r t i e s <eos>",
+        "tokenid": "2 27 15 12 7 15 22 27 12 19 7 22 23 12 25 8 27 22 25 4 26 7 12 20 9 8 26 26 32 7 26 28 16 27 12 26 7 15 22 27 12 19 26 7 16 21 10 22 25 23 22 25 8 27 12 11 7 26 28 9 26 16 11 16 8 25 32 7 30 16 19 19 7 10 22 21 27 16 21 28 12 7 27 22 7 20 8 21 8 14 12 7 27 15 12 7 23 25 22 23 12 25 27 16 12 26 3",
+        "utt2spk": "011",
+        "uttid": "011c0202",
+        "vocab_size": "34"
+    },
+    "011c0203": {
+        "feat": "/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s0/mfcc/train_si284/feats_cmvn.1.ark:215257",
+        "feat_dim": "40",
+        "num_frames": "1069",
+        "num_tokens": "165",
+        "text": "LONG TERM MANAGEMENT CONTRACTS ALLOW US TO GENERATE INCOME ON A SIGNIFICANTLY LOWER CAPITAL BASE SAID MICHAEL D. ROSE HOLIDAY'S CHAIRMAN AND CHIEF EXECUTIVE OFFICER",
+        "token": "<sos> l o n g <space> t e r m <space> m a n a g e m e n t <space> c o n t r a c t s <space> a l l o w <space> u s <space> t o <space> g e n e r a t e <space> i n c o m e <space> o n <space> a <space> s i g n i f i c a n t l y <space> l o w e r <space> c a p i t a l <space> b a s e <space> s a i d <space> m i c h a e l <space> d <space> r o s e <space> h o l i d a y <apostrophe> s <space> c h a i r m a n <space> a n d <space> c h i e f <space> e x e c u t i v e <space> o f f i c e r <eos>",
+        "tokenid": "2 19 22 21 14 7 27 12 25 20 7 20 8 21 8 14 12 20 12 21 27 7 10 22 21 27 25 8 10 27 26 7 8 19 19 22 30 7 28 26 7 27 22 7 14 12 21 12 25 8 27 12 7 16 21 10 22 20 12 7 22 21 7 8 7 26 16 14 21 16 13 16 10 8 21 27 19 32 7 19 22 30 12 25 7 10 8 23 16 27 8 19 7 9 8 26 12 7 26 8 16 11 7 20 16 10 15 8 12 19 7 11 7 25 22 26 12 7 15 22 19 16 11 8 32 4 26 7 10 15 8 16 25 20 8 21 7 8 21 11 7 10 15 16 12 13 7 12 31 12 10 28 27 16 29 12 7 22 13 13 16 10 12 25 3",
+        "utt2spk": "011",
+        "uttid": "011c0203",
+        "vocab_size": "34"
+    }
+}
