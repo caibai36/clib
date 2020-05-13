@@ -109,7 +109,6 @@ def main():
 
     for line in f:
         line = line.strip()
-        if args.str2lower: line = line.lower()
         if args.strs_replace_in:
             for pair in rep_pairs:
                 line = line.replace(pair['old'], pair['new'])
@@ -119,6 +118,7 @@ def main():
         # Split the first skip_ncols tokens, take the remaining
         skipped_str = " ".join(tokens[:args.skip_ncols])
         remained_str = " ".join(tokens[args.skip_ncols:])
+        if args.str2lower: remained_str = remained_str.lower()
 
         # print(skipped_str, end=" ")
         sys.stdout.buffer.write((skipped_str + " ").encode('utf8')) # print utf8 string
