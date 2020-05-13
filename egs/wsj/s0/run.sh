@@ -2,7 +2,7 @@
 
 # Set bash to 'debug' mode, it will exit on :
 # -e 'error', -u 'undefined variable', -o ... 'error in pipeline', -x 'print commands',
-set -euo pipefail
+set -uo pipefail
 
 # Prepare some basic config files of kaldi.
 sh local/kaldi_conf.sh
@@ -93,17 +93,26 @@ non_ling_syms=data/lang_1char/${train_set}_non_ling_syms.txt
 if [ ${stage} -le 3 ]; then
     echo "Stage 3: Dictionary Preparation"
 
+    # Use './local/scripts/analyze_marks.sh --text data/train/text' to analyze the text
+    # and then manually set str_rep.txt, char_del.txt and chars_rep.txt
+    # which are later processed by text2token.py in the order of replacing strings,
+    # deleting characters and replacing characters. By default, these files are empty.
+    if [ ! -f conf/str_rep.txt ]; then touch conf/str_rep.txt; fi
+    if [ ! -f conf/chars_del.txt ]; then touch conf/chars_del.txt; fi
+    if [ ! -f conf/chars_rep.txt ]; then touch conf/chars_rep.txt; fi
+
     echo "dictionary: ${dict}"
     mkdir -p data/lang_1char/
 
     echo "make a non-linguistic symbol list"
+    # Task dependent.
+    # Assume that the non-linguistic symbols of this text are in the format <symbol>.
     # Note that the first column of text is the uttid.
-    # assume that speakers not confused between upper and lower case; all non_ling_syms with <...> format
     local/scripts/replace_str.py --text_in data/${train_set}/text \
 				--rep_in=conf/str_rep.txt \
 				--sep='#' \
 				--str2lower | \
-	cut -f 2-  | tr " " "\n" | sort | uniq | grep "<" > ${non_ling_syms}
+	cut -f 2- -d" " | tr " " "\n" | sort | uniq | grep "<" > ${non_ling_syms}
     cat ${non_ling_syms}
 
     echo "make a dictionary"
@@ -158,8 +167,8 @@ if [ ${stage} -le 6 ]; then
 	exp_setting=${feat}_batchsize${batch_size}_cutoff${cutoff}_labelsmoothing${label_smoothing}_lr${lr}_gradclip${grad_clip}_factor${factor}_patience${patience}
 	result_dir=${exp_dir}/${dataset_name}/${data_name}/${model_name}-${run}/${exp_setting}/train
 
-	# comment out this line if you are not sure how many epochs to run
-	# comment out overwrite when you do not want to overwrite the previous runs
+	# comment out the --exit option if you are not sure how many epochs to run
+	# comment out the --overwrite option when you do not want to overwrite the previous runs
 	python local/scripts/train_asr.py \
 	       --gpu $gpu \
 	       --data_config $data_config \
