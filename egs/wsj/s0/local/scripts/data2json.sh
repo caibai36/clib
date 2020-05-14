@@ -49,7 +49,7 @@ if [ -f $dir/text ]; then
 			       --chars-replace=conf/chars_rep.txt \
 			       --non-ling-syms=${non_ling_syms} \
 			       --skip-ncols=1 \
-			       --str2lower | sed -r -e 's/^(\w*) /\1 <sos> /' -e 's/$/ <eos>/' > ${tmpdir}/token.scp
+			       --str2lower | sed -r -e 's/^(\S*) /\1 <sos> /' -e 's/$/ <eos>/' > ${tmpdir}/token.scp
     cat ${tmpdir}/token.scp | utils/sym2int.pl --map-oov ${oov} -f 2- ${dict} > ${tmpdir}/tokenid.scp
     cat ${tmpdir}/tokenid.scp | awk '{print $1 " " NF-1}' > ${tmpdir}/num_tokens.scp # -1 for uncounting first field: the uttid
     vocsize=`tail -n 1 ${dict} | awk '{print $2}'` # Get the index of the last word, assuming the largest index starting from 0 (vocsize=$vocab_size-1).
