@@ -143,8 +143,13 @@ for dset in {'train', 'dev', 'test'}:
     instances = json.load(open(data_config[dset], encoding='utf8')).values() # the json file mapping utterance id to instance (e.g., {'02c': {'uttid': '02c', 'num_frames': 20}, ...})
 
     save_json_path = os.path.join(opts['result'], "excluded_utts_" + dset + ".json") # json file (e.g., '$result_dir/excluded_utts_train.json') to save the excluded long utterances
+    num_instances_before_cutoff = len(instances)
     if (opts['cutoff'] > 0):
         instances, _ = KaldiDataset.cutoff_long_instances(instances, cutoff=opts['cutoff'], dataset=dset, save_excluded_utts_to=save_json_path, logger=logger) # cutoff the long utterances
+
+    if dset == 'test' and num_instances_before_cutoff != len(instances):
+        logger.error(f"!!!Error: do not cut off the test set, please set the cutoff length {opts['cutoff']} larger!!!")
+        sys.exit()
 
     dataset = KaldiDataset(instances, field_to_sort='num_frames') # Every batch has instances with similar lengths, thus less padded elements; required by pad_packed_sequence (pytorch < 1.3)
     shuffle_batch = True if dset == 'train' else False # shuffle the batch when training, with each batch has instances with similar lengths.
