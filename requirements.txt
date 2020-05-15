@@ -1,0 +1,12 @@
+# conda install -y numpy scipy matplotlib pytorch==1.4.0
+# pip install pyyaml tabulate tqdm GPUtil kaldi_io tensorboard
+numpy==1.18.1
+scipy
+matplotlib
+torch==1.4.0
+pyyaml
+tabulate
+tqdm
+GPUtil
+kaldi_io
+tensorboard

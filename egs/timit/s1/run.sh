@@ -50,7 +50,7 @@ beam_size=10
 # Note that the options should be defined as shell variable before parsing
 . utils/parse_options.sh || exit 1
 
-# number of jobs to run feature extraction
+# the directory of timit
 timit=/project/nakamura-lab01/Share/Corpora/Speech/en/TIMIT/TIMIT # CHECKME
 
 if [ ${stage} -le 1 ]; then

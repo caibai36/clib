@@ -1,0 +1,11 @@
+$                                        # step 0: see requirements.txt and install packages
+$ cd egs/wsj/s0/                         # step 1: go to an example corpus
+$ ./run.sh --stage 0                     # step 2: execute run.sh from the stage 1 to the stage 5 step by step to finish data preparation
+$ ./run.sh --stage 6 --save_interval 100 # step 3: stage 6 is training asr; stage 7 is evaluating asr
+
+while training, you can evaluate asr at any time by running
+    $ ./run.sh --stage 7
+while training, you can use tensorboard to monitor the performance
+    $ tensorboard --logdir exp/tmp/ --port 6006
+you can change any parameter setting of training
+    $ ./run.sh --stage 7 --gpu 1 --feat mfcc40
