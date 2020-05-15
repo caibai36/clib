@@ -8,18 +8,20 @@
 # -e 'error', -u 'undefined variable', -o ... 'error in pipeline', -x 'print commands',
 set -uo pipefail
 
-# Prepare the conf files.
+# Prepare some basic config files of kaldi.
 ./local/kaldi_conf.sh # CHECKME
+# Note: cmd.sh, path.sh are created by kaldi_conf.sh
 . cmd.sh
 . path.sh
 
-stage=8
-mfcc_config=conf/mfcc.conf
-mel_config=clib/conf/feat/taco_mel_f80.json
+# general configuration
+stage=8  # start from 0 if you need to start from data preparation
+mfcc_config=conf/mfcc.conf # 13 dimensional mfcc feature of kaldi default setting
+mel_config=clib/conf/feat/taco_mel_f80.json # 80 dimensional mel feature of tacotron tts
 
 # Data and model options
 run=run0
-feat=mfcc39
+feat=mfcc39 # or mel80
 dataset_name=timit
 # data_name=default
 model_name=EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp
@@ -85,11 +87,11 @@ train_set=train
 dict=data/lang_1char/${train_set}_units.txt
 non_ling_syms=data/lang_1char/${train_set}_non_ling_syms.txt
 if [ ${stage} -le 3 ]; then
-    echo "Dictionary Preparation..."
+    echo "Dictionary preparation..."
 
     # Use './local/scripts/analyze_marks.sh --text data/train/text' to analyze the text
     # and then manually set str_rep.txt, char_del.txt and chars_rep.txt
-    # which are Later processed by text2token.py in the order of replacing strings,
+    # which are later processed by text2token.py in the order of replacing strings,
     # deleting characters and replacing characters. By default, these files are empty.
     if [ ! -f conf/str_rep.txt ]; then touch conf/str_rep.txt; fi
     if [ ! -f conf/chars_del.txt ]; then touch conf/chars_del.txt; fi
@@ -126,32 +128,32 @@ if [ ${stage} -le 3 ]; then
 fi
 
 if [ ${stage} -le 4 ]; then
-    echo "make json files"
+    echo "Making json files"
     # get scp files (each line as 'uttid scp_content'), then merge them into utts.json.
     #     (eg. num_frames.scp, feat_dim.scp, num_tokens.scp, tokenid.scp, vocab_size.scp, feat.scp, token.scp and etc.)
     # If you want to add more information, just create more scp files in data2json.sh
-
-    for x in train dev test; do
+    for dataset in train dev test; do
+	x=${dataset}
 	local/scripts/data2json.sh --feat data/$x/feats.scp \
-    		     --non-ling-syms ${non_ling_syms} \
-    	             --output-utts-json data/$x/utts.json \
-    		     --output-dir-of-scps data/$x/scps \
-    		     data/$x ${dict}
+    				   --non-ling-syms ${non_ling_syms} \
+    				   --output-utts-json data/$x/utts.json \
+    				   --output-dir-of-scps data/$x/scps \
+    				   data/$x ${dict}
     done
 fi
 
 if [ ${stage} -le 4 ]; then
-    echo "make json files"
+    echo "Making json files"
     # get scp files (each line as 'uttid scp_content'), then merge them into utts.json.
     #     (eg. num_frames.scp, feat_dim.scp, num_tokens.scp, tokenid.scp, vocab_size.scp, feat.scp, token.scp and etc.)
     # If you want to add more information, just create more scp files in data2json.sh
-
-    for x in train_mel80 dev_mel80 test_mel80; do
+    for dataset in train dev test; do
+	x=${dataset}_mel80
 	local/scripts/data2json.sh --feat data/$x/feats.scp \
-    		     --non-ling-syms ${non_ling_syms} \
-    	             --output-utts-json data/$x/utts.json \
-    		     --output-dir-of-scps data/$x/scps \
-    		     data/$x ${dict}
+				   --non-ling-syms ${non_ling_syms} \
+				   --output-utts-json data/$x/utts.json \
+				   --output-dir-of-scps data/$x/scps \
+				   data/$x ${dict}
     done
 fi
 
@@ -181,17 +183,14 @@ if [ ${stage} -le 6 ]; then
 	       --num_epochs $num_epochs \
 	       --grad_clip $grad_clip \
 	       --result $result_dir \
-	       --save_interval $save_interval
-#	       --save_interval $save_interval \
-#	       --exit \
-#	       --overwrite
+	       --save_interval $save_interval \
+	       --exit \
+	       --overwrite
     done
 fi
 
 if [ ${stage} -le 7 ]; then
     echo "Evaluating ASR..."
-    # data_name=wsj0  # train:si84;dev:dev93;test:eval92
-    # data_name=wsj1  # train:si284;dev:dev93;test:eval92
 
     for data_name in default; do
 	exp_setting=${feat}_batchsize${batch_size}_cutoff${cutoff}_labelsmoothing${label_smoothing}_lr${lr}_gradclip${grad_clip}_factor${factor}_patience${patience}
