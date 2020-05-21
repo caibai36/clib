@@ -58,6 +58,11 @@ if [ ${stage} -le 1 ]; then
     echo "Data preparation..."
 
     local/timit_data_prep.sh $timit || exit 1
+    local/timit_prepare_dict.sh
+    utils/prepare_lang.sh --sil-prob 0.0 --position-dependent-phones false --num-sil-states 3 \
+			  data/local/dict "sil" data/local/lang_tmp data/lang
+    local/timit_format_data.sh
+
     date
 fi
 
@@ -161,7 +166,7 @@ if [ ${stage} -le 6 ]; then
     echo "Training ASR..."
 
     for data_name in default; do
-	data_config=clib/conf/data/${dataset_name}/${data_name}/asr_tts/data_${feat}.yaml
+	data_config=clib/conf/data/${dataset_name}/${data_name}/asr_tts/data_${feat}.yaml # CHECKME (you can change the data_config to the setting of your prepared dataset)
 	model_config=clib/conf/model/asr/seq2seq/${model_name}.yaml
 
 	reducelr={\"factor\":$factor,\"patience\":$patience}

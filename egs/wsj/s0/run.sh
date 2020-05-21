@@ -162,7 +162,7 @@ if [ ${stage} -le 6 ]; then
     echo "Training ASR..."
 
     for data_name in wsj0 wsj1; do
-	data_config=clib/conf/data/${dataset_name}/${data_name}/asr_tts/data_${feat}.yaml
+	data_config=clib/conf/data/${dataset_name}/${data_name}/asr_tts/data_${feat}.yaml # CHECKME (you can change the data_config to the setting of your prepared dataset)
 	model_config=clib/conf/model/asr/seq2seq/${model_name}.yaml
 
 	reducelr={\"factor\":$factor,\"patience\":$patience}

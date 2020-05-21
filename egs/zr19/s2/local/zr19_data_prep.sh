@@ -17,10 +17,16 @@ if [ $stage -le 1 ]; then
     echo "number of utterances: $(wc -l data/$dataset/wav.scp): "
 
     echo "Preparing utt2spk and spk2utt..."
-    awk '{print gensub(/^([A-Za-z0-9]+)_([A_Za-z0-9]+)$/, "\\0 \\1", "g", $1)}' data/$dataset/wav.scp > data/${dataset}/utt2spk # wav.scp: S002_01 test/S002_01.wav
+    awk '{print gensub(/^([A-Za-z0-9]+)_([A-Za-z0-9]+)$/, "\\0 \\1", "g", $1)}' data/$dataset/wav.scp > data/${dataset}/utt2spk # wav.scp: S002_01 test/S002_01.wav
     utils/utt2spk_to_spk2utt.pl data/${dataset}/utt2spk > data/${dataset}/spk2utt
 
     echo "Preparing segment..."
-    awk '{print $1}' data/$dataset/wav.scp | grep -f - $vad_file | awk '{print $1, $1, $2, $3}' | sort -k1,1 -u > data/${dataset}/segments # vad_file: S002_01 1.0800 3.4200 
+    awk '{print $1}' data/$dataset/wav.scp | grep -f - $vad_file | awk '{print $1, $1, $2, $3}' | sort -k1,1 -u > data/${dataset}/segments # vad_file: S002_01 1.0800 3.4200
     echo "number of segments: $(wc -l data/$dataset/segments): "
 fi
+
+# # avoid one uttid is the prefix of another
+# echo "Preparing segment..."
+# for uttid in $(awk '{print $1}' data/$dataset/wav.scp); do
+#     awk -v uttid=$uttid '$1==uttid {print $1, $1, $2, $3}' $vad_file
+# done | sort -k1,1 -u > data/${dataset}/segments # vad_file: S002_01 1.0800 3.4200
