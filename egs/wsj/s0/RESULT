@@ -1,0 +1,101 @@
+#!/bin/bash
+head exp/tmp/wsj/wsj*/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/*_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/*er.txt
+exit 0
+
+# CER mel80 wsj0 train:si84;dev:dev93;test:eval92
+==> exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/cer.txt <==
+/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_char.txt ark,t:exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_char.txt 
+%WER 13.88 [ 4617 / 33259, 1076 ins, 1830 del, 1711 sub ]
+%SER 92.79 [ 309 / 333 ]
+Scored 333 sentences, 0 not present in hyp.
+
+# WER mel80 wsj0 train:si84;dev:dev93;test:eval92
+==> exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/wer.txt <==
+/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_word.txt ark,t:exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_word.txt 
+%WER 30.93 [ 1763 / 5700, 229 ins, 268 del, 1266 sub ]
+%SER 92.79 [ 309 / 333 ]
+Scored 333 sentences, 0 not present in hyp.
+
+# CER mfcc40 wsj0 train:si84;dev:dev93;test:eval92
+==> exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc40_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/cer.txt <==
+/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc40_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_char.txt ark,t:exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc40_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_char.txt 
+%WER 16.61 [ 5525 / 33259, 1353 ins, 2068 del, 2104 sub ]
+%SER 94.59 [ 315 / 333 ]
+Scored 333 sentences, 0 not present in hyp.
+
+# WER mfcc40 wsj0 train:si84;dev:dev93;test:eval92
+==> exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc40_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/wer.txt <==
+/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc40_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_word.txt ark,t:exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc40_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_word.txt 
+%WER 35.18 [ 2005 / 5700, 305 ins, 297 del, 1403 sub ]
+%SER 94.59 [ 315 / 333 ]
+Scored 333 sentences, 0 not present in hyp.
+
+# CER mfcc80 wsj0 train:si84;dev:dev93;test:eval92
+==> exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/cer.txt <==
+/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_char.txt ark,t:exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_char.txt 
+%WER 17.04 [ 5667 / 33259, 1399 ins, 2120 del, 2148 sub ]
+%SER 96.40 [ 321 / 333 ]
+Scored 333 sentences, 0 not present in hyp.
+
+# CER mfcc80 wsj0 train:si84;dev:dev93;test:eval92
+==> exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/wer.txt <==
+/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_word.txt ark,t:exp/tmp/wsj/wsj0/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_word.txt 
+%WER 35.19 [ 2006 / 5700, 299 ins, 307 del, 1400 sub ]
+%SER 96.40 [ 321 / 333 ]
+Scored 333 sentences, 0 not present in hyp.
+
+# CER mel80 wsj1 train:si284;dev:dev93;test:eval92
+==> exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/cer.txt <==
+/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_char.txt ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_char.txt 
+%WER 5.57 [ 1851 / 33259, 480 ins, 671 del, 700 sub ]
+%SER 81.38 [ 271 / 333 ]
+Scored 333 sentences, 0 not present in hyp.
+
+# WER mel80 wsj1 train:si284;dev:dev93;test:eval92
+==> exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/wer.txt <==
+/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_word.txt ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_word.txt 
+%WER 15.49 [ 883 / 5700, 109 ins, 132 del, 642 sub ]
+%SER 81.38 [ 271 / 333 ]
+Scored 333 sentences, 0 not present in hyp.
+
+# CER mel80 without cmvn normalization wsj1 train:si284;dev:dev93;test:eval92
+==> exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_raw_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/cer.txt <==
+/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_raw_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_char.txt ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_raw_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_char.txt 
+%WER 6.00 [ 1995 / 33259, 458 ins, 747 del, 790 sub ]
+%SER 83.48 [ 278 / 333 ]
+Scored 333 sentences, 0 not present in hyp.
+
+# WER mel80 without cmvn normalization wsj1 train:si284;dev:dev93;test:eval92
+==> exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_raw_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/wer.txt <==
+/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_raw_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_word.txt ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mel80_raw_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_word.txt 
+%WER 15.77 [ 899 / 5700, 102 ins, 143 del, 654 sub ]
+%SER 83.48 [ 278 / 333 ]
+Scored 333 sentences, 0 not present in hyp.
+
+# CER mfcc40 wsj1 train:si284;dev:dev93;test:eval92
+==> exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc40_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/cer.txt <==
+/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc40_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_char.txt ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc40_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_char.txt 
+%WER 6.57 [ 2186 / 33259, 481 ins, 772 del, 933 sub ]
+%SER 82.28 [ 274 / 333 ]
+Scored 333 sentences, 0 not present in hyp.
+
+# WER mfcc40 wsj1 train:si284;dev:dev93;test:eval92
+==> exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc40_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/wer.txt <==
+/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc40_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_word.txt ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc40_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_word.txt 
+%WER 16.96 [ 967 / 5700, 115 ins, 138 del, 714 sub ]
+%SER 82.28 [ 274 / 333 ]
+Scored 333 sentences, 0 not present in hyp.
+
+# CER mfcc80 wsj1 train:si284;dev:dev93;test:eval92
+==> exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/cer.txt <==
+/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_char.txt ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_char.txt 
+%WER 7.38 [ 2456 / 33259, 574 ins, 873 del, 1009 sub ]
+%SER 84.08 [ 280 / 333 ]
+Scored 333 sentences, 0 not present in hyp.
+
+# WER mfcc80 wsj1 train:si284;dev:dev93;test:eval92
+==> exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/wer.txt <==
+/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer --mode=present ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_word.txt ark,t:exp/tmp/wsj/wsj1/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc80_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_word.txt 
+%WER 18.19 [ 1037 / 5700, 132 ins, 156 del, 749 sub ]
+%SER 84.08 [ 280 / 333 ]
+Scored 333 sentences, 0 not present in hyp.
