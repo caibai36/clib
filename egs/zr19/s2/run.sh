@@ -2,7 +2,7 @@
 
 # Set bash to 'debug' mode, it will exit on :
 # -e 'error', -u 'undefined variable', -o ... 'error in pipeline', -x 'print commands',
-set -euox pipefail
+set -eox pipefail
 
 # Prepare some basic config files of kaldi.
 bash local/kaldi_conf.sh
@@ -10,7 +10,9 @@ bash local/kaldi_conf.sh
 . cmd.sh
 . path.sh
 
-stage=3
+stage=8
+seed=123
+K0=60
 # Parse the options. (eg. ./run.sh --stage 1)
 # Note that the options should be defined as shell variable before parsing
 . utils/parse_options.sh || exit 1
@@ -29,26 +31,52 @@ fi
 if [ $stage -le 2 ]; then
     date
     echo "Feature extraction..."
-    [ ! -d data/test_en_hires ]  && cp -r data/test_en data/test_en_hires
-    [ ! -d data/train_en_hires ] && cp -r data/train_en data/train_en_hires
-    [ ! -d data/test_en_hires80 ] && cp -r data/test_en data/test_en_hires80
-    [ ! -d data/train_en_hires80 ] && cp -r data/train_en data/train_en_hires80
-
-    ./local/scripts/feat_extract.sh --dataset test_en --cmvn true --vtln true --delta_order 2 --mfcc_conf conf/mfcc.conf --min_segment_length 0.001 # 3 hours
-    ./local/scripts/feat_extract.sh --dataset train_en --cmvn true --vtln true --delta_order 2 --mfcc_conf conf/mfcc.conf --min_segment_length 0.001 # 2 hours
-    ./local/scripts/feat_extract.sh --dataset test_en_hires --cmvn true --vtln false --delta_order 0 --mfcc_conf conf/mfcc_hires.conf --min_segment_length 0.001 # 4 min
-    ./local/scripts/feat_extract.sh --dataset train_en_hires --cmvn true --vtln false --delta_order 0 --mfcc_conf conf/mfcc_hires.conf --min_segment_length 0.001 # 5 min
-    ./local/scripts/feat_extract.sh --dataset test_en_hires80 --cmvn true --vtln false --delta_order 0 --mfcc_conf conf/mfcc_hires80.conf --min_segment_length 0.001 # 4 min
-    ./local/scripts/feat_extract.sh --dataset train_en_hires80 --cmvn true --vtln false --delta_order 0 --mfcc_conf conf/mfcc_hires80.conf --min_segment_length 0.001 # 5 min
+    ./local/scripts/feat_extract.sh --dataset test_en --cmvn true --vtln true --delta_order 2 --mfcc_conf conf/mfcc.conf --min_segment_length 0.001 # takes 3 hours
+    ./local/scripts/feat_extract.sh --dataset train_en --cmvn true --vtln true --delta_order 2 --mfcc_conf conf/mfcc.conf --min_segment_length 0.001 # takes 2 hours
     date
 fi
 
-if [ $stage -le 3 ]; then
+echo seed: $seed K0: $K0;
+#K0=10
+num_iterations=1500
+alpha=1
+lmbda=1
+#seed=2020
+
+feat_train=data/train_en/feats.scp
+feat_test=data/test_en/feats.scp
+result=eval/abx/embedding/exp/dpgmm/mfcc39_dpgmm_seed${seed}_K${K0}
+if [ $stage -le 6 ]; then
     date
-    for dataset in $(ls data/); do
-	echo "Make json files for $dataset..."
-	./local/scripts/data2json.sh --feat data/$dataset/feats.scp --output-utts-json data/$dataset/utts.json data/$dataset
-	./local/scripts/data2json.sh --feat data/$dataset/raw.scp --output-utts-json data/$dataset/utts_raw.json data/$dataset
+    python local/dpgmm2embedding.py \
+	   --feat_train=$feat_train \
+	   --feat_test=$feat_test \
+	   --result=$result \
+	   --K0=$K0 \
+	   --num_iterations=$num_iterations \
+	   --seed=$seed \
+	   --alpha=$alpha \
+	   --lmbda=$lmbda |& tee exp/logs/run_$(basename ${result}).log
+    date
+fi
+
+if [ $stage -le 7 ]; then
+    for task in $(basename ${result}_onehot) $(basename ${result}_prob); do
+	# result=exp/dpgmm/test2utt_mfcc13
+	# task=$(basename $result)
+	root=exp/dpgmm/${task}
+
+	abx_embedding=eval/abx/embedding/${root} # CHECK ME
+	abx_result_cos=eval/abx/result/${root}/cos
+	abx_result_kl=eval/abx/result/${root}/kl
+	abx_result_edit=eval/abx/result/${root}/edit
+
+	# /project/nakamura-lab08/Work/bin-wu/share/tools/abx_2019/system/deploy/set_up_eval.sh
+	# or go to http://zerospeech.com/2020/instructions.html
+	source activate eval
+	./local/eval.sh --DIST 'cos' --EMB $abx_embedding --RES $abx_result_cos
+	./local/eval.sh --DIST 'kl' --EMB $abx_embedding --RES $abx_result_kl
+	./local/eval.sh --DIST 'edit' --EMB $abx_embedding --RES $abx_result_edit
     done
     date
 fi
