@@ -2,7 +2,7 @@
 
 # Set bash to 'debug' mode, it will exit on :
 # -e 'error', -u 'undefined variable', -o ... 'error in pipeline', -x 'print commands',
-set -eox pipefail
+set -o pipefail
 
 # Prepare some basic config files of kaldi.
 bash local/kaldi_conf.sh
@@ -19,6 +19,10 @@ K0=60
 
 # Database for zerospeech 2019
 db=/project/nakamura-lab08/Work/bin-wu/share/data/zr19/db # CHECKME downloaded by local/download.sh
+# Evaluation environment
+# see /project/nakamura-lab08/Work/bin-wu/share/tools/abx_2019/system/deploy/set_up_eval.sh
+# or go to http://zerospeech.com/2020/instructions.html
+abx_env=/project/nakamura-lab08/Work/bin-wu/.local/miniconda3/envs/eval # CHECKME
 
 if [ $stage -le 1 ]; then
     date
@@ -71,9 +75,7 @@ if [ $stage -le 7 ]; then
 	abx_result_kl=eval/abx/result/${root}/kl
 	abx_result_edit=eval/abx/result/${root}/edit
 
-	# /project/nakamura-lab08/Work/bin-wu/share/tools/abx_2019/system/deploy/set_up_eval.sh
-	# or go to http://zerospeech.com/2020/instructions.html
-	source activate eval
+	conda activate $abx_env
 	./local/eval.sh --DIST 'cos' --EMB $abx_embedding --RES $abx_result_cos
 	./local/eval.sh --DIST 'kl' --EMB $abx_embedding --RES $abx_result_kl
 	./local/eval.sh --DIST 'edit' --EMB $abx_embedding --RES $abx_result_edit
