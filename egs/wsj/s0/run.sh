@@ -67,7 +67,7 @@ if [ ${stage} -le 2 ]; then
     date
     echo "Making 40-dimensional mfcc feature..."
 
-    for dataset in test_eval92 test_eval93 test_dev93 train_si284; do
+    for dataset in test_eval92 train_si284 train_si84 test_dev93; do
 	./local/scripts/feat_extract.sh --dataset ${dataset} --cmvn true --mfcc_conf $mfcc_config --delta_order 0
     done
     date
@@ -133,7 +133,7 @@ if [ ${stage} -le 4 ]; then
     # get scp files (each line as 'uttid scp_content'), then merge them into utts.json.
     #     (eg. num_frames.scp, feat_dim.scp, num_tokens.scp, tokenid.scp, vocab_size.scp, feat.scp, token.scp and etc.)
     # If you want to add more information, just create more scp files in data2json.sh
-    for dataset in test_eval92 test_eval93 test_dev93 train_si284 train_si84 train_si84_2kshort; do
+    for dataset in test_eval92 train_si284 train_si84 test_dev93; do
 	x=${dataset}
 	local/scripts/data2json.sh --feat data/$x/feats.scp \
     				   --non-ling-syms ${non_ling_syms} \
