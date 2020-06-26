@@ -1,5 +1,6 @@
 # conda install -y numpy scipy matplotlib pytorch==1.4.0
 # pip install pyyaml tabulate tqdm GPUtil kaldi_io tensorboard
+# pip install -r requirements.txt
 numpy==1.18.1
 scipy
 matplotlib
@@ -10,3 +11,4 @@ tqdm
 GPUtil
 kaldi_io
 tensorboard
+librosa
