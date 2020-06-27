@@ -1,7 +1,7 @@
 $ pip install -r requirements.txt        # step 0: see requirements.txt and install packages
 $ cd egs/wsj/s0/                         # step 1: go to an example corpus
 $ ./run.sh --stage 0                     # step 2: stage 1-5 in run.sh for data preparation (optional)
-$ ./run.sh --stage 6 --save_interval 100 # step 3: stage 6 is training asr; stage 7 is evaluating asr
+$ ./run.sh --stage 6 --save_interval 100 # step 3: stage 6-7 in run.sh for training and evaluating asr
 
 while training, you can evaluate asr at any time by running
     $ ./run.sh --stage 7

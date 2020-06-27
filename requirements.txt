@@ -1,6 +1,6 @@
-# conda install -y numpy scipy matplotlib pytorch==1.4.0
-# pip install pyyaml tabulate tqdm GPUtil kaldi_io tensorboard
 # pip install -r requirements.txt
+# librosa and numba version numbers should match
+# torch and numpy version numbers are not necessary
 numpy==1.18.1
 scipy
 matplotlib
@@ -11,4 +11,5 @@ tqdm
 GPUtil
 kaldi_io
 tensorboard
-librosa
+librosa==0.7.2
+numba==0.48

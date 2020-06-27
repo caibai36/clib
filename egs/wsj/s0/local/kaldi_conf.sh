@@ -38,7 +38,9 @@ cp $KALDI_ROOT/egs/wsj/s5/local/normalize_transcript.pl local
 cp $KALDI_ROOT/egs/wsj/s5/local/flist2scp.pl local
 cp $KALDI_ROOT/egs/wsj/s5/local/find_transcripts.pl local
 # remove the langauge model part of formatting the data
-sed -i -e '/# Next, for each type/, /done/ d' -e'/tmp/ d' -e '/lm/ d' local/wsj_format_data.sh 
+sed -i -e '/# Next, for each type/, /done/ d' -e'/tmp/ d' -e '/lm/ d' local/wsj_format_data.sh
+# only retain the the necessary datasets --- 'test_eval92 train_si284 train_si84 test_dev93' --- for experiments
+sed -i 's/train_si284 test_eval92 test_eval93 test_dev93 test_eval92_5k test_eval93_5k test_dev93_5k dev_dt_05 dev_dt_20/test_eval92 train_si284 train_si84 test_dev93/g' local/wsj_format_data.sh
 
 # make local directories for private scripts
 # mkdir -p local/{script,src,bin}
