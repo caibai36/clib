@@ -311,14 +311,16 @@ with torch.no_grad():
         target = batch['target'].to(device).float()
 
         output = model(source, target)
-        test_outputs.append(output['predicted'])
+        # test_outputs.append(output['predicted']) # cuda out of memory
+        test_outputs.append(output['predicted'].cpu())
         
     for batch in train_dataloader:
         source = batch['source'].to(device).float()
         target = batch['target'].to(device).float()
 
         output = model(source, target)
-        training_outputs.append(output['predicted'])
+        # training_outputs.append(output['predicted']) # cuda out of memory
+        training_outputs.append(output['predicted'].cpu())
 
 z_posterior_train, z_posterior_dev_test = torch.cat(training_outputs, dim=0).cpu().numpy(), torch.cat(test_outputs, dim=0).cpu().numpy()
 print("Shape of posteriorgrams of training data and test+dev data")
