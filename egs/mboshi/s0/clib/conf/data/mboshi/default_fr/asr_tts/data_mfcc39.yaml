@@ -1,0 +1,4 @@
+train: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/mboshi/s0/data/train_fr/utts.json'
+dev: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/mboshi/s0/data/dev_fr/utts.json'
+test: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/mboshi/s0/data/test_fr/utts.json'
+token2id: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/mboshi/s0/data/lang_1char/train_fr_units.txt'
