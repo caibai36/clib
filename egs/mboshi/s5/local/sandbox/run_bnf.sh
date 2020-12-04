@@ -15,9 +15,9 @@ stage=0
 bnf_train_stage=-100
 run_cmd="$train_cmd" # "$cuda_cmd" for gpu, "" for empty spaces in the variable
 
-train_data_dir=data/train
-dev_data_dir=data/dev
-test_data_dir=data/test
+train_data_dir=data/train_mb
+dev_data_dir=data/dev_mb
+test_data_dir=data/test_mb
 align_dir=exp/tri3_ali
 dev_align_dir=exp/tri3/decode_dev
 test_align_dir=exp/tri3/decode_test
@@ -27,6 +27,7 @@ data_dev_bnf=data_bnf/dev_bnf
 data_test_bnf=data_bnf/test_bnf
 exp_dir=exp_bnf
 bnf_exp_dir=$exp_dir/tri6_bnf
+nj=3 # number of speakers is 3
 
 . utils/parse_options.sh
 if [ $stage -le 1 ]; then
@@ -37,7 +38,7 @@ if [ $stage -le 1 ]; then
 	echo "Starting training the bottleneck network"
 	echo ---------------------------------------------------------------------
 	steps/nnet2/train_tanh_bottleneck.sh \
-	    --stage $bnf_train_stage --num-jobs-nnet 4 \
+	    --stage $bnf_train_stage --num-jobs-nnet $nj \
 	    --num-threads 10 --mix-up 5000 --max-change 40 \
 	    --minibatch-size 512 \
 	    --initial-learning-rate 0.005 \
@@ -55,14 +56,14 @@ if [ $stage -le 2 ]; then
 	mkdir -p data_bnf
 	# put the archives in param_bnf/.
 	steps/nnet2/dump_bottleneck_features.sh --cmd "$train_cmd" \
-	      --transform-dir $align_dir $train_data_dir $data_train_bnf $bnf_exp_dir param_bnf $exp_dir/dump_bnf
+	      --nj $nj --transform-dir $align_dir $train_data_dir $data_train_bnf $bnf_exp_dir param_bnf $exp_dir/dump_bnf
 	touch $data_train_bnf/.done
     fi
 
-    steps/nnet2/dump_bottleneck_features.sh --nj 8 \
+    steps/nnet2/dump_bottleneck_features.sh --nj $nj \
 	      --transform-dir $test_align_dir $test_data_dir $data_test_bnf $bnf_exp_dir param_bnf $exp_dir/dump_bnf
 
-    steps/nnet2/dump_bottleneck_features.sh --nj 10 \
+    steps/nnet2/dump_bottleneck_features.sh --nj $nj \
 	      --transform-dir $dev_align_dir $dev_data_dir $data_dev_bnf $bnf_exp_dir param_bnf $exp_dir/dump_bnf
 
 # [ ! -d data/test_eval92 ] && echo "No such directory data/test_eval92" && exit 1;
@@ -83,7 +84,7 @@ if [ $stage -le 3 ]; then
 	      --transform-dir $align_dir  data_bnf/train_sat $train_data_dir \
 	      $model_dir $exp_dir/make_fmllr_feats/log param_bnf/
 
-	steps/append_feats.sh --cmd "$train_cmd" --nj 4 \
+	steps/append_feats.sh --cmd "$train_cmd" --nj $nj \
 	      $data_train_bnf data_bnf/train_sat data_bnf/train \
 	      $exp_dir/append_feats/log param_bnf/
 	steps/compute_cmvn_stats.sh --fake data_bnf/train $exp_dir/make_fmllr_feats param_bnf
@@ -93,16 +94,16 @@ if [ $stage -le 3 ]; then
     fi
     # preparing Bottleneck features for test and dev
     steps/nnet/make_fmllr_feats.sh \
-	--nj 8 --transform-dir $test_align_dir data_bnf/test_sat $test_data_dir \
+	--nj $nj --transform-dir $test_align_dir data_bnf/test_sat $test_data_dir \
 	$align_dir $exp_dir/make_fmllr_feats/log param_bnf/
     steps/nnet/make_fmllr_feats.sh \
-	--nj 10 --transform-dir $dev_align_dir data_bnf/dev_sat $dev_data_dir \
+	--nj $nj --transform-dir $dev_align_dir data_bnf/dev_sat $dev_data_dir \
 	$align_dir $exp_dir/make_fmllr_feats/log param_bnf/
 
-    steps/append_feats.sh --nj 4 \
+    steps/append_feats.sh --nj $nj \
 			  $data_test_bnf data_bnf/test_sat data_bnf/test \
 			  $exp_dir/append_feats/log param_bnf/
-    steps/append_feats.sh --nj 4 \
+    steps/append_feats.sh --nj $nj \
 			  $data_dev_bnf data_bnf/dev_sat data_bnf/dev \
 			  $exp_dir/append_feats/log param_bnf/
 
