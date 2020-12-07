@@ -190,10 +190,11 @@ if [ ${stage} -le 3 ]; then
 
     utils/mkgraph.sh data/lang_test_bg exp/mono exp/mono/graph
 
-    steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" \
+    # --skip-scoring true enables iterative decoding without local/score.sh
+    steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" --skip-scoring true \
 		    exp/mono/graph data/dev_mb exp/mono/decode_dev
 
-    steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" \
+    steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" --skip-scoring true \
 		    exp/mono/graph data/test_mb exp/mono/decode_test
 
 fi
@@ -212,10 +213,10 @@ if [ ${stage} -le 4 ]; then
 
     utils/mkgraph.sh data/lang_test_bg exp/tri1 exp/tri1/graph
 
-    steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" \
+    steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" --skip-scoring true \
 		    exp/tri1/graph data/dev_mb exp/tri1/decode_dev
 
-    steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" \
+    steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" --skip-scoring true \
 		    exp/tri1/graph data/test_mb exp/tri1/decode_test
 fi
 
@@ -233,10 +234,10 @@ if [ ${stage} -le 5 ]; then
 
     utils/mkgraph.sh data/lang_test_bg exp/tri2 exp/tri2/graph
 
-    steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" \
+    steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" --skip-scoring true \
 		    exp/tri2/graph data/dev_mb exp/tri2/decode_dev
 
-    steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" \
+    steps/decode.sh --nj "$decode_nj" --cmd "$decode_cmd" --skip-scoring true \
 		    exp/tri2/graph data/test_mb exp/tri2/decode_test
 fi
 
@@ -255,10 +256,10 @@ if [ ${stage} -le 6 ]; then
 
     utils/mkgraph.sh data/lang_test_bg exp/tri3 exp/tri3/graph
 
-    steps/decode_fmllr.sh --nj "$decode_nj" --cmd "$decode_cmd" \
+    steps/decode_fmllr.sh --nj "$decode_nj" --cmd "$decode_cmd" --skip-scoring true \
 			  exp/tri3/graph data/dev_mb exp/tri3/decode_dev
 
-    steps/decode_fmllr.sh --nj "$decode_nj" --cmd "$decode_cmd" \
+    steps/decode_fmllr.sh --nj "$decode_nj" --cmd "$decode_cmd" --skip-scoring true \
 			  exp/tri3/graph data/test_mb exp/tri3/decode_test
 
     echo ============================================================================
