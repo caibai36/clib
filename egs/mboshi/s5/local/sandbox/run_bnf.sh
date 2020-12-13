@@ -81,7 +81,7 @@ fi
 if [ $stage -le 3 ]; then
     if [ ! data_bnf/train/.done -nt $data_train_bnf/.done ]; then
 	steps/nnet/make_fmllr_feats.sh --cmd "$train_cmd --max-jobs-run 10" \
-	      --transform-dir $align_dir  data_bnf/train_sat $train_data_dir \
+	      --nj $nj --transform-dir $align_dir  data_bnf/train_sat $train_data_dir \
 	      $model_dir $exp_dir/make_fmllr_feats/log param_bnf/
 
 	steps/append_feats.sh --cmd "$train_cmd" --nj $nj \
