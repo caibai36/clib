@@ -13,20 +13,15 @@ set -uo pipefail
 # general configuration
 stage=8  # start from 0 if you need to start from data preparation
 
-feat1_name=MFCC40
-feat2_name=BNF99
-
-feat_train=data/train_si284/feats.scp
-feat_dev=data/test_dev93/feats.scp
-feat_test=data/test_eval92/feats.scp
+feat_name=BNF99
 
 file=param_bnf;if [[ -L "$file" && -d "$file" ]]; then rm -rf $file; fi # $file is a symlink to a directory; safe to remove
 ln -s /project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s5.1/param_bnf param_bnf # a feature stored as param_bnf/raw_bnfeat_train_si284.1.ark
-feat_train2=/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s5.1/data_bnf/train_bnf/feats.scp
-feat_dev2=/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s5.1/data_bnf/dev93_bnf/feats.scp
-feat_test2=/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s5.1/data_bnf/eval92_bnf/feats.scp
+feat_train=/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s5.1/data_bnf/train_bnf/feats.scp
+feat_dev=/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s5.1/data_bnf/dev93_bnf/feats.scp
+feat_test=/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s5.1/data_bnf/eval92_bnf/feats.scp
 
-feat=concat_${feat1_name}_${feat2_name}
+feat=single_${feat_name}
 root=exp/concatfeat2asr/asr_wsj1_${feat}
 
 # # setting for DPGMM clustering
@@ -85,15 +80,10 @@ if [ $stage -le 1 ]; then
     cp -r data/test_dev93 $data_dir/dev
     cp -r data/test_eval92 $data_dir/test
 
-    date
-    python local/concatfeat2asrdata.py \
-	   --feat_train=$feat_train \
-	   --feat_dev=$feat_dev \
-	   --feat_test=$feat_test \
-	   --feat_train2=$feat_train2 \
-	   --feat_dev2=$feat_dev2 \
-	   --feat_test2=$feat_test2 \
-	   --result=$data_dir |& tee exp/logs/run_$(basename ${root}).log
+    cp $feat_train $data_dir/train
+    cp $feat_dev $data_dir/dev
+    cp $feat_test $data_dir/test
+
     date
     head -2 ${root}/data/*/feats.scp
 fi
