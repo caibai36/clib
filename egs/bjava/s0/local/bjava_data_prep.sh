@@ -10,12 +10,15 @@ bjava=/project/nakamura-lab09/Share/Corpora/Speech/multi/Additional_OpenASR2020/
 sph2pipe=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/tools/sph2pipe_v2.5/sph2pipe
 
 morethanNwords=2 # text of each utterance has more than N words (end point included).
-train_begin=2 # all the data between line number from train_begin to train_end is the training set (end points both included; indexing starting at one)
+# all the data between line number from train_begin to train_end is the training set (end points both included; indexing starting at one)
+# be careful when you use two channels, please take twice the sentences number of audios
+train_begin=2
 train_end=20000
 dev_begin=2
 dev_end=3
 test_begin=1
 test_end=2
+single_channel=true # one channel or two; phone conversation might have more than one channels.
 
 # Parse the options. (eg. ./run.sh --stage 1)
 # Note that the options should be defined as shell variable before parsing
@@ -53,11 +56,24 @@ if [ $stage -le 1 ]; then
 	echo "${uttid} ${aud_path}"  >> data/all/wav_all.scp
 	# if [ $num_fields -ge ${morethanNwords} ]; then
 	if [ $num_fields -ge ${morethanNwords} ] && (echo $trans | grep -vq "<"); then
-	    # echo "${uttid} ${sph2pipe} -f wav ${aud_path} |" >> data/all/wav.scp
-	    echo "${uttid} ${sph2pipe} -f wav -p -c 1 ${aud_path} |" >> data/all/wav.scp # We use one channel of phone conversation, it is alternative to use two
-	    echo "${uttid} ${trans}" >> data/all/text
-	    echo "${uttid} ${gender}" >> data/all/utt2gender
-	    echo "${uttid} ${speaker}" >> data/all/utt2spk
+	    if $single_channel;
+	    then
+		echo "${uttid} ${sph2pipe} -f wav -p -c 1 ${aud_path} |" >> data/all/wav.scp # We use one channel of phone conversation, it is alternative to use two
+		echo "${uttid} ${trans}" >> data/all/text
+		echo "${uttid} ${gender}" >> data/all/utt2gender
+		echo "${uttid} ${speaker}" >> data/all/utt2spk
+	    else
+		# use two channels
+		echo "${uttid}-A ${sph2pipe} -f wav -p -c 1 ${aud_path} |" >> data/all/wav.scp
+		echo "${uttid}-A ${trans}" >> data/all/text
+		echo "${uttid}-A ${gender}" >> data/all/utt2gender
+		echo "${uttid}-A ${speaker}" >> data/all/utt2spk
+
+		echo "${uttid}-B ${sph2pipe} -f wav -p -c 2 ${aud_path} |" >> data/all/wav.scp
+		echo "${uttid}-B ${trans}" >> data/all/text
+		echo "${uttid}-B ${gender}" >> data/all/utt2gender
+		echo "${uttid}-B ${speaker}" >> data/all/utt2spk
+	    fi
 	fi
     done
 fi
