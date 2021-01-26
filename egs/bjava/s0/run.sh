@@ -65,10 +65,10 @@ if [ ${stage} -le 1 ]; then
 			       --bjava $bjava \
 			       --sph2pipe $sph2pipe \
 			       --morethanNwords 2 \
-			       --test_begin 1  \
-			       --test_end 217  \
-			       --dev_begin 218  \
-			       --dev_end 411 \
+			       --dev_begin 1  \
+			       --dev_end 217  \
+			       --test_begin 218  \
+			       --test_end 411 \
 			       --train_begin 412 \
 			       --train_end 2000000000
     date
