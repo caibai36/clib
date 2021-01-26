@@ -1,0 +1,28 @@
+{
+    "seed": 2020,
+    "gpu": "0",
+    "data_config": "conf/data/test_small/data.yaml",
+    "cutoff": -1,
+    "const_token": {
+        "unk": "<unk>",
+        "pad": "<pad>",
+        "sos": "<sos>",
+        "eos": "<sos>"
+    },
+    "batch_size": 3,
+    "model_config": "conf/model/test_small/model.yaml",
+    "pretrained_model": "",
+    "label_smoothing": 0,
+    "optim": "Adam",
+    "lr": 0.001,
+    "reducelr": {
+        "factor": 0.5,
+        "patience": 3
+    },
+    "num_epochs": 2001,
+    "grad_clip": 20,
+    "save_interval": 1,
+    "result": "tmp_result",
+    "overwrite": true,
+    "exit": true
+}
