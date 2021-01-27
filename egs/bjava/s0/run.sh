@@ -10,6 +10,7 @@ set -uo pipefail
 # Prepare some basic config files of kaldi.
 ./local/kaldi_conf.sh # CHECKME
 echo "--sample-frequency=8000" >> conf/mfcc.conf
+
 # Note: cmd.sh, path.sh are created by kaldi_conf.sh
 . cmd.sh
 . path.sh
@@ -21,7 +22,6 @@ mfcc_config=conf/mfcc.conf # 13 dimensional mfcc feature of kaldi default settin
 
 # Data and model options
 run=run0
-feat=mfcc39 # or mel80
 dataset_name=bjava
 # data_name=default
 model_name=EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp
@@ -53,6 +53,9 @@ beam_size=10
 # the directory of timit
 bjava=/project/nakamura-lab09/Share/Corpora/Speech/multi/Additional_OpenASR2020/javanese/IARPA_BABEL_OP3_402_LDC2020S07/package/IARPA_BABEL_OP3_402
 sph2pipe=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/tools/sph2pipe_v2.5/sph2pipe # convert sph file to wav file
+
+feat=mfcc39 # or mel80
+root=. # ASR located at $PWD/$root
 
 if [ ${stage} -le 1 ]; then
     date
@@ -129,7 +132,7 @@ if [ ${stage} -le 3 ]; then
 fi
 
 if [ ${stage} -le 4 ]; then
-    echo "Making json files"
+    echo "Making json files..."
     # get scp files (each line as 'uttid scp_content'), then merge them into utts.json.
     #     (eg. num_frames.scp, feat_dim.scp, num_tokens.scp, tokenid.scp, vocab_size.scp, feat.scp, token.scp and etc.)
     # If you want to add more information, just create more scp files in data2json.sh
@@ -143,11 +146,20 @@ if [ ${stage} -le 4 ]; then
     done
 fi
 
+if [ $stage -le 5 ]; then
+    echo "Making data configs..."
+    mkdir -p ${root}/conf
+    if [ -f ${root}/data/train/utts.json ]; then echo train: \'${PWD}/${root}/data/train/utts.json\'; fi > ${root}/conf/data_${feat}.yaml
+    if [ -f ${root}/data/dev/utts.json ]; then echo dev: \'${PWD}/${root}/data/dev/utts.json\'; fi >> ${root}/conf/data_${feat}.yaml
+    if [ -f ${root}/data/test/utts.json ]; then echo test: \'${PWD}/${root}/data/test/utts.json\'; fi >> ${root}/conf/data_${feat}.yaml
+    echo "token2id: '$PWD/data/lang_1char/train_units.txt'" >> ${root}/conf/data_${feat}.yaml
+fi
+
 if [ ${stage} -le 6 ]; then
     echo "Training ASR..."
 
     for data_name in default; do
-	data_config=clib/conf/data/${dataset_name}/${data_name}/asr_tts/data_${feat}.yaml # CHECKME (you can change the data_config to the setting of your prepared dataset)
+	data_config=${root}/conf/data_${feat}.yaml # CHECKME (you can change the data_config to the setting of your prepared dataset)
 	model_config=clib/conf/model/asr/seq2seq/${model_name}.yaml
 
 	reducelr={\"factor\":$factor,\"patience\":$patience}
@@ -182,7 +194,7 @@ if [ ${stage} -le 7 ]; then
 	exp_setting=${feat}_batchsize${batch_size}_cutoff${cutoff}_labelsmoothing${label_smoothing}_lr${lr}_gradclip${grad_clip}_factor${factor}_patience${patience}
 	model_path=${exp_dir}/${dataset_name}/${data_name}/${model_name}-${run}/${exp_setting}/train/best_model.mdl
 
-	data_config=clib/conf/data/${dataset_name}/${data_name}/asr_tts/data_${feat}.yaml
+	data_config=${root}/conf/data_${feat}.yaml
 	result_dir=${model_path%/train/*}/eval/beamsize${beam_size} # ${string%substring} # Deletes shortest match of $substring from back of $string.
 
 	python local/scripts/eval_asr.py \
