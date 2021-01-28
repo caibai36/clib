@@ -10,6 +10,7 @@ set -uo pipefail
 # Prepare some basic config files of kaldi.
 ./local/kaldi_conf.sh # CHECKME
 echo "--sample-frequency=8000" >> conf/mfcc.conf
+cp ../../wsj/s0/conf/{str_rep.txt,chars_del.txt,chars_rep.txt} conf # text cleaning
 
 # Note: cmd.sh, path.sh are created by kaldi_conf.sh
 . cmd.sh
