@@ -19,6 +19,7 @@ dev_end=3
 test_begin=1
 test_end=2
 single_channel=true # one channel or two; phone conversation might have more than one channels.
+testdata_nonoverlap=false # test data has no overlap with the training and develpment data in text sentences
 
 # Parse the options. (eg. ./run.sh --stage 1)
 # Note that the options should be defined as shell variable before parsing
@@ -97,6 +98,13 @@ if [ $stage -le 3 ]; then
 	cat $file | awk -v dev_begin=$dev_begin -v dev_end=$dev_end 'NR >= dev_begin && NR <= dev_end' > data/dev/$(basename $file)
 	cat $file | awk -v test_begin=$test_begin -v test_end=$test_end 'NR >= test_begin && NR <= test_end' > data/test/$(basename $file)
     done
+
+
+    if $testdata_nonoverlap; then
+	echo "Processing test dataset to have nonoverlapping sentences with texts of training and development dataset..."
+	mv data/test data/test.bak
+	python local/scripts/data_diffset_text.py --original data/test.bak --remove data/train/text data/dev/text --result data/test
+    fi
 
     for dataset in train dev test; do
 	utils/utt2spk_to_spk2utt.pl data/${dataset}/utt2spk > data/${dataset}/spk2utt

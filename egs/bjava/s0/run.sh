@@ -65,10 +65,12 @@ if [ ${stage} -le 1 ]; then
     # train_begin: all the data between line number from train_begin to train_end is the training set (end points both included; indexing starting at one)
     # test_set utt1-utt200; dev_set utt201-utt400; train_set utt401-end.
     # the division considers non-overlapping of speakers between any two datasets.
+    # the division considers non-overlapping of sentences in the test data w.r.t training and deveolpment set
     ./local/bjava_data_prep.sh --stage 0 \
 			       --bjava $bjava \
 			       --sph2pipe $sph2pipe \
 			       --morethanNwords 2 \
+			       --testdata_nonoverlap true \
 			       --dev_begin 1  \
 			       --dev_end 217  \
 			       --test_begin 218  \
