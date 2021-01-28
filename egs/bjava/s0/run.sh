@@ -62,21 +62,21 @@ if [ ${stage} -le 1 ]; then
     date
     echo "Data preparation..."
     # morethanNwords: text of each utterance has more than N words (end point included).
-    # train_begin: all the data between line number from train_begin to train_end is the training set (end points both included; indexing starting at one)
-    # test_set utt1-utt200; dev_set utt201-utt400; train_set utt401-end.
+    # dev_set utt1-utt200; test_set utt201-utt400; train_set utt401-end.
     # the division considers non-overlapping of speakers between any two datasets.
+    # train_begin: all the data between line number from train_begin to train_end is the training set (end points both included; indexing starting at one).
     # the division considers non-overlapping of sentences in the test data w.r.t training and deveolpment set
     ./local/bjava_data_prep.sh --stage 0 \
 			       --bjava $bjava \
 			       --sph2pipe $sph2pipe \
 			       --morethanNwords 2 \
-			       --testdata_nonoverlap true \
 			       --dev_begin 1  \
 			       --dev_end 217  \
 			       --test_begin 218  \
 			       --test_end 411 \
 			       --train_begin 412 \
-			       --train_end 2000000000
+			       --train_end 2000000000 \
+			       --testdata_nonoverlap true
     date
 fi
 
