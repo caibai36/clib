@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Implemented by bin-wu at 18:40 on 2 Feb 2021
+
 # Set bash to 'debug' mode, it will exit on :
 # -e 'error', -u 'undefined variable', -o ... 'error in pipeline', -x 'print commands',
 set -uo pipefail
