@@ -12,7 +12,7 @@ KALDI_ROOT=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi  # CHECKME
 sed -e "1 c export KALDI_ROOT=$KALDI_ROOT" $KALDI_ROOT/egs/wsj/s5/path.sh > path.sh
 
 # Set cmd.sh: contains different commands.
-echo 'export train_cmd="run.pl --mem 4G"\nexport decode_cmd="run.pl --mem 4G"\nexport cuda_cmd="run.pl --gpu 1"' > cmd.sh
+echo -e 'export train_cmd="run.pl --mem 4G"\nexport decode_cmd="run.pl --mem 4G"\nexport cuda_cmd="run.pl --gpu 1"' > cmd.sh
 
 # Create symbolic links to essential scripts to build kaldi system.
 # steps: contains essential scripts for creating an ASR system
