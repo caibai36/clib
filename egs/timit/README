@@ -1,3 +1,3 @@
 s1 and zr0 the main workspace for encoder-decoder attentional asr
-s0 default kaldi scripts with timit COMPLETE test set with bottleneck feature extraction
+s0 default kaldi scripts with timit COMPLETE test set with bottleneck feature extraction (99 dim)
 s5 the totally kaldi default timit CORE test set (be careful)
