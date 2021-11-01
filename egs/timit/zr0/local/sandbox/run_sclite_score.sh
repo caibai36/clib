@@ -22,3 +22,8 @@ tag=bnf
 ref=exp/tmp/timit/default/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/single_BNF42_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_word.txt
 hyp=exp/tmp/timit/default/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/single_BNF42_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_word.txt
 ./local/sclite_score.sh  --tag $tag --ref $ref --hyp $hyp
+
+tag=mfcc_hybrid_bnf
+ref=exp/tmp_asr_general_rnnbnf_aseed/aseed2021.gpuauto.bs32.cf1600.ls0.05.lr0.001.ne70.gp5.factor0.5.pat3.si1.searchbeam.mt250.beamsize.10/timit/default/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/default_asr_general_concat_mfccrnn_bnf_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_word.txt
+hyp=exp/tmp_asr_general_rnnbnf_aseed/aseed2021.gpuauto.bs32.cf1600.ls0.05.lr0.001.ne70.gp5.factor0.5.pat3.si1.searchbeam.mt250.beamsize.10/timit/default/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/default_asr_general_concat_mfccrnn_bnf_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_word.txt
+./local/sclite_score.sh  --tag $tag --ref $ref --hyp $hyp
