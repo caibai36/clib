@@ -12,12 +12,9 @@ chmod +x local/sandbox/extract_wav.sh
 ./local/sandbox/extract_wav.sh
 
 # cp -r exp/data/ /project/nakamura-lab08/Work/bin-wu/share/data/javanese
-# mkdir -p exp/data/train exp/data/dev exp/data/test
-# head data/train/wav.scp | sed -r "s:(\w+) (.*) \|:\2 > exp/data/train/\1.wav:g" > local/sandbox/extract_wav.sh
-# head data/dev/wav.scp | sed -r "s:(\w+) (.*) \|:\2 > exp/data/dev/\1.wav:g" >> local/sandbox/extract_wav.sh
-# head data/test/wav.scp | sed -r "s:(\w+) (.*) \|:\2 > exp/data/test/\1.wav:g" >> local/sandbox/extract_wav.sh
-# chmod +x local/sandbox/extract_wav.sh
-# ./local/sandbox/extract_wav.sh
+# cat data/train/wav.scp | sed -r "s:(\w+) (.*) \|:\1 /project/nakamura-lab08/Work/bin-wu/share/data/javanese/train/\1.wav:g"  > data/train/raw_wav.scp
+# cat data/dev/wav.scp | sed -r "s:(\w+) (.*) \|:\1 /project/nakamura-lab08/Work/bin-wu/share/data/javanese/dev/\1.wav:g"  > data/dev/raw_wav.scp
+# cat data/test/wav.scp | sed -r "s:(\w+) (.*) \|:\1 /project/nakamura-lab08/Work/bin-wu/share/data/javanese/test/\1.wav:g"  > data/test/raw_wav.scp
 
 # (mlp4) [bin-wu@ahctitan05 s0]$(wsj) cp data/train/segments /project/nakamura-lab08/Work/bin-wu/share/data/javanese/segments/train/
 # (mlp4) [bin-wu@ahctitan05 s0]$(wsj) cp data/dev/segments /project/nakamura-lab08/Work/bin-wu/share/data/javanese/segments/dev
