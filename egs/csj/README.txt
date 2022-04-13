@@ -1,3 +1,6 @@
+s0 building attentional ASR
+s5 following kaldi scipts
+
 About the Corpus of Spontaneous Japanese:
 The Corpus of Spontaneous Japanese (CSJ) is a database of spoken
 Japanese developed by the Japan's national priority area research
