@@ -1,0 +1,11 @@
+---
+class:
+    "<class '__main__.EncRNNDecRNNAtt'>"
+att_config:
+    type: mlp
+dec_embedding_dropout: 0.25
+dec_rnn_sizes: [512]
+dec_rnn_dropout: 0.25
+enc_rnn_sizes: [1024, 1024, 1024, 1024, 1024]
+enc_rnn_subsampling: [True, True, True, True, True]
+enc_rnn_subsampling_type: 'drop'
