@@ -1,0 +1,9 @@
+This is corpus of telephone conversations of Javanese language.
+The corpus contains background noise sometime.
+
+package: IARPA_BABEL_OP3_402_LDC2020S07
+website: https://catalog.ldc.upenn.edu/LDC2020S07
+
+s0: asr with single channel
+bak/s0.1: asr with two channels
+bak/s0.2: asr with single channel, swapping dev and test data
