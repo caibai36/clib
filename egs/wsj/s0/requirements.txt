@@ -1,0 +1,15 @@
+# pip install -r requirements.txt
+# librosa and numba version numbers should match
+# torch and numpy version numbers are not necessary
+numpy
+scipy
+matplotlib
+torch
+pyyaml
+tabulate
+tqdm
+GPUtil
+kaldi_io
+tensorboard
+librosa==0.7.2
+numba==0.48
