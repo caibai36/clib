@@ -1,0 +1,9 @@
+mkdir -p exp/mt/default
+cat exp/tmp/mboshi/default/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc39_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_word.txt | cut -d" " -f2- | head > exp/mt/default/ref.txt
+cat exp/tmp/mboshi/default/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc39_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_word.txt | cut -d" " -f2- | head > exp/mt/default/hypo.txt
+exp/mt/multi-bleu.perl -lc exp/mt/default/ref.txt  < exp/mt/default/hypo.txt
+
+mkdir -p exp/mt/default_fr
+cat exp/tmp/mboshi/default_fr/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc39_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_word.txt | cut -d" " -f2- | head > exp/mt/default_fr/ref.txt
+cat exp/tmp/mboshi/default_fr/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc39_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_word.txt | cut -d" " -f2- | head > exp/mt/default_fr/hypo.txt
+exp/mt/multi-bleu.perl -lc exp/mt/default_fr/ref.txt  < exp/mt/default_fr/hypo.txt
