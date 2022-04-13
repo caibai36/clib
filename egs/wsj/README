@@ -1,3 +1,4 @@
 s0 attentional asr (lastest codes are here by default)
 s5 mfcc40 default setting
-s5.1 mfcc13 default setting with bottleneck features
+s5.1 mfcc13 default setting with bottleneck features of 99 dim
+bnf42  extracting bnf feature of 42 dim
