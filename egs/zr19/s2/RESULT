@@ -1,0 +1,11 @@
+# mkdir -p exp/results/feat
+# head eval/abx/result/exp/feat/*/kl/abx.txt | awk 'BEGIN {printf "Method\tABX_average\n"} /abx\.txt/ {printf gensub(/.*\/(.*)\/(.*).post\/(cos|edit|kl)\/abx\.txt/, "\\2_\\3", "g", $2)"\t"} /average/ {print $5"\t"}' | sort -k1.27,1.28 -k1.36,1.37g | tee exp/results/feat/abx_kl.txt
+# head eval/abx/result/exp/feat/*/cos/abx.txt | awk 'BEGIN {printf "Method\tABX_average\n"} /abx\.txt/ {printf gensub(/.*\/(.*)\/(.*).post\/(cos|edit|kl)\/abx\.txt/, "\\2_\\3", "g", $2)"\t"} /average/ {print $5"\t"}' | sort -k1.27,1.28 -k1.36,1.37g | tee exp/results/feat/abx_cos.txt
+# head eval/abx/result/exp/feat/*/edit/abx.txt | awk 'BEGIN {printf "Method\tABX_average\n"} /abx\.txt/ {printf gensub(/.*\/(.*)\/(.*).post\/(cos|edit|kl)\/abx\.txt/, "\\2_\\3", "g", $2)"\t"} /average/ {print $5"\t"}' | sort -k1.27,1.28 -k1.36,1.37g | tee exp/results/feat/abx_edit.txt
+# head eval/abx/result/exp/feat/*/kl/bit.txt | awk 'BEGIN {printf "Method\tBitrate\n"} /bit\.txt/ {printf $2 "\t"} /bits/ {print $4"\t"}' | tee exp/results/feat/bit.txt
+
+mkdir -p exp/results/dpgmm
+head eval/abx/result/exp/dpgmm/*/kl/abx.txt | awk 'BEGIN {printf "Method\tABX_average\n"} /abx\.txt/ {printf gensub(/.*\/(.*)\/(.*).post\/(cos|edit|kl)\/abx\.txt/, "\\2_\\3", "g", $2)"\t"} /average/ {print $5"\t"}' | sort -k1.27,1.28 -k1.36,1.37g | tee exp/results/dpgmm/abx_kl.txt
+head eval/abx/result/exp/dpgmm/*/cos/abx.txt | awk 'BEGIN {printf "Method\tABX_average\n"} /abx\.txt/ {printf gensub(/.*\/(.*)\/(.*).post\/(cos|edit|kl)\/abx\.txt/, "\\2_\\3", "g", $2)"\t"} /average/ {print $5"\t"}' | sort -k1.27,1.28 -k1.36,1.37g | tee exp/results/dpgmm/abx_cos.txt
+head eval/abx/result/exp/dpgmm/*/edit/abx.txt | awk 'BEGIN {printf "Method\tABX_average\n"} /abx\.txt/ {printf gensub(/.*\/(.*)\/(.*).post\/(cos|edit|kl)\/abx\.txt/, "\\2_\\3", "g", $2)"\t"} /average/ {print $5"\t"}' | sort -k1.27,1.28 -k1.36,1.37g | tee exp/results/dpgmm/abx_edit.txt
+head eval/abx/result/exp/dpgmm/*/kl/bit.txt | awk 'BEGIN {printf "Method\tBitrate\n"} /bit\.txt/ {printf $2 "\t"} /bits/ {print $4"\t"}' | tee exp/results/dpgmm/bit.txt
