@@ -132,16 +132,16 @@ if $bnf_feat_extract; then
 fi
 
 if $run_dpgmm_asr; then
-    # Run DPGMM ASR after feature extraction
-    ./local/sandbox/asr_general/run_dpgmm2asr.sh --stage 2 `# run DPGMM ASR assuming DPGMM feature extracted` \
-                                          --tag ${tag} --dataset_name ${dataset_name} --data_name ${data_name} --feat_name ${feat_name} \
-                                          --train_data ${train_data} --dev_data ${dev_data} --test_data ${test_data} --train_set ${train_set} \
-					  --seed ${seed} --K0 ${K0} \
-					  --asr_seed ${asr_seed} --gpu ${gpu} --batch_size ${batch_size} --cutoff ${cutoff} --label_smoothing ${label_smoothing} `# config asr`\
-					  --lr ${lr} --num_epochs ${num_epochs} --grad_clip ${grad_clip} --factor ${factor} --patience ${patience} --save_interval ${save_interval} `# train asr`\
-					  --set_uttid ${set_uttid} --search ${search} --max_target ${max_target} --beam_size ${beam_size} `# eval asr`\
-					  --model_name ${model_name} \
-					  --exp_dir ${exp_dir}
+    # # Run DPGMM ASR after feature extraction
+    # ./local/sandbox/asr_general/run_dpgmm2asr.sh --stage 2 `# run DPGMM ASR assuming DPGMM feature extracted` \
+    #                                       --tag ${tag} --dataset_name ${dataset_name} --data_name ${data_name} --feat_name ${feat_name} \
+    #                                       --train_data ${train_data} --dev_data ${dev_data} --test_data ${test_data} --train_set ${train_set} \
+    # 					  --seed ${seed} --K0 ${K0} \
+    # 					  --asr_seed ${asr_seed} --gpu ${gpu} --batch_size ${batch_size} --cutoff ${cutoff} --label_smoothing ${label_smoothing} `# config asr`\
+    # 					  --lr ${lr} --num_epochs ${num_epochs} --grad_clip ${grad_clip} --factor ${factor} --patience ${patience} --save_interval ${save_interval} `# train asr`\
+    # 					  --set_uttid ${set_uttid} --search ${search} --max_target ${max_target} --beam_size ${beam_size} `# eval asr`\
+    # 					  --model_name ${model_name} \
+    # 					  --exp_dir ${exp_dir}
 
     dpgmm_root=exp/dpgmm2asr/asr_${data_name}_${tag}_dpgmm_seed${seed}_K${K0}_from_${feat_name}
     dpgmm_train=$dpgmm_root/data/train/feats.scp

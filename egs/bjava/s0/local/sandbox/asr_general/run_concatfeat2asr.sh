@@ -79,6 +79,7 @@ if [ $stage -le 1 ]; then
     if [ -f $root/data/dev/feats.scp ]; then cp $root/data/dev/feats.scp $root/dev_feats.scp; fi
     if [ -f $root/data/test/feats.scp ]; then cp $root/data/test/feats.scp $root/test_feats.scp; fi
 
+    # OK for running a single experiment, problem when running several experiments at the same time
     rm -rf $data_dir
     mkdir -p $data_dir
     
