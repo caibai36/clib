@@ -5,13 +5,13 @@ import io
 import sys
 
 def main():
-    parser = argparse.ArgumentParser(description="replace some strings in corpus",
+    parser = argparse.ArgumentParser(description="replace or remove certain strings from utf8 streams from text or stdin",
                                      epilog='python cutils/replace_str.py --text_in=cutils/tests/data/dump/text.scp --rep_in=cutils/tests/data/str_rep')
-    parser.add_argument("--text_in", type=str, default="", help="the input text")
-    parser.add_argument("--text_out", type=str, default="", help="the output text")
-    parser.add_argument("--rep_in", type=str, default="", help="the string replacement file, default separator is :")
-    parser.add_argument("--sep", type=str, default=":", help="the separator of the string replacement file")
-    parser.add_argument("--str2lower", action='store_true', default=False, help="convert the characters of string to lower case before replacement and after replacement")
+    parser.add_argument("--text_in", type=str, default="", help="the input text or the standard input")
+    parser.add_argument("--text_out", type=str, default="", help="the output text or the standard output")
+    parser.add_argument("--rep_in", type=str, required=True, default="", help="the string replacement file. Each line with formats of <oldStr>:<newStr> or <delStr>: ")
+    parser.add_argument("--sep", type=str, default=":", help="the separator of the string replacement file. The default separator is :")
+    parser.add_argument("--str2lower", action='store_true', default=False, help="convert characters of string to lower case before replacement and after replacement")
     
     args = parser.parse_args()
 
