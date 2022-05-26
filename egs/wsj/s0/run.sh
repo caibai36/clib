@@ -79,7 +79,7 @@ if [ ${stage} -le 2 ]; then
 
     for dataset in test_eval92 train_si284 train_si84 test_dev93; do
     	x=${dataset}_mel80
-    	cp -rf data/${dataset} data/${x}
+	cp -r data/${dataset}/* data/${x} # Fail to overwrite with command `cp -r data/${dataset} data/${x}'
     	./local/scripts/feat_extract_taco.sh --dataset ${x} --cmvn true --mel_conf $mel_config  # 80-dim mel
     done
     date
