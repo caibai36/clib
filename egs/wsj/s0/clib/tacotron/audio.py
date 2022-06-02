@@ -81,6 +81,8 @@ class TacotronAudio() :
         ----------
         path: the path of the audio
         """
+        # Normalize to 16-bit range
+        # see: https://simpleaudio.readthedocs.io/en/latest/tutorial.html
         wav *= 32767 / max(0.01, np.max(np.abs(wav)))
         try :
             librosa.output.write_wav(path, wav.astype(np.int16), self.config['sample_rate'])
