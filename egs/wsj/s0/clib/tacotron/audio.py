@@ -76,12 +76,13 @@ class TacotronAudio() :
     def save_wav(self, wav, path) :
         """
         save a waveform data to an audio file at path.
+        The waveform is normalized into the maximum amplitude.
 
         Parameters
         ----------
         path: the path of the audio
         """
-        # Normalize to 16-bit range
+        # Normalize the audio to the maximum amplitude.
         # see: https://simpleaudio.readthedocs.io/en/latest/tutorial.html
         wav *= 32767 / max(0.01, np.max(np.abs(wav)))
         try :
@@ -176,7 +177,7 @@ class TacotronAudio() :
 
     def _build_mel_basis(self):
         n_fft = (self.config['num_freq'] - 1) * 2
-        return librosa.filters.mel(self.config['sample_rate'], n_fft, n_mels=self.config['num_mels'])
+        return librosa.filters.mel(sr=self.config['sample_rate'], n_fft=n_fft, n_mels=self.config['num_mels'])
 
     def _amp_to_db(self, x):
         return 20 * np.log10(np.maximum(1e-5, x))
