@@ -6,7 +6,7 @@ import math
 import warnings
 from scipy import signal
 
-# Modified from the class TacotronHelper of the speech chain by andros
+# Modified from the original implementation at: https://github.com/keithito/tacotron/blob/master/util/audio.py
 class TacotronAudio() :
     def __init__(self, config={"num_mels":80,
                                "sample_rate":16000,
@@ -180,7 +180,7 @@ class TacotronAudio() :
         return librosa.filters.mel(sr=self.config['sample_rate'], n_fft=n_fft, n_mels=self.config['num_mels'])
 
     def _amp_to_db(self, x):
-        return 20 * np.log10(np.maximum(1e-5, x))
+        return 20 * np.log10(np.maximum(1e-5, x)) # 10 * np.log10(amplitude ** 2) = 10 * np.log10(power)
 
     def _db_to_amp(self, x):
         return np.power(10.0, x * 0.05)
