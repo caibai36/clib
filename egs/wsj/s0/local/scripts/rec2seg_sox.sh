@@ -33,6 +33,8 @@ wav_scp=$1
 segments=$2
 output_dir=$3
 
+mkdir -p $output_dir
+
 declare -A recid2path
 
 # Read wav.scp

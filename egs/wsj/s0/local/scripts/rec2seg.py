@@ -90,7 +90,7 @@ parser = argparse.ArgumentParser(description="Split long recordings into segment
 wav_scp = parser.add_argument('--wav_scp', type=str, default="data/all/tmp/wav_all_test.scp", help="the Kaldi `wav.scp' file with line format of <recording_id> <recording_path>")
 segments = parser.add_argument('--segments', type=str, default="data/all/tmp/segments_all_test", help="the Kaldi `segments' file with line format of <utterance_id> <recording_id> <begin_sec> <end_sec>")
 output_dir = parser.add_argument('--output_dir', type=str, default="data/all/tmp/", help="the output directory to store the segmented recordings, each with name of <utterance_id>.wav")
-output_wav_scp = parser.add_argument("--output_wav_scp", type=str, default="data/all/tmp/wav_seg_test.scp", help="the Kaldi `wav.scp' file of segmented recordings")  
+output_wav_scp = parser.add_argument("--output_wav_scp", type=str, default="data/all/tmp/wav_seg_test.scp", help="the Kaldi `wav.scp' file of segmented recordings")
 sampling_rate = parser.add_argument('--sampling_rate', type=int, default=16000, help="the sampling rate of the recordings (default 16000)")
 
 args = parser.parse_args()
@@ -100,6 +100,9 @@ segments = args.segments
 output_dir = args.output_dir
 sampling_rate = args.sampling_rate
 output_wav_scp = args.output_wav_scp
+
+if (not os.path.exists(args.output_dir)):
+    os.makedirs(args.output_dir)
 
 uttid2wavpath = read_scp(wav_scp)
 uttid2segments = read_segments(segments)
