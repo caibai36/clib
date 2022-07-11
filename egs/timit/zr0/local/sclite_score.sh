@@ -27,7 +27,7 @@ sed 's/\([^ ]*\) *\(.*\)/\2 (\1)/'  $ref > $sref
 $sclite -r $sref -h $shyp -i rm -o all -s -e utf-8 -O $out_dir -n result > /dev/null
 cat $out_dir/result.pra | grep -E "id:|Scores:|Attributes:|REF:|HYP:|Eval:" > $out_dir/result
 
-python local/grep_sclite_error.py --input exp/scores/KER_$(basename $ref)_$(basename $hyp)/result --text exp/yonden/text > exp/scores/KER_$(basename $ref)_$(basename $hyp)/analysis_err
-python local/grep_sclite_error.py --input exp/scores/KER_$(basename $ref)_$(basename $hyp)/result --text exp/yonden/text --print_all > exp/scores/KER_$(basename $ref)_$(basename $hyp)/analysis_all
+python local/grep_sclite_error.py --input exp/scores/${tag}/result --text exp/yonden/text > exp/scores/${tag}/analysis_err
+python local/grep_sclite_error.py --input exp/scores/${tag}/result --text exp/yonden/text --print_all > exp/scores/${tag}/analysis_all
 
 echo "result at: $out_dir/result" 
