@@ -30,7 +30,7 @@ cat conf/user_dict/$udict.pronun | python local/pronun2csv.py --mecab > data/dic
 cat conf/user_dict/$udict.pronun | python local/pronun2csv.py --mecab_unidic > data/dict/${udict}_mecab_unidic.csv
 cat conf/user_dict/$udict.pronun | python local/pronun2csv.py --openjtalk > data/dict/${udict}_openjtalk.csv
 
-yonden_data=/localwork/asrwork/yonden/wavdata
+# yonden_data=/localwork/asrwork/yonden/wavdata
 yonden_data=/project/nakamura-lab08/Work/bin-wu/workspace/datasets/yonden/20220627/backup/
 if [ ${stage} -le 1 ]; then
     # Datasets are numbered by 四電データNAIST管理表.20220627.xlsx
