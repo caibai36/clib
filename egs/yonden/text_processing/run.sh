@@ -30,21 +30,23 @@ cat conf/user_dict/$udict.pronun | python local/pronun2csv.py --mecab > data/dic
 cat conf/user_dict/$udict.pronun | python local/pronun2csv.py --mecab_unidic > data/dict/${udict}_mecab_unidic.csv
 cat conf/user_dict/$udict.pronun | python local/pronun2csv.py --openjtalk > data/dict/${udict}_openjtalk.csv
 
+yonden_data=/localwork/asrwork/yonden/wavdata
+yonden_data=/project/nakamura-lab08/Work/bin-wu/workspace/datasets/yonden/20220627/backup/
 if [ ${stage} -le 1 ]; then
     # Datasets are numbered by 四電データNAIST管理表.20220627.xlsx
     # Fixed text
-    text3=/localwork/asrwork/yonden/wavdata/収録用ファイル整備/210909_0808_無線機.kana.txt
-    text4=/localwork/asrwork/yonden/wavdata/収録用ファイル整備/210909_1249_平岡班_無線機.kana.txt
-    text5=/localwork/asrwork/yonden/wavdata/収録用ファイル整備/210914_1029_田中班_無線機.kana.txt
-    text6=/localwork/asrwork/yonden/wavdata/収録用ファイル整備/210920_1358_平岡班_無線機.kana.txt
-    text7=/localwork/asrwork/yonden/wavdata/収録用ファイル整備/210924_1114_田中班_無線機.kana.txt
+    text3=$yonden_data/収録用ファイル整備/210909_0808_無線機.kana.txt
+    text4=$yonden_data/収録用ファイル整備/210909_1249_平岡班_無線機.kana.txt
+    text5=$yonden_data/収録用ファイル整備/210914_1029_田中班_無線機.kana.txt
+    text6=$yonden_data/収録用ファイル整備/210920_1358_平岡班_無線機.kana.txt
+    text7=$yonden_data/収録用ファイル整備/210924_1114_田中班_無線機.kana.txt
 
     # Chasen text (text.am)
-    ctext3=/localwork/asrwork/yonden/wavdata/kaldi_by_date/210909_0808/text.am
-    ctext4=/localwork/asrwork/yonden/wavdata/kaldi_by_date/210909_1249/text.am
-    ctext5=/localwork/asrwork/yonden/wavdata/kaldi_by_date/210914_1029/text.am
-    ctext6=/localwork/asrwork/yonden/wavdata/kaldi_by_date/210920_1358/text.am
-    ctext7=/localwork/asrwork/yonden/wavdata/kaldi_by_date/210924_1114/text.am
+    ctext3=$yonden_data/kaldi_by_date/210909_0808/text.am
+    ctext4=$yonden_data/kaldi_by_date/210909_1249/text.am
+    ctext5=$yonden_data/kaldi_by_date/210914_1029/text.am
+    ctext6=$yonden_data/kaldi_by_date/210920_1358/text.am
+    ctext7=$yonden_data/kaldi_by_date/210924_1114/text.am
 
     # Extract text
     mkdir -p exp/yonden
