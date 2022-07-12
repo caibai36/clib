@@ -1,0 +1,38 @@
+######################
+# Simple instruction
+pip install mecab-python3
+echo -e "白本線1.40\n柱上" | python /project/nakamura-lab08/Work/bin-wu/share/sys/text_processing/local/scripts/mecab.py
+# 白本|シロホン 線|セン 1|イチ .|. 40|フォーティ
+# 柱上|チュージョー
+
+# Need access to gcc at ‘/project/nakamura-lab08/Work/bin-wu/share/tools/gcc/path.sh’
+/project/nakamura-lab08/Work/bin-wu/share/sys/text_processing/tools/install_openjtalk_for_user_dict.sh ./
+echo -e "白本線1.40\n柱上" | python /project/nakamura-lab08/Work/bin-wu/share/sys/text_processing/local/scripts/openjtalk.py
+# 白|シロ 本線|ホンセン 一|イッ ．|テン 四|ヨン ０|ゼロ
+# 柱|ハシラ 上|ジョー
+
+#######################
+# Complete instruction
+# Tested on ahcclcssa02 with isolated env of
+# /project/nakamura-lab08/Work/bin-wu/.local/miniconda3/envs/tp
+
+# # Create an isolated env. (Optional)
+# conda create --name tp python==3.8.1 -y # tp short for text_processing
+# conda activate tp
+# conda install numpy -y # 1.22.3
+
+# Copy the directory
+cp -r /project/nakamura-lab08/Work/bin-wu/share/sys/text_processing ./
+cd text_processing
+
+# First install the python version of mecab and openjtalk that support user dict
+pip install mecab-python3
+./tools/install_openjtalk_for_user_dict.sh tools/openjtalk_with_user_dict
+
+# For simple test
+./local/sandbox/test_simple.sh
+
+# For complete test
+# for kaldi toolkit compiled at gcc 5.4.0 (/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer)
+source /project/nakamura-lab08/Work/bin-wu/share/tools/gcc/path.sh
+./run.sh
