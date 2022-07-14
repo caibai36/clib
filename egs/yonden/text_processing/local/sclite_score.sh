@@ -6,6 +6,13 @@ set -o pipefail # without -u here for conda setting
 
 tag=default
 
+# The "ref", "hyp", and "text" share the identical uttids. For example: an error utterance in the error analysis file "$out_dir/analysis_err" can be
+# 210914_1029_田中班_無線機_01740_0145012_0145091,err:A 1 S 1 I 0 D 0 all_tokens 8 corr_tokens 7
+# 210914_1029_田中班_無線機_01740_0145012_0145091,utt:保護具はきます。                                <= text
+# 210914_1029_田中班_無線機_01740_0145012_0145091,ref:ホ ゴ グ ハ キ マ ス <period>                   <= ref
+# 210914_1029_田中班_無線機_01740_0145012_0145091,hyp:ホ ゴ グ ワ キ マ ス <period>                   <= hyp
+# 210914_1029_田中班_無線機_01740_0145012_0145091,evl:            S                        
+#
 ref=../s1/exp/tmp/timit/default/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc39_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/ref_word.txt
 hyp=../s1/exp/tmp/timit/default/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc39_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_word.txt
 text= # extra reference text with same uttid as ref and hypo for easy error analysis
