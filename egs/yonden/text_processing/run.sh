@@ -74,7 +74,7 @@ if [ ${stage} -le 3 ]; then
     hyp=exp/yonden/text_chasen.kana
     COMPUTE_WER=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer
     $COMPUTE_WER --mode=present ark,t:$ref ark,t:$hyp |& tee exp/yonden/KER_$(basename $ref)_$(basename $hyp)
-    ./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp) --ref $ref --hyp $hyp
+    ./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp) --ref $ref --hyp $hyp --text exp/yonden/text
     echo
 fi
 
@@ -95,7 +95,7 @@ if [ ${stage} -le 4 ]; then
 	hyp=$output
 	COMPUTE_WER=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer
 	$COMPUTE_WER --mode=present ark,t:$ref ark,t:$hyp |& tee exp/yonden/KER_$(basename $ref)_$(basename $hyp)
-	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp) --ref $ref --hyp $hyp
+	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp) --ref $ref --hyp $hyp --text exp/yonden/text
 	echo
     done
 fi
@@ -117,7 +117,7 @@ if [ ${stage} -le 5 ]; then
 	hyp=$output
 	COMPUTE_WER=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer
 	$COMPUTE_WER --mode=present ark,t:$ref ark,t:$hyp |& tee exp/yonden/KER_$(basename $ref)_$(basename $hyp)
-	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp) --ref $ref --hyp $hyp
+	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp) --ref $ref --hyp $hyp --text exp/yonden/text
 	echo
     done
 fi
@@ -141,7 +141,7 @@ if [ ${stage} -le 6 ]; then
 	hyp=$output
 	COMPUTE_WER=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer
 	$COMPUTE_WER --mode=present ark,t:$ref ark,t:$hyp |& tee exp/yonden/KER_$(basename $ref)_$(basename $hyp)
-	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp)_$(basename $dict_dir)_$(basename $user_dict) --ref $ref --hyp $hyp
+	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp)_$(basename $dict_dir)_$(basename $user_dict) --ref $ref --hyp $hyp --text exp/yonden/text
 	echo
     done
 fi
@@ -165,7 +165,7 @@ if [ ${stage} -le 6 ]; then
 	hyp=$output
 	COMPUTE_WER=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer
 	$COMPUTE_WER --mode=present ark,t:$ref ark,t:$hyp |& tee exp/yonden/KER_$(basename $ref)_$(basename $hyp)
-	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp)_$(basename $dict_dir)_$(basename $user_dict) --ref $ref --hyp $hyp
+	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp)_$(basename $dict_dir)_$(basename $user_dict) --ref $ref --hyp $hyp --text exp/yonden/text
 	echo
     done
 fi
@@ -191,7 +191,7 @@ if [ ${stage} -le 6 ]; then
 	hyp=$output
 	COMPUTE_WER=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer
 	$COMPUTE_WER --mode=present ark,t:$ref ark,t:$hyp |& tee exp/yonden/KER_$(basename $ref)_$(basename $hyp)
-	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp)_$(basename $dict_dir)_$(basename $user_dict) --ref $ref --hyp $hyp
+	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp)_$(basename $dict_dir)_$(basename $user_dict) --ref $ref --hyp $hyp --text exp/yonden/text
 	echo
     done
 fi
@@ -216,7 +216,7 @@ if [ ${stage} -le 8 ]; then
 	hyp=$output
 	COMPUTE_WER=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer
 	$COMPUTE_WER --mode=present ark,t:$ref ark,t:$hyp |& tee exp/yonden/KER_$(basename $ref)_$(basename $hyp)
-	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp)_$(basename $dict_dir)_$(basename $user_dict) --ref $ref --hyp $hyp
+	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp)_$(basename $dict_dir)_$(basename $user_dict) --ref $ref --hyp $hyp --text exp/yonden/text
 	echo
     done
 fi
@@ -240,7 +240,7 @@ if [ ${stage} -le 8 ]; then
 	hyp=$output
 	COMPUTE_WER=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer
 	$COMPUTE_WER --mode=present ark,t:$ref ark,t:$hyp |& tee exp/yonden/KER_$(basename $ref)_$(basename $hyp)
-	./local/sclite_score.sh --tag KER_$(basename $ref)_$(basename $hyp)_$(basename $dict_dir)_$(basename $user_dict) --ref $ref --hyp $hyp
+	./local/sclite_score.sh --tag KER_$(basename $ref)_$(basename $hyp)_$(basename $dict_dir)_$(basename $user_dict) --ref $ref --hyp $hyp --text exp/yonden/text
 	echo
     done
 fi
@@ -264,7 +264,7 @@ if [ ${stage} -le 8 ]; then
 	hyp=$output
 	COMPUTE_WER=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer
 	$COMPUTE_WER --mode=present ark,t:$ref ark,t:$hyp |& tee exp/yonden/KER_$(basename $ref)_$(basename $hyp)
-	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp)_$(basename $dict_dir)_$(basename $user_dict) --ref $ref --hyp $hyp
+	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp)_$(basename $dict_dir)_$(basename $user_dict) --ref $ref --hyp $hyp --text exp/yonden/text
 	echo
     done
 fi
@@ -289,7 +289,7 @@ if [ ${stage} -le 8 ]; then
 	hyp=$output
 	COMPUTE_WER=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer
 	$COMPUTE_WER --mode=present ark,t:$ref ark,t:$hyp |& tee exp/yonden/KER_$(basename $ref)_$(basename $hyp)
-	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp)_$(basename $dict_dir)_$(basename $user_dict)_num --ref $ref --hyp $hyp
+	./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp)_$(basename $dict_dir)_$(basename $user_dict)_num --ref $ref --hyp $hyp --text exp/yonden/text
 	echo
     done
 fi
