@@ -113,5 +113,9 @@ with readfile(args.input) as f:
                 if (not keep_accent): pronun_field = pronun_field.replace("’", "") # 接地|セッチ’ => 接地|セッチ
 
                 if (pronun_field == u"、" and text_field != pronun_field): pronun_field = text_field # 。|、 (text of '。' has pronunciation of '、')
+
+                if (text_field == u"．" and pronun_field == u"テン"): text_field = u"点" # ．|テン => 点|テン
+                if (text_field == u"０" and pronun_field == u"ゼロ"): text_field = u"ゼロ" # ０|ゼロ => ゼロ|ゼロ
+                if (text_field == u"０" and pronun_field == u"レー"): text_field = u"零" # ０|レー => 零|レー
                 print(text_field + "|" + pronun_field, end=" ")
         print()
