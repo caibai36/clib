@@ -117,7 +117,7 @@ with readfile(args.input) as f:
                 if (text_field == u"．" and pronun_field == u"テン"): text_field = u"点" # ．|テン => 点|テン
                 if (text_field == u"０" and pronun_field == u"ゼロ"): text_field = u"ゼロ" # ０|ゼロ => ゼロ|ゼロ
                 if (text_field == u"０" and pronun_field == u"レー"): text_field = u"零" # ０|レー => 零|レー
-                if (text_field == u"一" and pronun_field == u"イッ"): text_field = u"イッ" # 一|イッ => イッ|イッ
+                # if (text_field == u"一" and pronun_field == u"イッ"): text_field = u"イッ" # 一|イッ => イッ|イッ, but has effects of texts of 一本 (イッ本) and 一個 (イッ個)
 
                 print(text_field + "|" + pronun_field, end=" ")
         print()
