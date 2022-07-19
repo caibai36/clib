@@ -293,3 +293,31 @@ if [ ${stage} -le 8 ]; then
 	echo
     done
 fi
+
+if [ ${stage} -le 9 ]; then
+    udict=yonden_ver1.1 # user dict
+    output=exp/yonden/text_openjtalk_default_dict.kana # kana text generated from openjtalk default dict: open_jtalk_dic_utf_8-1.11 (same as openjtalk_default_unidic_ipadic)
+
+    user_dict_csv=data/dict/${udict}_openjtalk.csv
+    user_dict_dic=data/dict/${udict}_openjtalk.dic
+
+    echo "DICT_DIR: $dict_dir"
+    echo "USER_DICT: $user_dict_csv"
+    cat conf/user_dict/{yonden_text_am,yonden_text_openjtalk}.pronun > conf/user_dict/${udict}.pronun # simple_num dict not needed
+    cat conf/user_dict/${udict}.pronun | python local/pronun2csv.py --openjtalk > $user_dict_csv # pronun2csv
+    python local/scripts/openjtalk.py --csv2dic $user_dict_csv # csv2dic
+
+    cat exp/yonden/text |  python local/scripts/replace_str.py --rep_in conf/char2num | \
+	python local/scripts/replace_str.py --rep_in conf/text2fixed | \
+	python local/scripts/openjtalk.py --has_uttid --user_dict "$user_dict_dic" | \
+    	python local/scripts/chasen_text2subtokens.py --fields 2 --has_uttid | \
+    	awk '{uttid = $1; $1 = ""; printf("%s %s\n", uttid, gensub(" ", "", "g", $0))}' | \
+    	perl local/scripts/kanaseq_splitter.pl -k > $output
+
+    echo "Computing kana error rate (KER) for $output..."
+    ref=exp/yonden/text.kana
+    hyp=$output
+    COMPUTE_WER=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer
+    $COMPUTE_WER --mode=present ark,t:$ref ark,t:$hyp |& tee exp/yonden/KER_$(basename $ref)_$(basename $hyp)
+    ./local/sclite_score.sh  --tag KER_$(basename $ref)_$(basename $hyp)_openjtalk_default_dict_${udict}_user_dict --ref $ref --hyp $hyp --text exp/yonden/text
+fi
