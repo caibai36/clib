@@ -62,6 +62,7 @@ install_user_dict=r"""# Install the pyopenjalk that support user dictionary:
 parser = argparse.ArgumentParser(description=u"Python version of openjtalk (openjtalk processing + mecab parsing)\n\nNote that a special openjtalk version that supports adding user dictionary is needed:\n" + install_user_dict, formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument("--input", type=str, default="-", help="name of file or '-' of stdin")
 parser.add_argument("--keep_accent", action="store_true", help="keep the accent of the pronunciation (e.g., 接地|セッチ’ 体|タイ)")
+parser.add_argument("--pos", action="store_true", help="add fields of part of speech (e.g., 柱|ハシラ|名詞|一般|* 上|ジョー|名詞|接尾|副詞可能)")
 parser.add_argument("--dict_dir", type=str, default="/project/nakamura-lab08/Work/bin-wu/share/data/openjtalk_dict/open_jtalk_dic_utf_8-1.11", help='Compiled openjtalk dictionary.\ne.g., /project/nakamura-lab08/Work/bin-wu/share/data/openjtalk_dict/open_jtalk_dic_utf_8-1.11 (default)\nor /project/nakamura-lab08/Work/bin-wu/share/data/openjtalk_dict/openjtalk_default_unidic_ipadic\nor /project/nakamura-lab08/Work/bin-wu/share/data/openjtalk_dict/openjtalk_ipadic_unidic_neologd')
 parser.add_argument("--user_dict", type=str, default=None, help="Specify an user dict: either a compiled dict of XXX.dic or a raw openjtalk dict of XXX.csv\n" + user_dict_example + "Note that the field of '1' might be cost and the field of '2/3' might be accent related for TTS.\nFields such as '名詞' and '一般' are necessary and take a finite set of options.)")
 parser.add_argument("--has_uttid", action="store_true", help="input in Kaldi script format: the first column is an uttid and the remaining is the content for a line.")
@@ -108,6 +109,7 @@ with readfile(args.input) as f:
 
         for token in pyopenjtalk.run_frontend(line)[0]:
             if (not token.split(',')[0].isspace()): # Skip an empty token
+                fields = token.split(',')
                 text_field = token.split(',')[0]
                 pronun_field = token.split(',')[9] # default for mecab-naist-jdic
                 if (not keep_accent): pronun_field = pronun_field.replace("’", "") # 接地|セッチ’ => 接地|セッチ
@@ -119,5 +121,8 @@ with readfile(args.input) as f:
                 if (text_field == u"０" and pronun_field == u"レー"): text_field = u"零" # ０|レー => 零|レー
                 # if (text_field == u"一" and pronun_field == u"イッ"): text_field = u"イッ" # 一|イッ => イッ|イッ, but has effects of texts of 一本 (イッ本) and 一個 (イッ個)
 
-                print(text_field + "|" + pronun_field, end=" ")
+                if (args.pos):
+                    print(text_field + "|" + pronun_field + "|" + fields[1] + "|" + fields[2] + "|" + fields[3], end=" ")
+                else:
+                    print(text_field + "|" + pronun_field, end=" ")
         print()
