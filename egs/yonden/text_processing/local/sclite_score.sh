@@ -4,6 +4,9 @@
 # -e 'error', -u 'undefined variable', -o ... 'error in pipeline', -x 'print commands',
 set -o pipefail # without -u here for conda setting
 
+sclite=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/tools/sctk/bin/sclite # CHECKME
+exp_dir=exp/scores
+
 tag=default
 
 # The "ref", "hyp", and "text" share the identical uttids. For example: an error utterance in the error analysis file "$out_dir/analysis_err" can be
@@ -17,12 +20,10 @@ ref=../s1/exp/tmp/timit/default/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do
 hyp=../s1/exp/tmp/timit/default/EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp-run0/mfcc39_batchsize32_cutoff1600_labelsmoothing0.05_lr0.001_gradclip5_factor0.5_patience3/eval/beamsize10/hypo_word.txt
 text= # extra reference text with same uttid as ref and hypo for easy error analysis
 
-sclite=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/tools/sctk/bin/sclite # CHECKME
-
 # Parse the options. (eg. ./run.sh --stage 1)
 # Note that the options should be defined as shell variable before parsing
 . utils/parse_options.sh || exit 1
-out_dir=exp/scores/$tag
+out_dir=$exp_dir/$tag
 mkdir -p $out_dir
 
 shyp=/tmp/shyp
@@ -38,4 +39,4 @@ cat $out_dir/result.pra | grep -E "id:|Scores:|Attributes:|REF:|HYP:|Eval:" > $o
 python local/grep_sclite_error.py --input $out_dir/result --text "$text" > $out_dir/analysis_err
 python local/grep_sclite_error.py --input $out_dir/result --text "$text" --print_all > $out_dir/analysis_all
 
-echo "result at: $out_dir/result" 
+echo "result at: $out_dir/analysis_err"
