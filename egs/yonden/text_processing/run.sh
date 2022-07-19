@@ -30,8 +30,14 @@ cat conf/user_dict/$udict.pronun | python local/pronun2csv.py --mecab > data/dic
 cat conf/user_dict/$udict.pronun | python local/pronun2csv.py --mecab_unidic > data/dict/${udict}_mecab_unidic.csv
 cat conf/user_dict/$udict.pronun | python local/pronun2csv.py --openjtalk > data/dict/${udict}_openjtalk.csv
 
-# yonden_data=/localwork/asrwork/yonden/wavdata
-yonden_data=/project/nakamura-lab08/Work/bin-wu/workspace/datasets/yonden/20220627/backup/
+yonden_data=/localwork/asrwork/yonden/wavdata
+# # backup 20220607 (original data that get 0.09% KER for openjtalk)
+# yonden_data=/project/nakamura-lab08/Work/bin-wu/workspace/datasets/yonden/20220627/backup
+# # backup 20220719
+# # 1) fixed date of files in the folder of kaldi_by_date (s/210909_0808_平岡班/210907_0808_平岡班/g)
+# # 2) fixed 210914_1029_田中班_無線機_00100_0014888_0015062 低圧|テーアツ防護|ボーゴし|シます|マス。|。 保護|ホゴ具|グは|ワき|キます|マス。|。 # は|ワ=> は|ハ (収録用ファイル整備)
+# # 3) fixed 210914_1029_田中班_無線機_00100_0014888_0015062 低圧|テーアツ防護|ボーゴし|シます|マス。|。保護|ホゴ具|グはきます|ハキマス。|。   # no space " between 。and 保護 (kaldi_by_date)
+# yonden_data=/project/nakamura-lab08/Work/bin-wu/workspace/datasets/yonden/20220719/backup
 if [ ${stage} -le 1 ]; then
     # Datasets are numbered by 四電データNAIST管理表.20220627.xlsx
     # Fixed text
@@ -50,14 +56,14 @@ if [ ${stage} -le 1 ]; then
 
     # Extract text
     mkdir -p exp/yonden
-    cat $text3 $text4 $text5 $text6 $text7 > exp/yonden/text3to7.txt
+    cat $text3 $text4 $text5 $text6 $text7 | sed 's/210909_0808_平岡班/210907_0808_平岡班/g' > exp/yonden/text3to7.txt
     cat exp/yonden/text3to7.txt | python local/scripts/chasen_text2subtokens.py --fields 1 --has_uttid | awk '{uttid = $1; $1 = ""; printf("%s %s\n", uttid, gensub(" ", "", "g", $0))}' > exp/yonden/text
 
     # Extract kana
     cat exp/yonden/text3to7.txt | python local/scripts/chasen_text2subtokens.py --fields 2 --has_uttid | awk '{uttid = $1; $1 = ""; printf("%s %s\n", uttid, gensub(" ", "", "g", $0))}' | perl local/scripts/kanaseq_splitter.pl -k > exp/yonden/text.kana
     # $ grep 210914_1029_田中班_無線機_00100_0014888_0015062  /localwork/asrwork/yonden/wavdata/kaldi_by_date/210914_1029/text.am
     # 210914_1029_田中班_無線機_00100_0014888_0015062 低圧|テーアツ 防護|ボーゴ し|シ ます|マス 。|。保護|ホゴ 具|グ はきます|ハキマス 。|。  # no space " between 。and 保護    
-    cat $ctext3 $ctext4 $ctext5 $ctext6 $ctext7 | sed "s/。保護/。 保護/g" | \
+    cat $ctext3 $ctext4 $ctext5 $ctext6 $ctext7 | sed "s/。保護/。 保護/g" | sed 's/210909_0808_平岡班/210907_0808_平岡班/g' | \
 	python local/scripts/chasen_select_first_pronun.py | python local/scripts/chasen_text2subtokens.py --fields 2 --has_uttid | \
 	awk '{uttid = $1; $1 = ""; printf("%s %s\n", uttid, gensub(" ", "", "g", $0))}' | \
 	perl local/scripts/kanaseq_splitter.pl -k > exp/yonden/text_chasen.kana
