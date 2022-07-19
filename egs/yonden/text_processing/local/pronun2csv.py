@@ -34,7 +34,7 @@ def readfile(filename: str = "-") -> TextIO:
 parser = argparse.ArgumentParser(description=u"Convert pronunciation to csv format for mecab or openjtalk", formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument("--input", type=str, default="-", help="name of file or '-' of stdin")
 parser.add_argument("--openjtalk", action="store_true", help="Convert to openjtalk format (e.g., 柱上|チュウジョー => 柱上,,,,,,,,,,,チュウジョー,チュウジョー)")
-parser.add_argument("--mecab", action="store_true", help="Convert to mecab format (default) (e.g., 柱上|チュウジョー => 柱上,,,1,名詞,一般,*,*,*,*,柱上,チュウジョー,チュウジョー,2/3,*")
+parser.add_argument("--mecab", action="store_true", help="Convert to mecab format (default) (e.g., 柱上|チュウジョー => 柱上,,,1,名詞,一般,*,*,*,*,柱上,チュウジョー,チュウジョー,2/3,* or 柱上|チュウジョー|名詞|固有名詞 => 柱上,,,1,名詞,固有名詞,*,*,*,*,柱上,チュウジョー,チュウジョー,2/3,*")
 parser.add_argument("--mecab_unidic", action="store_true", help="Convert to mecab format (default) for unidic (e.g., 柱上|チュウジョー => 柱上,,,1,,,,*,*,*,チュウジョー,柱上,柱上,チュウジョー,柱上,チュウジョー,*,*,*,*,*,*,*,*,チュウジョー,チュウジョー,チュウジョー,チュウジョー,*,*,*,*,*")
 args = parser.parse_args()
 
@@ -50,12 +50,22 @@ with readfile(args.input) as f:
     for line in f:
         line = line.strip()
         if line[0] == '#': continue # comments
-        text, pronun = re.split("\|", line)
+
+        pos=u"名詞"
+        pos1=u"一般"
+        fields = re.split("\|", line)
+        if len(fields) == 2:
+            text, pronun = fields
+        elif len(fields) == 3:
+            text, pronun, pos = fields
+        else:
+            text, pronun, pos, pos1 = fields
+
         if (args.mecab):
             print("{},,,1,,,,,,,,{},{}".format(text, pronun, pronun))
         elif (args.mecab_unidic):
             print("{},,,1,,,,*,*,*,{},{},{},{},{},{},*,*,*,*,*,*,*,*,{},{},{},{},*,*,*,*,*".format(text, pronun, text, text, pronun, text, pronun, pronun, pronun, pronun, pronun))
         elif (args.openjtalk):
-            print("{},,,1,名詞,一般,*,*,*,*,{},{},{},2/3,*".format(text, text, pronun, pronun))
+            print("{},,,1,{},{},*,*,*,*,{},{},{},2/3,*".format(text, pos, pos1, text, pronun, pronun))
         else:
             print("{},,,1,,,,,,,,{},{}".format(text, pronun, pronun)) # default mecab format
