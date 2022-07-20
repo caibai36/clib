@@ -33,9 +33,9 @@ def readfile(filename: str = "-") -> TextIO:
 
 parser = argparse.ArgumentParser(description=u"Convert pronunciation to csv format for mecab or openjtalk", formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument("--input", type=str, default="-", help="name of file or '-' of stdin")
-parser.add_argument("--openjtalk", action="store_true", help="Convert to openjtalk format (e.g., 柱上|チュウジョー => 柱上,,,,,,,,,,,チュウジョー,チュウジョー)")
-parser.add_argument("--mecab", action="store_true", help="Convert to mecab format (default) (e.g., 柱上|チュウジョー => 柱上,,,1,名詞,一般,*,*,*,*,柱上,チュウジョー,チュウジョー,2/3,* or 柱上|チュウジョー|名詞|固有名詞 => 柱上,,,1,名詞,固有名詞,*,*,*,*,柱上,チュウジョー,チュウジョー,2/3,*")
-parser.add_argument("--mecab_unidic", action="store_true", help="Convert to mecab format (default) for unidic (e.g., 柱上|チュウジョー => 柱上,,,1,,,,*,*,*,チュウジョー,柱上,柱上,チュウジョー,柱上,チュウジョー,*,*,*,*,*,*,*,*,チュウジョー,チュウジョー,チュウジョー,チュウジョー,*,*,*,*,*")
+parser.add_argument("--openjtalk", action="store_true", help="Convert to openjtalk format (e.g., 柱上|チュウジョー => 柱上,,,1,名詞,一般,*,*,*,*,柱上,チュウジョー,チュウジョー,2/3,* or 柱上|チュウジョー|名詞|固有名詞 => 柱上,,,1,名詞,固有名詞,*,*,*,*,柱上,チュウジョー,チュウジョー,2/3,*)")
+parser.add_argument("--mecab", action="store_true", help="Convert to mecab format (default) (e.g., 柱上|チュウジョー => 柱上,,,,,,,,,,,チュウジョー,チュウジョー)")
+parser.add_argument("--mecab_unidic", action="store_true", help="Convert to mecab format for unidic (e.g., 柱上|チュウジョー => 柱上,,,1,,,,*,*,*,チュウジョー,柱上,柱上,チュウジョー,柱上,チュウジョー,*,*,*,*,*,*,*,*,チュウジョー,チュウジョー,チュウジョー,チュウジョー,*,*,*,*,*)")
 args = parser.parse_args()
 
 # pronun: 表層形|発音
