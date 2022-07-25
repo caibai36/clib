@@ -25,14 +25,14 @@ if (!$opt_p) {
 open(PHONES, $opt_p);
 while(<PHONES>) {
     chomp;
-    ($kana, $phone) = split('\+', $_);
+    ($kana, $phone) = split('\+', $_); # 'ア+a<space>'
     $kana2phone{$kana} = $phone;
 }
 
 if($convert_punctuations) {
-    $kana2phone{"、"} = "<comma>";
-    $kana2phone{"。"} = "<period>";
-    $kana2phone{"？"} = "<question_mark>";
+    $kana2phone{"、"} = "<comma> "; # add a space at the end (e.g., ア with pronun 'a<space>').
+    $kana2phone{"。"} = "<period> ";
+    $kana2phone{"？"} = "<question_mark> ";
 }
 
 sub kanaseq2phoneseq($) {
