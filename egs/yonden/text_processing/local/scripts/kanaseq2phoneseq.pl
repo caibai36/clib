@@ -117,7 +117,7 @@ while (<>) {
 }
 
 print STDERR join("\n", @error_lines);
-if (@error_lines != 0) {print("\n");} # print endline if there is any convertion error
+if (@error_lines != 0) {print STDERR "\n";} # print endline if there is any convertion error
 
 # See: https://stackoverflow.com/questions/17543925/getting-used-only-once-possible-typo-warning-when-aliasing-subroutines
 *opt_h if 0; # prevent warning of 'Name "main::opt_h" used only once: possible typo at k2p.pl line 17.'
