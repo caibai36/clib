@@ -38,7 +38,7 @@ source /project/nakamura-lab08/Work/bin-wu/share/tools/gcc/path.sh
 ./run.sh
 
 ######################
-About openjtalk chouon and sokuon problems
+# About openjtalk chouon and sokuon problems
 ######################
 # Simple instruction
 pip install mecab-python3
@@ -55,7 +55,7 @@ python /project/nakamura-lab08/Work/bin-wu/share/sys/text_processing/local/norma
 # Replacing trans from openjtalk with mecab: あのー|アノー ホリケ|ホリケ
 # Found a token starting with the chouon 'ー': 防護|ボーゴ しよ|シヨ う|ー か|カ
 # Replacing trans from openjtalk with mecab: 防護|ボーゴ しよう|シヨー か|カ
-
+rm -rf text.mecab  text.openjtalk  text.openjtalk.mecab
 
 #######################
 # Complete instruction
