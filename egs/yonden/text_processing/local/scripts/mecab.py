@@ -117,6 +117,7 @@ $ /project/nakamura-lab08/Work/bin-wu/.local/mecab/libexec/mecab/mecab-dict-inde
 parser = argparse.ArgumentParser(description=u"A python wrapper of mecab", formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument("--input", type=str, default="-", help="name of file or '-' of stdin")
 parser.add_argument("--output_format", type=str, default="default", help="the output formats include default, Ochasen, Oyomi, Odump, and Owakati,\nwhere a line of the default format is '次側' converting to '次|ツギ 側|ガワ'")
+parser.add_argument("--pos", action="store_true", help="add fields of part of speech of '表層形|読み|品詞|品詞細分類1'\n(e.g., 柱|ハシラ|名詞|一般 上|ジョー|名詞|接尾 or 瑤泉院|ヨーゼーイン|名詞|固有名詞)")
 parser.add_argument("--dict_dir", type=str, default="/project/nakamura-lab08/Work/bin-wu/share/data/mecab_dict/unidic-csj-3.1.0-full", help='the path that contains a dicrc file.\ne.g., /project/nakamura-lab08/Work/bin-wu/share/data/mecab_dict/mecab-ipadic-2.7.0-20070801-neologd-20200910\nor /project/nakamura-lab08/Work/bin-wu/share/data/mecab_dict/mecab-ipadic-2.7.0-20070801\nor /project/nakamura-lab08/Work/bin-wu/share/data/mecab_dict/unidic-csj-3.1.0-full (default)\nor /project/nakamura-lab08/Work/bin-wu/share/data/mecab_dict/unidic-mecab-2.1.2_src-neologd-20200910')
 parser.add_argument("--user_dict", type=str, default=None, help="the user defined dictionary (XXX.dic).\nFor example, we can make a dictionary of 'yonden.dic' from 'yonden.csv' as follows:\n" + user_dict_example)
 parser.add_argument("--has_uttid", action="store_true", help="input in Kaldi script format: the first column is an uttid and the remaining is the content for a line.")
@@ -165,11 +166,20 @@ with readfile(args.input) as f:
          for parsed_line in parsed_lines:
              # unidic does not have pronuciation for special symbols (e.g., '、\t\t、\t補助記号-読点\t\t' => '、\t、\t、\t補助記号-読点\t\t')
              parsed_line = re.sub("^([^\s])+\t\t", "\\1\t\\1\t", parsed_line)
-             if (args.output_format == "default"): # convert from the Ochasen format to the default format
+             if (args.output_format == "default" or args.pos): # convert from the Ochasen format to the default format
                  if (parsed_line == "EOS"):
                      print()
                  else:
-                     chasen_fields = re.split("\s+", parsed_line)
-                     print(chasen_fields[0] + "|" + chasen_fields[1], end=" ")
+                     chasen_fields = re.split("\s+", parsed_line) # ['百', 'ヒャク', '百', '名詞-数詞', '']
+                     if (chasen_fields[0] == u'っ' and chasen_fields[1] == u'っ'): # っ|っ|補助記号|一般
+                         chasen_fields[1] = u'ッ'
+
+                     pos_fields = re.split("-", chasen_fields[3])
+                     if len(pos_fields) == 0: pos_fields = ["*", "*"]
+                     elif len(pos_fields) == 1: pos_fields = [pos_fields[0], "*"]
+                     else:  pos_fields = [pos_fields[0], pos_fields[1]]
+
+                     if (args.pos): print(chasen_fields[0] + "|" + chasen_fields[1] + "|" + pos_fields[0] + "|" + pos_fields[1], end=" ")
+                     else: print(chasen_fields[0] + "|" + chasen_fields[1], end=" ")
              else:
                  print(parsed_line)
