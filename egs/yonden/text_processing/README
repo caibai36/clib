@@ -36,3 +36,32 @@ pip install mecab-python3
 # for kaldi toolkit compiled at gcc 5.4.0 (/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi/src/bin/compute-wer)
 source /project/nakamura-lab08/Work/bin-wu/share/tools/gcc/path.sh
 ./run.sh
+
+######################
+About openjtalk chouon and sokuon problems
+######################
+# Simple instruction
+pip install mecab-python3
+echo -e "あのーホリケ\n防護しようか" | python /project/nakamura-lab08/Work/bin-wu/share/sys/text_processing/local/scripts/openjtalk.py |& tee text.openjtalk
+# あの|アノ ーホリケ|ーホリケ
+# 防護|ボーゴ しよ|シヨ う|ー か|カ
+echo -e "あのーホリケ\n防護しようか" | python /project/nakamura-lab08/Work/bin-wu/share/sys/text_processing/local/scripts/mecab.py|& tee text.mecab # default using undic_csj3.1
+# あのー|アノー ホリケ|ホリケ
+# 防護|ボーゴ しよう|シヨー か|カ
+python /project/nakamura-lab08/Work/bin-wu/share/sys/text_processing/local/normalize_openjtalk_with_mecab.py --openjtalk_text text.openjtalk --mecab_text text.mecab --verbose |& tee text.openjtalk.mecab
+# あのー|アノー ホリケ|ホリケ
+# 防護|ボーゴ しよう|シヨー か|カ
+# Found a token starting with the chouon 'ー': あの|アノ ーホリケ|ーホリケ
+# Replacing trans from openjtalk with mecab: あのー|アノー ホリケ|ホリケ
+# Found a token starting with the chouon 'ー': 防護|ボーゴ しよ|シヨ う|ー か|カ
+# Replacing trans from openjtalk with mecab: 防護|ボーゴ しよう|シヨー か|カ
+
+
+#######################
+# Complete instruction
+# Copy the directory
+cp -r /project/nakamura-lab08/Work/bin-wu/share/sys/text_processing ./
+cd text_processing
+
+# For simple test of openjtalk chouon and sokuon problems
+./local/sandbox/test_openjtalk_problem.sh
