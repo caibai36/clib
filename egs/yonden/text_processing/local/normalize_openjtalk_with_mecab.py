@@ -133,18 +133,22 @@ with open(args.openjtalk_text) as f_openjtalk, open(args.mecab_text) as f_mecab,
         if (not args.ignore_token_start_with_chouon) and token_start_with_chouon_openjtalk:
             replace_to_mecab = True
             if (args.verbose):
-                f_err.write("Found a token starting with the chouon 'ー': {}\n".format(result_line + tokens_openjtalk))
+                f_err.write("Found a token starting with a chouon 'ー': {}\n".format(result_line + tokens_openjtalk))
                 f_err.write("Replacing trans from openjtalk with mecab: {}\n".format(result_line + tokens_mecab))
+                f_err.write("-----\n")
             if (token_start_with_chouon_mecab and (not args.silence)):
                 f_err.write("==> Warning: mecab trans has the chouon 'ー': {}\n".format(result_line + tokens_mecab))
+                f_err.write("-----\n")
 
         if (not args.ignore_token_start_with_sokuon) and token_start_with_sokuon_openjtalk:
             replace_to_mecab = True
             if (args.verbose):
-                f_err.write("Found a token starting with the sokuon 'ッ': {}\n".format(result_line + tokens_openjtalk))
+                f_err.write("Found a token starting with a sokuon 'ッ': {}\n".format(result_line + tokens_openjtalk))
                 f_err.write("Replacing trans from openjtalk with mecab: {}\n".format(result_line + tokens_mecab))
+                f_err.write("-----\n")
             if (token_start_with_sokuon_mecab and (not args.silence)):
                 f_err.write("==> Warning: mecab trans has the sokuon 'ッ': {}\n".format(result_line + tokens_mecab))
+                f_err.write("-----\n")
         
         if replace_to_mecab:
             result_line = result_line + tokens_mecab
