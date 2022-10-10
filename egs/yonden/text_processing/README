@@ -65,3 +65,7 @@ cd text_processing
 
 # For simple test of openjtalk chouon and sokuon problems
 ./local/sandbox/test_openjtalk_problem.sh
+
+# openjtalk_mecab_parser (e.g., ./local/sandbox/test_openjtalk_problem.sh)
+mkdir -p exp/del; ln -sf $KALDI_ROOT/egs/wsj/s5/utils/ utils
+./local/openjtalk_mecab_parser.sh --text data/text/openjtalk_text_problem.scp --dir exp/de
