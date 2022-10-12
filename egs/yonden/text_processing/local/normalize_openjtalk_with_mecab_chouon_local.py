@@ -203,7 +203,7 @@ def local_replace_openjtalk_with_mecab_single_replacement(tokens_openjtalk, toke
     # Get smallest kana index range
     kana_index_chouon_openjtalk = token_index_to_kana_index_openjtalk[token_index_chouon_openjtalk]
     kana_range_left = common_kana_index[common_kana_index <= kana_index_chouon_openjtalk].max()
-    kana_range_right = common_kana_index[common_kana_index >= kana_index_chouon_openjtalk].min()
+    kana_range_right = common_kana_index[common_kana_index > kana_index_chouon_openjtalk].min()
 
     # Get smallest token index range
     token_range_openjtalk = (token_index_to_kana_index_openjtalk.index(kana_range_left), token_index_to_kana_index_openjtalk.index(kana_range_right))
@@ -215,7 +215,24 @@ def local_replace_openjtalk_with_mecab_single_replacement(tokens_openjtalk, toke
     ori = " ".join(token_list_openjtalk[token_range_openjtalk[0]:token_range_openjtalk[1]])
     rep = " ".join(token_list_mecab[token_range_mecab[0]:token_range_mecab[1]])
     right = " ".join(token_list_openjtalk[token_range_openjtalk[1]:])
-    replacement = " ".join([left, rep, right]).strip() # strip to remove the left or right spaces if the variables of left or right is empty. 
+    replacement = " ".join([left, rep, right]).strip() # strip to remove the left or right spaces if the variables of left or right is empty.
+
+    if (rep == ""):
+        f_err.write(f"ERROR: The replacement part 'rep' should not be empty\n")
+
+        f_err.write(f"{tokens_openjtalk=}\n")
+        f_err.write(f"{tokens_mecab=}\n")
+        f_err.write(f"{left=}\n")
+        f_err.write(f"{rep=}\n")
+        f_err.write(f"{right=}\n")
+        f_err.write(f"{replacement=}\n")
+
+        f_err.write(f"{common_kana_index=}\n")
+        f_err.write(f"{kana_index_chouon_openjtalk=}\n")
+        f_err.write(f"{kana_range_left=}\n")
+        f_err.write(f"{kana_range_right=}\n")
+
+        sys.exit(1)
 
     return replacement, (ori, rep)
 
@@ -271,7 +288,7 @@ with open(args.openjtalk_text) as f_openjtalk, open(args.mecab_text) as f_mecab,
                     for replacement in replacement_list:
                         f_err.write("### Replacement from openjtalk with mecab: {} => {}\n".format(replacement[0], replacement[1]))
                     f_err.write("--\n")
-                
+
         if replace_to_mecab:
             result_line = result_line + tokens_mecab
         else:
