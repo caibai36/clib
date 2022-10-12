@@ -88,7 +88,7 @@ def line_has_token_start_with_chouon(line: str):
     for token in re.split('\s+', line):
         fields = token.split(args.in_sep)
         # output line format: uttid f1|f3 f1|f3 f1|f3
-        assert len(fields) >= 2, "the tokens should have at least two fields such as あのー|アノー, but found '{}' in '{}'\n==> Maybe you should add the '--has_uttid' option if the transcription has uttids.".format(token, line_openjtalk)
+        assert len(fields) >= 2, "the tokens should have at least two fields such as あのー|アノー, but found '{}' in '{}'\n==> Maybe you should add the '--has_uttid' option if the transcription has uttids.".format(token, line)
         if (fields[1][0] == u'ー'):
             token_start_with_chouon = True
 
@@ -100,7 +100,7 @@ def line_has_token_start_with_sokuon(line: str):
     for token in re.split('\s+', line):
         fields = token.split(args.in_sep)
         # output line format: uttid f1|f3 f1|f3 f1|f3
-        assert len(fields) >= 2, "the tokens should have at least two fields such as あのー|アノー, but found '{}' in '{}'\n==> Maybe you should add the '--has_uttid' option if the transcription has uttids.".format(token, line_openjtalk)
+        assert len(fields) >= 2, "the tokens should have at least two fields such as あのー|アノー, but found '{}' in '{}'\n==> Maybe you should add the '--has_uttid' option if the transcription has uttids.".format(token, line)
         if (fields[1][0] == u'ッ'):
             token_start_with_sokuon = True
         
