@@ -25,7 +25,8 @@ mecab_text_name=text.mecab
 openjtalk_normalized_with_mecab_name=text.openjtalk.mecab
 # Parse the options. (eg. ./run.sh --stage 1)
 # Note that the options should be defined as shell variable before parsing
-. utils/parse_options.sh || exit 1
+KALDI_ROOT=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi
+. $KALDI_ROOT/egs/wsj/s5/utils/parse_options.sh || exit 1
 
 if [ -z $dir ] | [ -z $text ]; then
     echo "./local/yonden_data_prep_all.sh --text \$path_text --dir \$output_dir [ --openjtalk_dict \$openjtalk_dict --mecab_dict \$mecab_dict --openjtalk_user_dict \$openjtalk_user_dict --mecab_user_dict \$mecab_user_dict ]"
@@ -36,7 +37,7 @@ fi
 if [ ${stage} -le 1 ]; then
     date
     echo "Generating openjtalk transcription..."
-    cat $text | python local/scripts/openjtalk.py --dict_dir $openjtalk_dict --user_dict "$openjtalk_user_dict" --has_uttid --pos 2>/dev/null > $dir/$openjtalk_text_name
+    cat $text | python local/scripts/openjtalk.py --dict_dir $openjtalk_dict --user_dict "$openjtalk_user_dict" --has_uttid --pos > $dir/$openjtalk_text_name
 
     date
     echo "Generating mecab transcription..."
