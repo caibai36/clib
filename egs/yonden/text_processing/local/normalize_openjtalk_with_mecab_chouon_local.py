@@ -1,3 +1,5 @@
+# Implemented by bin-wu at 11:05 p.m. on 13th October 2022
+
 from typing import TextIO
 import io
 import sys
@@ -72,7 +74,7 @@ parser.add_argument("--verbose", action="store_true", help="verbose (to the stde
 args = parser.parse_args()
 
 def parse_uttid_tokens(line: str):
-    """ Parse the line into utterace id and the tokens """
+    """ Parse the line into utterace id and the tokens. """
     if (len(re.split('\s+', line)) <= 1): # empty line or uttid with empty content
         uttid = line
         tokens = ""
@@ -82,7 +84,7 @@ def parse_uttid_tokens(line: str):
     return uttid, tokens
 
 def line_has_token_start_with_chouon(line: str, field_sep="|"):
-    """ Whether a line contains a token starts with chouon """
+    """ Whether a line contains a token starts with chouon. """
     token_start_with_chouon = False
     for token in re.split('\s+', line):
         fields = token.split(field_sep)
@@ -94,7 +96,7 @@ def line_has_token_start_with_chouon(line: str, field_sep="|"):
     return token_start_with_chouon
 
 def identical_kana_length(line1: str, line2: str, token_sep="\s+", field_sep="|"):
-    """ whether two line contains the identical kana length
+    """ Whether two line contains the identical kana length.
     (e.g., "len(ビーシーエイ) == len(ビーシーエー)" 
 
     This is a private function for the case that we prefer openjtalk kana representation
@@ -110,7 +112,7 @@ def identical_kana_length(line1: str, line2: str, token_sep="\s+", field_sep="|"
     return (len(line1_kana) == len(line2_kana))
 
 def extract_fields_from_tokens(line: str, field_index=0, in_token_sep="\s+", field_sep="|", out_token_sep=" "):
-    """Extract a sequence of fields from line that is a sequence of tokens.
+    """ Extract a sequence of fields from line that is a sequence of tokens.
     
     Example:
     そしたら|ソシタラ いこ|イコ う|ー か|カ な|ナ => そしたら いこ う か な
@@ -127,12 +129,12 @@ def extract_fields_from_tokens(line: str, field_index=0, in_token_sep="\s+", fie
     return out_token_sep.join(line_field)
 
 def extract_fields_index_from_tokens(line: str, field_index=0, token_sep="\s+", field_sep="|", ending_index=True):
-    """Extract a sequence of field indices from line that is a sequence of tokens
+    """ Extract a sequence of field indices from line that is a sequence of tokens, a mapping from token index to the field index.
     
     Example: when field_index is 1,
     そしたら|ソシタラ いこ|イコ う|ー か|カ な|ナ => 0 4 6 7 8 9
     そ|ソ し|シ たら|タラ いこう|イコー か|カ な|ナ => 0 1 2 4 7 8 9,
-    where '9' is the ending index
+    where '9' is the ending index.
     """
     fields_index = [0]
     index_counter = 0
@@ -162,9 +164,10 @@ def index_of_first_token_start_with_chouon(line: str, field_sep="|", fail_to_fou
 def local_replace_openjtalk_with_mecab_single_replacement(tokens_openjtalk, tokens_mecab):
     """
     Find the minimum range inside mecab that contain the choun part of openjtalk.
-    Replace the first opentjalk chouon part with mecab section
+    Replace the first opentjalk chouon part with mecab section.
+    The function assumes that at least one replacement happens and it conducts the first replacement.
     
-    Returns: the while replaced string, (openjtalk_portion, mecab_portion) 
+    Returns: the whole replaced string, (openjtalk_portion, mecab_portion)
     
     Usage:
     tokens_openjtalk = "そしたら|ソシタラ いこ|イコ う|ー か|カ な|ナ"
@@ -173,19 +176,15 @@ def local_replace_openjtalk_with_mecab_single_replacement(tokens_openjtalk, toke
     ('そしたら|ソシタラ いこう|イコー か|カ な|ナ', ('いこ|イコ う|ー', 'いこう|イコー'))
 
     For example:
-    tokens_openjtalk = "そしたら|ソシタラ いこ|イコ う|ー か|カ な|ナ"
-    tokens_mecab = "そ|ソ し|シ たら|タラ いこう|イコー か|カ な|ナ"
-    local_replace_openjtalk_with_mecab_single_replacement(tokens_openjtalk, tokens_mecab)
-    For example:
     Indices of 'そしたら いこ う か な' from openjtalk is [0, 4, 6, 7, 8, 9] (token_index_to_kana_index)
     Indices of 'そ し たら いこう か な' from mecab is [0, 1, 2, 4, 7, 8, 9]
     Common indices should be [0, 4, 7, 8, 9]
     
-    The script assumes one replacement happens. Here chouon token index in openjtalk is 2.
-    Chouon kana index is 6, which lies in the smallest kana range (4, 7)
-    Token range for openjtalk is (1, 3) and for mecab is (3, 4)
+    Here chouon token index in openjtalk is 2.
+    Chouon kana index is 6, which lies in the smallest kana range (4, 7).
+    Token range for openjtalk is (1, 3) and for mecab is (3, 4).
     Replace the openjtalk chouon part with mecab chouon part that has minimun range.
-    Finally we get そしたら いこう か な
+    Finally we get 'そしたら いこう か な'.
     """
     # kana_line_openjtalk = extract_fields_from_tokens(tokens_openjtalk, field_index=1) # そしたら いこ う か な
     # kana_line_mecab = extract_fields_from_tokens(tokens_mecab, field_index=1) # そ し たら いこう か な
@@ -220,17 +219,17 @@ def local_replace_openjtalk_with_mecab_single_replacement(tokens_openjtalk, toke
     if (rep == ""):
         f_err.write(f"ERROR: The replacement part 'rep' should not be empty\n")
 
-        f_err.write(f"{tokens_openjtalk=}\n")
-        f_err.write(f"{tokens_mecab=}\n")
-        f_err.write(f"{left=}\n")
-        f_err.write(f"{rep=}\n")
-        f_err.write(f"{right=}\n")
-        f_err.write(f"{replacement=}\n")
+        # f_err.write(f"{tokens_openjtalk=}\n")
+        # f_err.write(f"{tokens_mecab=}\n")
+        # f_err.write(f"{left=}\n")
+        # f_err.write(f"{rep=}\n")
+        # f_err.write(f"{right=}\n")
+        # f_err.write(f"{replacement=}\n")
 
-        f_err.write(f"{common_kana_index=}\n")
-        f_err.write(f"{kana_index_chouon_openjtalk=}\n")
-        f_err.write(f"{kana_range_left=}\n")
-        f_err.write(f"{kana_range_right=}\n")
+        # f_err.write(f"{common_kana_index=}\n")
+        # f_err.write(f"{kana_index_chouon_openjtalk=}\n")
+        # f_err.write(f"{kana_range_left=}\n")
+        # f_err.write(f"{kana_range_right=}\n")
 
         sys.exit(1)
 
@@ -246,7 +245,6 @@ def local_replace_openjtalk_with_mecab(tokens_openjtalk, tokens_mecab):
 
     return tokens_openjtalk, replacement_list
 
-    
 openjtalk = []
 with open(args.openjtalk_text) as f_openjtalk, open(args.mecab_text) as f_mecab, writefile(args.output) as f_output:
     for line_openjtalk, line_mecab in zip(f_openjtalk, f_mecab):
