@@ -46,6 +46,6 @@ if [ ${stage} -le 1 ]; then
     date
     echo "Normalize the openjtalk text with the mecab text with dict..."
     # python local/normalize_openjtalk_with_mecab.py --openjtalk_text $dir/$openjtalk_text_name --mecab_text $dir/$mecab_text_name --has_uttid --ignore_token_start_with_sokuon --verbose > $dir/$openjtalk_normalized_with_mecab_name
-    python local/normalize_openjtalk_with_mecab_chouon_local.py --openjtalk_text $dir/$openjtalk_text_name --mecab_text $dir/$mecab_text_name --has_uttid --verbose > $dir/$openjtalk_normalized_with_mecab_name
+    python local/scripts/normalize_openjtalk_with_mecab_chouon_local.py --openjtalk_text $dir/$openjtalk_text_name --mecab_text $dir/$mecab_text_name --has_uttid --verbose > $dir/$openjtalk_normalized_with_mecab_name
     date
 fi
