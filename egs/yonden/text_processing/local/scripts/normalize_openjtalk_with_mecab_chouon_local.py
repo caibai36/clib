@@ -292,4 +292,4 @@ with open(args.openjtalk_text) as f_openjtalk, open(args.mecab_text) as f_mecab,
         else:
             result_line = result_line + tokens_openjtalk
 
-        f_output.write(result_line + "\n")
+        f_output.write(result_line + " \n")
