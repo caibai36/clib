@@ -28,16 +28,17 @@ openjtalk_normalized_with_mecab_name=text.openjtalk.mecab
 KALDI_ROOT=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi
 . $KALDI_ROOT/egs/wsj/s5/utils/parse_options.sh || exit 1
 
-if [ -z $dir ] | [ -z $text ]; then
-    echo "./local/yonden_data_prep_all.sh --text \$path_text --dir \$output_dir [ --openjtalk_dict \$openjtalk_dict --mecab_dict \$mecab_dict --openjtalk_user_dict \$openjtalk_user_dict --mecab_user_dict \$mecab_user_dict ]"
-    echo '    e.g., ./local/openjtalk_mecab_parser.sh --text exp/del/text --dir exp/del --mecab_user_dict "" --openjtalk_user_dict ""'
+if [ -z $dir ] || [ -z $text ]; then
+    echo "./local/openjtalk_mecab_parser.ver2.sh --text \$path_text --dir \$output_dir [ --openjtalk_dict \$openjtalk_dict --mecab_dict \$mecab_dict --openjtalk_user_dict \$openjtalk_user_dict --mecab_user_dict \$mecab_user_dict ]"
+    echo '    e.g., ./local/openjtalk_mecab_parser.ver2.sh --text exp/del/text --dir exp/del --mecab_user_dict "" --openjtalk_user_dict ""'
     exit 1
 fi
 
 if [ ${stage} -le 1 ]; then
     date
     echo "Generating openjtalk transcription..."
-    cat $text | python local/scripts/openjtalk.py --dict_dir $openjtalk_dict --user_dict "$openjtalk_user_dict" --has_uttid --pos > $dir/$openjtalk_text_name
+    # "2> >(grep -v njd2jpcommon.c >&2)" to remove the stderr lines that contain a word of "njd2jpcommon.c".
+    cat $text | python local/scripts/openjtalk.py --dict_dir $openjtalk_dict --user_dict "$openjtalk_user_dict" --has_uttid --pos > $dir/$openjtalk_text_name 2> >(grep -v njd2jpcommon.c >&2)
 
     date
     echo "Generating mecab transcription..."
