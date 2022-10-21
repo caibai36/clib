@@ -69,3 +69,4 @@ cd text_processing
 # openjtalk_mecab_parser (e.g., ./local/sandbox/test_openjtalk_problem.sh)
 mkdir -p exp/del; ln -sf $KALDI_ROOT/egs/wsj/s5/utils/ utils
 ./local/openjtalk_mecab_parser.sh --text data/text/openjtalk_text_problem.scp --dir exp/del
+./local/openjtalk_mecab_parser.ver2.sh --text data/text/openjtalk_text_problem2.scp --openjtalk_user_dict "" --mecab_user_dict "" --dir exp/del
