@@ -25,7 +25,7 @@ def readfile(filename: str = "-") -> TextIO:
     Parameters
     ----------
     filename: the filename or "-" where "-" means stardard input
-    
+
     Returns
     -------
     the file object
@@ -122,6 +122,45 @@ with readfile(args.input) as f:
                 if (text_field == u"０" and pronun_field == u"レー"): text_field = u"零" # ０|レー => 零|レー
                 # if (text_field == u"一" and pronun_field == u"イッ"): text_field = u"イッ" # 一|イッ => イッ|イッ, but has effects of texts of 一本 (イッ本) and 一個 (イッ個)
                 if (text_field == u"剝" and pronun_field == u"剝"): pronun_field = u"ム" # 剝|剝 => 剝|ム
+                if (text_field == u"窩" and pronun_field == u"窩"): pronun_field = u"カ" # 窩|窩 => 窩|カ
+                if (text_field == u"濡" and pronun_field == u"濡"): pronun_field = u"ヌ" # 濡|濡 => 濡|ヌ failure in mecab csj3.1
+                if (text_field == u"繹" and pronun_field == u"繹"): pronun_field = u"エキ" # 繹|繹 => 繹|エキ
+                if (text_field == u"駱" and pronun_field == u"駱"): pronun_field = u"ロ" # 駱|駱 => 駱|ロ mecab
+                if (text_field == u"旒" and pronun_field == u"旒"): pronun_field = u"リュー" # 旒|旒 => 旒|リュー
+                if (text_field == u"箇" and pronun_field == u"箇"): pronun_field = u"カ" # 箇|箇 => 箇|カ mecab
+                if (text_field == u"廷" and pronun_field == u"廷"): pronun_field = u"テー" # 廷|廷 => 廷|テー
+                if (text_field == u"忘記" and pronun_field == u"忘記"): pronun_field = u"ワスレキ" # 忘記|忘記 => 忘記|ワスレキ
+                if (text_field == u"曖" and pronun_field == u"曖"): pronun_field = u"アイ" # 曖|曖 => 曖|アイ
+                if (text_field == u"抽" and pronun_field == u"抽"): pronun_field = u"チュー" # 抽|抽 => 抽|チュー
+                if (text_field == u"漱漱" and pronun_field == u"漱漱"): pronun_field = u"ソーソー" # 漱漱|漱漱 => 漱漱|ソーソー
+                if (text_field == u"漱" and pronun_field == u"漱"): pronun_field = u"ソー" # 漱|漱 => 漱|ソー
+                if (text_field == u"θ" and pronun_field == u"θ"): pronun_field = u"シータ" # θ|θ => θ|シータ
+                if (text_field == u"陀" and pronun_field == u"陀"): pronun_field = u"ダ" # 陀|陀 => 陀|ダ
+                if (text_field == u"貯" and pronun_field == u"貯"): pronun_field = u"タクワ" # 貯|貯 => 貯|タクワ
+                if (text_field == u"購" and pronun_field == u"購"): pronun_field = u"コー" # 購|購 => 購|コー
+                if (text_field == u"吸" and pronun_field == u"吸"): pronun_field = u"ス" # 吸|吸 => 吸|ス
+                if (text_field == u"Λ" and pronun_field == u"Λ"): pronun_field = u"ラムダ" # Λ|Λ => Λ|ラムダ
+                if (text_field == u"忘" and pronun_field == u"忘"): pronun_field = u"ワス" # 忘|忘 => 忘|ワス
+                if (text_field == u"避" and pronun_field == u"避"): pronun_field = u"ヒ" # 避|避 => 避|ヒ
+                if (text_field == u"該" and pronun_field == u"該"): pronun_field = u"ガイ" # 該|該 => 該|ガイ
+                if (text_field == u"描" and pronun_field == u"描"): pronun_field = u"カ" # 描|描 => 描|カ
+                if (text_field == u"彙" and pronun_field == u"彙"): pronun_field = u"イ" # 彙|彙 => 彙|イ
+                if (text_field == u"βα" and pronun_field == u"βα"): pronun_field = u"アルファベータ" # βα|βα => βα|アルファベータ
+                if (text_field == u"警警" and pronun_field == u"警警"): pronun_field = u"ケーケー" # 警警|警警 => 警警|ケーケー
+                if (text_field == u"警" and pronun_field == u"警"): pronun_field = u"ケー" # 警|警 => 警|ケー
+                if (text_field == u"閣型" and pronun_field == u"閣型"): pronun_field = u"カクガタ" # 閣型|閣型 => 閣型|カクガタ
+                if (text_field == u"茶碗" and pronun_field == u"ヂャワン"): pronun_field = u"チャワン" # 茶碗|ヂャワン => 茶碗|チャワン
+                if (text_field == u"以" and pronun_field == u"以"): pronun_field = u"イ" # 以|以 => 以|イ
+                if (text_field == u"以以" and pronun_field == u"以以"): pronun_field = u"イイ" # 以以|以以 => 以以|イイ
+                if (text_field == u"τ" and pronun_field == u"τ"): pronun_field = u"タウ" # τ|τ => τ|タウ
+                if (text_field == u"Φ" and pronun_field == u"Φ"): pronun_field = u"ファイ" # Φ|Φ => Φ|ファイ
+                if (text_field == u"φ" and pronun_field == u"φ"): pronun_field = u"ファイ" # φ|φ => φ|ファイ
+                if (text_field == u"α" and pronun_field == u"α"): pronun_field = u"アルファ" # α|α => α|アルファ
+                if (text_field == u"挿" and pronun_field == u"挿"): pronun_field = u"ソー" # 挿|挿 => 挿|ソー
+                if (text_field == u"推" and pronun_field == u"推"): pronun_field = u"スイ" # 推|推 => 推|スイ
+                if (text_field == u"棄" and pronun_field == u"棄"): pronun_field = u"キ" # 棄|棄 => 棄|キ
+                if (text_field == u"抽" and pronun_field == u"抽"): pronun_field = u"チュー" # 抽|抽 => 抽|チュー
+                if (text_field == u"批" and pronun_field == u"批"): pronun_field = u"ヒ" # 批|批 => 批|ヒ
 
                 if (args.pos):
                     print(text_field + "|" + pronun_field + "|" + fields[1] + "|" + fields[2], end=" ")
