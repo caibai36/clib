@@ -23,6 +23,9 @@ dir= # output dir
 openjtalk_text_name=text.openjtalk
 mecab_text_name=text.mecab
 openjtalk_normalized_with_mecab_name=text.openjtalk.mecab
+
+word_start_with_file= # (Not implemented yet, keep it empty) For example, create a file called the conf/chouon_list by 'echo -e 'ー\nョ\nッ\nゥ\nュ\n々\nィ\nォ\nェ\nゎ\nャ' > conf/chouon_list'
+
 # Parse the options. (eg. ./run.sh --stage 1)
 # Note that the options should be defined as shell variable before parsing
 KALDI_ROOT=/project/nakamura-lab08/Work/bin-wu/share/tools/kaldi
@@ -47,6 +50,7 @@ if [ ${stage} -le 1 ]; then
     date
     echo "Normalize the openjtalk text with the mecab text with dict..."
     # python local/normalize_openjtalk_with_mecab.py --openjtalk_text $dir/$openjtalk_text_name --mecab_text $dir/$mecab_text_name --has_uttid --ignore_token_start_with_sokuon --verbose > $dir/$openjtalk_normalized_with_mecab_name
+    # python local/scripts/normalize_openjtalk_with_mecab_chouon_local.py --openjtalk_text $dir/$openjtalk_text_name --mecab_text $dir/$mecab_text_name --has_uttid --verbose > $dir/$openjtalk_normalized_with_mecab_name --word_start_with_file "$word_start_with_file"
     python local/scripts/normalize_openjtalk_with_mecab_chouon_local.py --openjtalk_text $dir/$openjtalk_text_name --mecab_text $dir/$mecab_text_name --has_uttid --verbose > $dir/$openjtalk_normalized_with_mecab_name
     date
 fi

@@ -72,7 +72,12 @@ parser.add_argument("--in_sep", type=str, default="|", help="separator between f
 parser.add_argument("--has_uttid", action="store_true", help="input in Kaldi script format: the first column is an uttid and the remaining is the content for a line")
 parser.add_argument("--verbose", action="store_true", help="verbose (to the stderr) each utterance that with replacement from openjtalk transcription to mecab ones")
 parser.add_argument('--mode', type=str, choices=['text', 'kana'], default='text', help="Ignore the mecab replacements when kana/text length of transcriptions are different.\ne.g., openjtalk: 間|アイダ 吊っ|ツッ いこ|イコ う|ー vs. mecab 間|カン 吊っ|ツッ いこう|イコー\ntext model will deal with the case; kana mode will ignore the case. Default is text mode.")
+parser.add_argument("--word_start_with_file", type=str, default="", help=u"(Not implemented yet) Replace the mecab shortest phrases that contains the words that start with a symbol, where each symbol are store as a line in --word_start_with_file. For example, create a file by\necho -e 'ー\\nョ\\nッ\\nゥ\\nュ\\n々\\nィ\\nォ\\nェ\\nゎ\\nャ' > conf/chouon_list\nThen invoke the file by --word_start_with_file conf/chouon_list")
 args = parser.parse_args()
+
+if args.word_start_with_file:
+    f_err.write("Not implemented yet, Please do not use the option --word_start_with_file.\n")
+    sys.exit(1)
 
 def parse_uttid_tokens(line: str):
     """ Parse the line into utterace id and the tokens. """
@@ -259,9 +264,9 @@ def local_replace_openjtalk_with_mecab(tokens_openjtalk, tokens_mecab, field_ind
     """
     replacement_list = []
     while (True):
-        tokens_openjtalk, replaced_parts = local_replace_openjtalk_with_mecab_single_replacement(tokens_openjtalk, tokens_mecab, field_index=field_index, chouon_symbol=u'ー')
+        tokens_openjtalk, replaced_parts = local_replace_openjtalk_with_mecab_single_replacement(tokens_openjtalk, tokens_mecab, field_index=field_index, chouon_symbol=chouon_symbol)
         replacement_list.append(replaced_parts)
-        if (not line_has_token_start_with_chouon(tokens_openjtalk, chouon_symbol=u'ー')): break
+        if (not line_has_token_start_with_chouon(tokens_openjtalk, chouon_symbol=chouon_symbol)): break
 
     return tokens_openjtalk, replacement_list
 
@@ -283,27 +288,25 @@ with open(args.openjtalk_text) as f_openjtalk, open(args.mecab_text) as f_mecab,
             tokens_openjtalk = line_openjtalk
             tokens_mecab = line_mecab
 
-        token_start_with_chouon_openjtalk = line_has_token_start_with_chouon(tokens_openjtalk, chouon_symbol=u'ー')
-        token_start_with_chouon_mecab = line_has_token_start_with_chouon(tokens_mecab, chouon_symbol=u'ー')
+        symbol = u'ー'
         has_identical_kana_length = identical_kana_length(tokens_openjtalk, tokens_mecab)
         has_identical_text_length = identical_text_length(tokens_openjtalk, tokens_mecab)
-
         replace_to_mecab = False
-        if token_start_with_chouon_openjtalk:
+        if (line_has_token_start_with_chouon(tokens_openjtalk, chouon_symbol=symbol)):
             if (args.mode == "kana"):
                 if (not has_identical_kana_length):
-                    f_err.write("Found a token starting with a chouon 'ー': {}\n".format(result_line + tokens_openjtalk))
+                    f_err.write("Found a token starting with a chouon '{}': {}\n".format(symbol, result_line + tokens_openjtalk))
                     f_err.write("==> Warning1: mecab and openjtalk trans has diff. kana lengths (preserving openjtalk trans): mecab trans: {}\n".format(result_line + tokens_mecab))
-                elif (token_start_with_chouon_mecab):
-                    f_err.write("Found a token starting with a chouon 'ー': {}\n".format(result_line + tokens_openjtalk))
-                    f_err.write("==> Warning2: mecab trans has the chouon 'ー' (preserving openjtalk trans): mecab trans: {}\n".format(result_line + tokens_mecab))
+                elif (line_has_token_start_with_chouon(tokens_mecab, chouon_symbol=symbol)):
+                    f_err.write("Found a token starting with a chouon '{}': {}\n".format(symbol, result_line + tokens_openjtalk))
+                    f_err.write("==> Warning2: mecab trans has the chouon '{}' (preserving openjtalk trans): mecab trans: {}\n".format(symbol, result_line + tokens_mecab))
                     f_err.write("--\n")
                 else:
                     if (args.verbose):
                         replace_to_mecab = True
-                        final_replacement, replacement_list = local_replace_openjtalk_with_mecab(tokens_openjtalk, tokens_mecab, field_index=1, chouon_symbol=u'ー') # field_index=1 for kana
+                        final_replacement, replacement_list = local_replace_openjtalk_with_mecab(tokens_openjtalk, tokens_mecab, field_index=1, chouon_symbol=symbol) # field_index=1 for kana
                         tokens_mecab = final_replacement
-                        f_err.write("Found a token starting with a chouon 'ー': {}\n".format(result_line + tokens_openjtalk))
+                        f_err.write("Found a token starting with a chouon '{}': {}\n".format(symbol, result_line + tokens_openjtalk))
                         f_err.write("Replacing trans from openjtalk with mecab: {}\n".format(result_line + tokens_mecab))
                         for replacement in replacement_list:
                             f_err.write("### Replacement from openjtalk with mecab: {} => {}\n".format(replacement[0], replacement[1]))
@@ -311,18 +314,18 @@ with open(args.openjtalk_text) as f_openjtalk, open(args.mecab_text) as f_mecab,
             else:
                 assert args.mode == "text", "arg.mode should be either text or kana, but now it is '{}'".format(args.mode)
                 if (not has_identical_text_length):
-                    f_err.write("Found a token starting with a chouon 'ー': {}\n".format(result_line + tokens_openjtalk))
+                    f_err.write("Found a token starting with a chouon '{}': {}\n".format(symbol, result_line + tokens_openjtalk))
                     f_err.write("==> Warning1: mecab and openjtalk trans has diff. text lengths (preserving openjtalk trans): mecab trans: {}\n".format(result_line + tokens_mecab))
-                elif (token_start_with_chouon_mecab):
-                    f_err.write("Found a token starting with a chouon 'ー': {}\n".format(result_line + tokens_openjtalk))
-                    f_err.write("==> Warning2: mecab trans has the chouon 'ー' (preserving openjtalk trans): mecab trans: {}\n".format(result_line + tokens_mecab))
+                elif (line_has_token_start_with_chouon(tokens_mecab, chouon_symbol=symbol)):
+                    f_err.write("Found a token starting with a chouon '{}': {}\n".format(symbol, result_line + tokens_openjtalk))
+                    f_err.write("==> Warning2: mecab trans has the chouon '{}' (preserving openjtalk trans): mecab trans: {}\n".format(symbol, result_line + tokens_mecab))
                     f_err.write("--\n")
                 else:
                     if (args.verbose):
                         replace_to_mecab = True
-                        final_replacement, replacement_list = local_replace_openjtalk_with_mecab(tokens_openjtalk, tokens_mecab, field_index=0, chouon_symbol=u'ー') # field_index=0 for text
+                        final_replacement, replacement_list = local_replace_openjtalk_with_mecab(tokens_openjtalk, tokens_mecab, field_index=0, chouon_symbol=symbol) # field_index=0 for text
                         tokens_mecab = final_replacement
-                        f_err.write("Found a token starting with a chouon 'ー': {}\n".format(result_line + tokens_openjtalk))
+                        f_err.write("Found a token starting with a chouon '{}': {}\n".format(symbol, result_line + tokens_openjtalk))
                         f_err.write("Replacing trans from openjtalk with mecab: {}\n".format(result_line + tokens_mecab))
                         for replacement in replacement_list:
                             f_err.write("### Replacement from openjtalk with mecab: {} => {}\n".format(replacement[0], replacement[1]))
