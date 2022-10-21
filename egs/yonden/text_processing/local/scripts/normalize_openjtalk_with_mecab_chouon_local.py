@@ -91,7 +91,7 @@ def line_has_token_start_with_chouon(line: str, field_sep="|", chouon_symbol=u'�
         fields = token.split(field_sep)
         # output line format: uttid f1|f3 f1|f3 f1|f3
         assert len(fields) >= 2, "the tokens should have at least two fields such as あのー|アノー, but found '{}' in '{}'\n==> Maybe you should add the '--has_uttid' option if the transcription has uttids.".format(token, line)
-        if (fields[1][0] == chouon_symbol):
+        if (re.findall("^" + chouon_symbol, fields[1])):
             token_start_with_chouon = True
 
     return token_start_with_chouon
@@ -167,7 +167,7 @@ def index_of_first_token_start_with_chouon(line: str, field_sep="|", fail_to_fou
         fields = token.split(field_sep)
         # output line format: uttid f1|f3 f1|f3 f1|f3
         assert len(fields) >= 2, "the tokens should have at least two fields such as あのー|アノー, but found '{}' in '{}'\n==> Maybe you should add the '--has_uttid' option if the transcription has uttids.".format(token, line)
-        if (fields[1][0] == chouon_symbol):
+        if (re.findall("^" + chouon_symbol, fields[1])):
             return index
 
     return fail_to_found_index
