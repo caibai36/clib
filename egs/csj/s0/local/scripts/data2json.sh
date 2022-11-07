@@ -9,6 +9,7 @@
 # then merge them into a json file indexed by the utterance id.
 # If you want to add more information, just create more scp files.
 feat="" # feat.scp
+token_scp="" # uttid token1 token2 (e.g., uttid シ キ <space> シャ <space> ヒ ラ オ カ <space> <space> <period>)
 non_ling_syms=""
 output_dir_of_scps=""
 output_utts_json=""
@@ -17,7 +18,7 @@ oov="<unk>"
 . utils/parse_options.sh
 
 if [[ $# != 1 && $# != 2 ]]; then
-    echo "Usage: $0 <data-dir> <dict> [--output_dir_of_scps <scps_dir>]"
+    echo "Usage: $0 <data-dir> <dict> [--feat <feat>] [--token_scp <token_scp>] [--non_ling_syms <non_ling_syms>] [--output_dir_of_scps <scps_dir>]"
     exit 1;
 fi
 
@@ -42,14 +43,19 @@ fi
 # Count how many tokens for each sentence (num_tokens.scp)
 # Convert token sequence to tokenid sequence (tokenid.scp)
 if [ -f $dir/text ]; then
-    local/scripts/text2token.py --text ${dir}/text \
-			       --strs-replace-in=conf/str_rep.txt \
-			       --strs-replace-sep='#' \
-			       --chars-delete=conf/chars_del.txt \
-			       --chars-replace=conf/chars_rep.txt \
-			       --non-ling-syms=${non_ling_syms} \
-			       --skip-ncols=1 \
-			       --str2lower | sed -r -e 's/^(\S*) /\1 <sos> /' -e 's/$/ <eos>/' > ${tmpdir}/token.scp
+    if [ ! -z ${token_scp} ]; then
+	cat ${token_scp} | sed -r -e 's/^(\S*) /\1 <sos> /' -e 's/$/ <eos>/' > ${tmpdir}/token.scp
+    else
+	local/scripts/text2token.py --text ${dir}/text \
+				    --strs-replace-in=conf/str_rep.txt \
+				    --strs-replace-sep='#' \
+				    --chars-delete=conf/chars_del.txt \
+				    --chars-replace=conf/chars_rep.txt \
+				    --non-ling-syms=${non_ling_syms} \
+				    --skip-ncols=1 \
+				    --str2lower | sed -r -e 's/^(\S*) /\1 <sos> /' -e 's/$/ <eos>/' > ${tmpdir}/token.scp
+    fi
+
     cat ${tmpdir}/token.scp | utils/sym2int.pl --map-oov ${oov} -f 2- ${dict} > ${tmpdir}/tokenid.scp
     cat ${tmpdir}/tokenid.scp | awk '{print $1 " " NF-1}' > ${tmpdir}/num_tokens.scp # -1 for uncounting first field: the uttid
     vocsize=`tail -n 1 ${dict} | awk '{print $2}'` # Get the index of the last word, assuming the largest index starting from 0 (vocsize=$vocab_size-1).

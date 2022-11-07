@@ -315,5 +315,7 @@ while epoch < num_epochs:
 
     epoch += 1
 
+save_model_with_config(model, os.path.join(opts['result'], "last_model.mdl"))
+
 logger.info("Result path: {}".format(opts['result']))
 logger.info("Get the best dev loss {:.3f} at the epoch {}".format(best_dev_loss, best_dev_epoch))

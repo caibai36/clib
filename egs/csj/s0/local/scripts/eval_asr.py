@@ -43,6 +43,55 @@ from clib.common.utils.log_util import init_logger
 from clib.ctorch.utils.model_util import save_options, load_pretrained_model_with_config
 from clib.ctorch.utils.attention_util import save_att
 
+def shrink_repeated_tail_tokens(token_str,  min_repeated_num=3):
+    """
+    "S C" => "S C"
+    "S C C C C" => "S C"
+    "C C C C S C" => "C C C C S C"
+    "C C C C S C C C" => "C C C C S C"
+    "S C K B C A B C A B C A B C" => "S C K B C A"
+    "C A B C A B C A B C" => "C A B"
+    "C A B B A A A B B A A A B B" => "C A B B A A A B B A A A B B" # repeated two times; shrink for at least three times by default
+    "C A A B B A A A A B B A A A A B B A A A A B B A A A" => "C A A B B A A"
+
+    if (len(re.split("\s+", token_str)) == max_target):
+       shrinked_token_str = shrink_repeated_tail_tokens(token_str)
+    """
+    tokens = re.split("\s+", token_str)
+    size = len(tokens)
+
+    loop_start = 0 # start position of loop
+    final_repeated_num = 0
+    final_seg_len = 0
+    for seg_len in range(1, size-1):
+        for repeated_num in range(size):
+            if (size-seg_len*(repeated_num+2) < 0): break
+            if tokens[size-seg_len*(repeated_num+2):size-seg_len*(repeated_num+1)] == tokens[size-seg_len*(repeated_num+1):size-seg_len*repeated_num]:
+                continue
+            else:
+                break
+        repeated_num += 1 # "S C K B C A B C A B C A B C" repeat 3 times
+        if (repeated_num >= min_repeated_num):
+            if (repeated_num * seg_len > final_repeated_num * final_seg_len):
+                final_repeated_num = repeated_num
+                final_seg_len = seg_len
+    repeated_pattern = tokens[size - final_seg_len: size] # S C K B C   A B C   A B C   A B C
+
+    residue = tokens[:size-final_repeated_num * final_seg_len]
+    i = 0
+    for i in range(1, len(repeated_pattern)+1):
+        if (len(residue) < i):
+            break;
+        if repeated_pattern[-i] == residue[-i]:
+            continue
+        else:
+            break
+    residue = [] if (len(residue) < i) else residue[:len(residue)-(i-1)] # S C K for S C K B C A B C A B C A B C
+
+    shrinked_token_str = " ".join(tokens[0:len(residue) + len(repeated_pattern)])
+    # print("\"{}\" => \"{}\"".format(token_str, shrinked_token_str))
+    return shrinked_token_str
+
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 # common
 parser.add_argument('--gpu', type=str, default="0",
@@ -70,6 +119,8 @@ parser.add_argument("--coeff_length_penalty", type=float, default=1,
 # others
 parser.add_argument('--result', type=str, required=True, help="result directory (e.g., exp/tmp/test_small_att/eval).")
 parser.add_argument('--save_att', action='store_true', default=False, help="save and plot attention")
+parser.add_argument("--min_repeated_num", type=int, default=5,
+                    help="When the generated token sequence by the decoder hits the max limiting length (max_target), shrink the repeated patterns at end of the sequence if the repeated patterns occur more than $num_repeated_num time.")
 
 args = parser.parse_args()
 
@@ -196,6 +247,11 @@ with open(os.path.join(meta_dir, "hypo_char.txt"), 'w', encoding='utf8') as hypo
      open(os.path.join(meta_dir, "ref_word.txt"), 'w', encoding='utf8') as ref_word:
     for info in metainfo:
         uttid, text_char = info['uttid'], info['text']
+        if len(re.split("\s+", text_char)) == args.max_target:
+            shrinked_text_char = shrink_repeated_tail_tokens(text_char,  min_repeated_num=args.min_repeated_num)
+            if (shrinked_text_char != text_char):
+                logger.warning("Shrinking the repeated tail tokens:\n{}\n=>\n{}\n".format(text_char, shrinked_text_char))
+                text_char = shrinked_text_char
         hypo_char.write(f"{uttid} {text_char}\n")
         text_word = text_char.replace(' ', '').replace(space_token, ' ') # 'A B <space> C' => 'AB C'
         hypo_word.write(f"{uttid} {text_word}\n")
