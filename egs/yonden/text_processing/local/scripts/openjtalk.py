@@ -145,7 +145,7 @@ with readfile(args.input) as f:
                 if (text_field == u"該" and pronun_field == u"該"): pronun_field = u"ガイ" # 該|該 => 該|ガイ
                 if (text_field == u"描" and pronun_field == u"描"): pronun_field = u"カ" # 描|描 => 描|カ
                 if (text_field == u"彙" and pronun_field == u"彙"): pronun_field = u"イ" # 彙|彙 => 彙|イ
-                if (text_field == u"βα" and pronun_field == u"βα"): pronun_field = u"アルファベータ" # βα|βα => βα|アルファベータ
+                if (text_field == u"βα" and pronun_field == u"βα"): pronun_field = u"ベータアルファ" # βα|βα => βα|ベータアルファ
                 if (text_field == u"警警" and pronun_field == u"警警"): pronun_field = u"ケーケー" # 警警|警警 => 警警|ケーケー
                 if (text_field == u"警" and pronun_field == u"警"): pronun_field = u"ケー" # 警|警 => 警|ケー
                 if (text_field == u"閣型" and pronun_field == u"閣型"): pronun_field = u"カクガタ" # 閣型|閣型 => 閣型|カクガタ
