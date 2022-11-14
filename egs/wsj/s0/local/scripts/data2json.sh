@@ -33,7 +33,8 @@ rm -f ${tmpdir}/*.scp
 if [ ! -z ${feat} ]; then
     cat ${feat} > ${tmpdir}/feat.scp
     # Redirecting stdout to stderr to prevent printing warning or error message to merged jsons.
-    [ -f ${dir}/utt2num_frames ] || utils/data/get_utt2num_frames.sh ${dir} 1>&2
+    rm -rf ${dir}/utt2num_frames # update utt2num_frames everytime with feats.scp
+    utils/data/get_utt2num_frames.sh ${dir} 1>&2
     cp ${dir}/utt2num_frames ${tmpdir}/num_frames.scp
     feat-to-dim scp:${feat} ark,t:${tmpdir}/feat_dim.scp 1>&2
 fi
