@@ -1,0 +1,4 @@
+train: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/csj/s0.char/data/train_nodev_mel80/utts.json'
+dev: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/csj/s0.char/data/train_dev_mel80/utts.json'
+test: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/csj/s0.char/data/eval1_mel80/utts.json'
+token2id: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/csj/s0.char/data/lang_1char/train_units.txt'
