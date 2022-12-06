@@ -1,0 +1,4 @@
+katakana from https://gist.github.com/dehmer/3ba550aeb453da52f08c3c99217b95c2 (There is an error line 818, kana should be ドゥ and not ドィ.)
+hirakana from https://gist.github.com/rdunk/6eed1a49ce6456ddcc9dc36af8bca992 (There is an error line 818, kana should be どぅ and not どぃ.)
+(mlp4) [bin-wu@ahcclcsa02 kana]$(wsj *) python -c 'import json; f = open("./hiragana.json", encoding="utf8"); j = json.load(f); print("\n".join([field["kana"] for field in j]))' > hiragana
+(mlp4) [bin-wu@ahcclcsa02 kana]$(wsj *) python -c 'import json; f = open("./katakana.json", encoding="utf8"); j = json.load(f); print("\n".join([field["kana"] for field in j]))' > katakana
