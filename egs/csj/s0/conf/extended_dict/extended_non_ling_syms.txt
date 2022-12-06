@@ -1,0 +1,13 @@
+<ampersand>
+<brace>
+<colon>
+<comma>
+<exclamation_point>
+<hyphen>
+<noise>
+<paren>
+<period>
+<question_mark>
+<quote>
+<semi_colon>
+<slash>
