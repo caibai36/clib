@@ -11,7 +11,7 @@ set -euo pipefail
 . path.sh
 
 # general configuration
-stage=3  # start from 0 if you need to start from data preparation
+stage=16  # start from 0 if you need to start from data preparation
 
 mfcc_config=conf/mfcc.conf # 13 dimensional mfcc feature of kaldi default setting for timit
 mfcc_hires=conf/mfcc_hires.conf # 40 dimensional mfcc feature of kaldi default setting for wsj
@@ -24,7 +24,13 @@ dataset_name=csj
 # data_name=wsj0  # train:si84;dev:dev93;test:eval92
 # data_name=wsj1  # train:si284;dev:dev93;test:eval92
 model_name=EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp
-exp_dir=exp/asr
+exp_dir=exp/asr_extend_dict
+
+# extend dict
+# extend the dict whose vocab do not exist in the csj training set
+# but possibly exist in corpora that use csj as pretrained model)
+extended_units=conf/extended_dict/extended_units.txt
+extended_non_ling_syms=conf/extended_dict/extended_non_ling_syms.txt
 
 # options for training ASR
 gpu=auto
@@ -45,8 +51,6 @@ search=beam
 max_target=250 # the maximum length of the decoded sequence
 beam_size=10
 
-word_start_with_file=conf/chouon_list # Normalize openjtalk chouon problem by mecab transcription. e.g., conf/chouon_list by 'echo -e 'ー\nッ\nョ\nゥ\nュ\n々\nィ\nォ\nェ\nゎ\nャ' > conf/chouon_list'
-
 # Parse the options. (eg. ./run.sh --stage 1)
 # Note that the options should be defined as shell variable before parsing
 . utils/parse_options.sh || exit 1
@@ -60,9 +64,6 @@ if [ ${stage} -le 1 ]; then
     ./local/csj_data_prep.sh --csj_data "$csj_data" --datasets "$datasets" --stage 1
 fi
 
-# train="train_data3_5_7to17_baseline"
-# dev="dev_data4_baseline"
-# test="test_data6_baseline"
 if [ ${stage} -le 2 ]; then
     date
     echo "Making 39-dimensional mfcc feature..."
@@ -116,6 +117,30 @@ if [ ${stage} -le 3 ]; then
     echo -ne "<unk> 0\n<pad> 1\n<sos> 2\n<eos> 3\n" > ${dict} # index convention of torchtext
     cat data/${train_set}/text.kana | cut -f 2- -d" " | tr " " "\n" | sort | uniq | grep -v -e '^\s*$' | grep -vE "<unk>|<pad>|<sos>|<eos>" | awk '{print $0 " " NR + 3}' >> ${dict}
     wc -l ${dict}
+
+    echo ""
+    if [ ! -z $extended_non_ling_syms ]; then
+	echo "Merging current and extended non-linguistic symbol lists..."
+	cat $non_ling_syms $extended_non_ling_syms | sort -u > /tmp/tmp
+	mv /tmp/tmp $non_ling_syms
+	cat $non_ling_syms
+    fi
+
+    if [ ! -z $extended_units ]; then
+	echo "Merging current and extended dict units (with new vocab from the extended dict)..."
+	vocabsize=`tail -n 1 ${dict} | awk '{print $2}'`
+	vocab_index=$vocabsize;
+	cp $dict /tmp/tmp
+	for new_vocab in $(comm -23 <(cat $extended_units | awk '{print $1}' | sort)  <(cat $dict | awk '{print $1}' | sort)); do
+	    let vocab_index=$vocab_index+1;
+	    echo $new_vocab $vocab_index |& tee -a /tmp/tmp
+	done
+	mv /tmp/tmp $dict
+
+	echo "dictionary: ${dict}"
+	wc -l $dict
+    fi
+
 fi
 
 if [ ${stage} -le 4 ]; then
