@@ -1,0 +1,8 @@
+<unk> 0
+<pad> 1
+<sos> 2
+<eos> 3
+<space> 4
+A 5
+B 6
+C 7
