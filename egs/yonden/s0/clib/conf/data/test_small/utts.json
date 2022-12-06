@@ -1,0 +1,50 @@
+{
+    "spk1_u1": {
+        "feat": "conf/data/test_small/feats1.ark",
+        "feat_dim": "2",
+        "num_frames": "3",
+        "num_tokens": "4",
+        "text": "AB",
+        "token": "<sos> A B <eos>",
+        "tokenid": "2 5 6 3",
+        "utt2spk": "spk1",
+        "uttid": "spk1_u1",
+        "vocab_size": "8"
+    },
+    "spk1_u2": {
+        "feat": "conf/data/test_small/feats2.ark",
+        "feat_dim": "2",
+        "num_frames": "4",
+        "num_tokens": "5",
+        "text": "A B",
+        "token": "<sos> A <space> B <eos>",
+        "tokenid": "2 5 4 6 3",
+        "utt2spk": "spk1",
+        "uttid": "spk1_u2",
+        "vocab_size": "8"
+    },
+    "spk1_u3": {
+        "feat": "conf/data/test_small/feats3.ark",
+        "feat_dim": "2",
+        "num_frames": "7",
+        "num_tokens": "6",
+        "text": "AC B",
+        "token": "<sos> A C <space> B <eos>",
+        "tokenid": "2 5 7 4 6 3",
+        "utt2spk": "spk1",
+        "uttid": "spk1_u3",
+        "vocab_size": "8"
+    },
+    "spk2_u4": {
+        "feat": "conf/data/test_small/feats4.ark",
+        "feat_dim": "2",
+        "num_frames": "6",
+        "num_tokens": "6",
+        "text": "AC A",
+        "token": "<sos> A C <space> A <eos>",
+        "tokenid": "2 5 7 4 5 3",
+        "utt2spk": "spk2",
+        "uttid": "spk2_u4",
+        "vocab_size": "8"
+    }
+}
