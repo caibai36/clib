@@ -1,0 +1,4 @@
+train: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/yonden/s0/data/train_data3_5_7to17_baseline/utts.json'
+dev: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/yonden/s0/data/dev_data4_baseline/utts.json'
+test: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/yonden/s0/data/test_data6_baseline/utts.json'
+token2id: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/yonden/s0/data/lang_1char/all_data3-28_baseline_units.txt'
