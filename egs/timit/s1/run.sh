@@ -25,7 +25,7 @@ feat=mfcc39 # or mel80
 dataset_name=timit
 # data_name=default
 model_name=EncRNNDecRNNAtt-enc3_bi256_ds3_drop-dec1_h512_do0.25-att_mlp
-exp_dir=exp/tmp
+exp_dir=exp/tmp_lm
 
 # options for training ASR
 gpu=auto
@@ -45,6 +45,22 @@ set_uttid=None # subset of testing data (e.g. set_uttid=conf/data/test_small/set
 search=beam
 max_target=250 # the maximum length of the decoded sequence
 beam_size=10
+
+# options for language model (still tentative)
+coeff_lm=1.0
+# file_lm=/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/timit/s0/data/local/srilm_lm/train.text_2gram.arpa
+# type_lm="word_ngram"
+file_lm= # data/train/lm/train.char_3gram.arpa
+type_lm="char_ngram"
+
+# pwd # /project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/timit/s0
+# mkdir data/local/srilm_lm
+# head data/local/data/train.text | cut -d ' ' -f2- > data/local/srilm_lm/train.text
+# cd data/local/srilm_lm/
+# order=2;file=train.text;ngram-count -text $file -order $order -lm ${file}_${order}gram.arpa
+# cd -
+# ls $PWD/data/local/srilm_lm/train.text_2gram.arpa
+# # /project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/timit/s0/data/local/srilm_lm/train.text_2gram.arpa
 
 # Parse the options. (eg. ./run.sh --stage 1)
 # Note that the options should be defined as shell variable before parsing
@@ -171,7 +187,7 @@ if [ ${stage} -le 6 ]; then
 
 	reducelr={\"factor\":$factor,\"patience\":$patience}
 
-	exp_setting=${feat}_batchsize${batch_size}_cutoff${cutoff}_labelsmoothing${label_smoothing}_lr${lr}_gradclip${grad_clip}_factor${factor}_patience${patience}
+	exp_setting=${feat}_batchsize${batch_size}_cutoff${cutoff}_labelsmoothing${label_smoothing}_lr${lr}_gradclip${grad_clip}_factor${factor}_patience${patience}_LM_${type_lm}_coeff${coeff_lm}_$(basename $file_lm)
 	result_dir=${exp_dir}/${dataset_name}/${data_name}/${model_name}-${run}/${exp_setting}/train
 
 	# comment out the --exit option if you are not sure how many epochs to run
@@ -198,13 +214,13 @@ if [ ${stage} -le 7 ]; then
     echo "Evaluating ASR..."
 
     for data_name in default; do
-	exp_setting=${feat}_batchsize${batch_size}_cutoff${cutoff}_labelsmoothing${label_smoothing}_lr${lr}_gradclip${grad_clip}_factor${factor}_patience${patience}
+	exp_setting=${feat}_batchsize${batch_size}_cutoff${cutoff}_labelsmoothing${label_smoothing}_lr${lr}_gradclip${grad_clip}_factor${factor}_patience${patience}_LM_${type_lm}_coeff${coeff_lm}_$(basename $file_lm)
 	model_path=${exp_dir}/${dataset_name}/${data_name}/${model_name}-${run}/${exp_setting}/train/best_model.mdl
 
 	data_config=clib/conf/data/${dataset_name}/${data_name}/asr_tts/data_${feat}.yaml
 	result_dir=${model_path%/train/*}/eval/beamsize${beam_size} # ${string%substring} # Deletes shortest match of $substring from back of $string.
 
-	python local/scripts/eval_asr.py \
+	python local/scripts/eval_asr_lm.py \
 	       --gpu $gpu \
 	       --data_config $data_config \
 	       --set_uttid $set_uttid \
@@ -213,6 +229,9 @@ if [ ${stage} -le 7 ]; then
 	       --max_target $max_target \
 	       --search $search \
 	       --beam_size $beam_size \
+	       --coeff_lm $coeff_lm \
+	       --file_lm "$file_lm" \
+	       --type_lm $type_lm \
 	       --result $result_dir
 
 	echo
