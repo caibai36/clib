@@ -265,7 +265,8 @@ class Node:
         log_seq_prob = self.log_prob + topk_log_prob_t # shape [expand_size]
         scores = log_seq_prob
 
-        scores = scores / self.length_penalty(len(self.tokenid_path), alpha=self.coeff_length_penalty) # shape [expand_size]
+        if (not self.model_lm): # add the length penalty only to lm score when lm model exists. See Google NMT: https://arxiv.org/pdf/1609.08144.pdf formula (14)
+            scores = scores / self.length_penalty(len(self.tokenid_path), alpha=self.coeff_length_penalty) # shape [expand_size]
 
         expanded_nodes = []
         for i in range(expand_size):
@@ -336,6 +337,7 @@ class Node:
                 #     Insert LM score whenever it has a <space> (increase punishment); the algorithm will not choose <space> any more.
                 #     ngram_score = -100 # min unigram score
 
+            ngram_score = ngram_score / self.length_penalty(len(self.tokenid_path)+1, alpha=self.coeff_length_penalty) # '+1' for counting the length of the new expanded token
             active = False if topk_log_prob_t_indices[i].item() == eos_id else True
             expand_node = Node(self.state + [state_t], # e.g. [1, 3] + [4] = [1, 3, 4]
                                self.tokenid_path + [topk_log_prob_t_indices[i].unsqueeze(-1)], # [tensor([1]),tensor([0])]+[tensor([2])]=[tensor([1]),tensor([0]),tensor([2])]
