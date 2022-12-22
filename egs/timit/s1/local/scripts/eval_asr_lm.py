@@ -143,6 +143,7 @@ logger.info("Start Evaluating...")
 
 metainfo_list = []
 loader = dataloader['test']
+
 # Settings for language model
 file_lm = opts["file_lm"]
 coeff_lm = opts["coeff_lm"]
@@ -189,7 +190,18 @@ for batch in tqdm.tqdm(loader, ascii=True, ncols=50):
         att = cur_best_att[i].detach().cpu().numpy() # shape [hypo_length, context_length]
         text = [id2token[tokenid] for tokenid in hypo] # length [hypo_length]
         info = {'uttid': uttid, 'text': ' '.join(text), 'att': att}
+
         # print({'uttid': uttid, 'text': ' '.join(text)})
+        uttid, text_char = info['uttid'], info['text']
+        # print(f"{uttid} {text_char}")
+        text_word = text_char.replace(' ', '').replace("<space>", ' ') # 'A B <space> C' => 'AB C'
+        print(f"HYP: {uttid} {text_word}")
+        text_char = re.sub("<sos>\s+(.+)\s+<eos>", "\\1", uttid2instance[uttid]['token']) # '<sos> A B <eos>' => 'A B'
+        # print(f"{uttid} {text_char}")
+        text_word = text_char.replace(' ', '').replace("<space>", ' ') # 'A B <space> C' => 'AB C'
+        print(f"REF: {uttid} {text_word}")
+        print()
+
         metainfo_list.append(info)
 
 ###########################

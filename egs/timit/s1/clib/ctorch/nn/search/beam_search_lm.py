@@ -228,7 +228,10 @@ class Node:
             "['<space>', 'h', 'e', 'r', 'e', '<space>', 'i', 's']" => "['here', 'is']"
             "['']" => "[]"
         """
-        word_path_str = ' '.join(token_path).replace(' ', '').replace(eos_token, ' <space> ' + eos_token).replace(sos_token,  sos_token + ' <space> ')
+        word_path_str = ' '.join(token_path).replace(' ', '')
+        # word_path_str = word_path_str.replace(eos_token, ' <space> ' + eos_token).replace(sos_token,  sos_token + ' <space> ')
+        for token in [sos_token, eos_token, '<unk>', '<pad>']:
+            word_path_str = word_path_str.replace(token, ' ' + space_token + ' ' + token + ' ' + space_token + ' ')
         word_path_str = word_path_str.replace(space_token, ' ').strip()
         word_path = re.split('\s+', word_path_str)
         word_path = [word for word in word_path if word] # remove the empty words
@@ -259,8 +262,86 @@ class Node:
         sos_token = '<sos>' if not self.const_token else self.const_token['sos'] # usually '<sos>' or '<s>'
         eos_token = '<eos>' if not self.id2token else self.id2token[int(eos_id)] # usually '<eos>' or '</s>'
 
+        # Language model
+        # Update the acoustic model scores (log_prob_t) with the language model scores (e.g., ngram conditional probabilities).
+        if (self.model_lm):
+            vocab_size = len(log_prob_t)
+            lm_scores_vocab = []
+            for i in range(vocab_size):
+                ngram_score = 0
+                lm_score = []
+
+                if (self.type_lm == "char_ngram" and self.coeff_lm != 0. and self.model_lm):
+                    order_lm = self.model_lm.order
+                    token_path = self.get_token_path()
+                    expand_token = self.id2token[i]
+                    expand_token_path = token_path + [expand_token]
+
+                    char_ngram = expand_token_path[-order_lm:] # the last n chars as an char_ngram; [2, 3][-4:] => [2, 3] never out of range
+                    if expand_token == eos_token: char_ngram[-1] = "</s>" # lm from srilm uses </s> as end of sentence
+                    conditional_rv, target_rv = char_ngram[:-1], char_ngram[-1] # split into conditional probabilities
+                    if (not conditional_rv): conditional_rv = "<s>" # condition empty
+                    score = ngram_log_prob(ngram_tokens=char_ngram, model=self.model_lm, log10=False)
+                    ngram_score += score
+                    lm_score.append(("log_prob('{}'|{}) ".format(target_rv, conditional_rv), score))
+
+                elif (self.type_lm == "word_ngram" and self.coeff_lm != 0. and self.model_lm):
+                    assert self.id2token, "language model with word_ngram needs the id2token dict in beam_search function"
+
+                    order_lm = self.model_lm.order
+                    token_path = self.get_token_path()
+                    expand_token = self.id2token[i]
+                    expand_token_path = token_path + [expand_token]
+
+                    # Treat '<space>' as a word boundary
+                    if expand_token == space_token:
+                        word_ngram = self.char_path_to_word_path(expand_token_path, space_token=space_token, # "['d','r','a','v','o','<space>','l','a','s','t','<eos>']" => "['dravo','last','<eos>']"
+                                                                 sos_token=sos_token, eos_token=eos_token)[-order_lm:] # the last n words as an word_ngram; [2, 3][-4:] => [2, 3] never out of range
+                        token_path = self.get_token_path()
+
+                        # Avoid repeated addition of ngram with consecutive space tokens ('<space>'), e.g., expanded path is ['B', '<space>', '<space>', 'A', '<space>', '<space>']
+                        if len(expand_token_path) > 1 and expand_token_path[-2] != space_token and len(word_ngram) >= 1:
+                            conditional_rv, target_rv = word_ngram[:-1], word_ngram[-1] # split into conditional probabilities
+                            if (not conditional_rv): conditional_rv = "<s>" # condition empty
+                            score = ngram_log_prob(ngram_tokens=word_ngram, model=self.model_lm, log10=False)
+                            ngram_score += score
+                            lm_score.append(("log_prob('{}'|{}) ".format(target_rv, conditional_rv), score))
+
+                    # Treat '<eos>' as a word boundary
+                    elif expand_token == eos_token:
+                        word_ngram = self.char_path_to_word_path(expand_token_path, space_token=space_token,
+                                                                 sos_token=sos_token, eos_token=eos_token)[-(order_lm+1):] # +1 for <eos>, e.g., ['A', 'B','<eos>'] logp(B|A) + logp(</s>|B)
+                        token_path = self.get_token_path()
+
+                        # Avoid repeated addition of ngram with consecutive space tokens ('<space>'), e.g., expanded path is ['B', '<space>', '<space>', 'A', '<space>', '<space>', '<eos>']
+                        if len(expand_token_path) > 1 and expand_token_path[-2] != space_token and len(word_ngram) >= 2:
+                            conditional_rv, target_rv = word_ngram[:-2], word_ngram[-2] # # split into conditional probabilities; -2 including removing <eos> ending
+                            if (not conditional_rv): conditional_rv = "<s>" # condition empty
+                            score = ngram_log_prob(ngram_tokens=word_ngram[:-1], model=self.model_lm, log10=False)
+                            ngram_score += score
+                            lm_score.append(("log_prob('{}'|{}) ".format(target_rv, conditional_rv), score))
+
+                        # Deal with ngram ending of '<eos>'
+                        start_pos = 1 if len(word_ngram) >= order_lm+1 else 0 # p(</s> | A B C) for 4-gram; word_gram (e.g., K A B C </s>), at least len 5 for start_pos 1
+                        if expand_token == eos_token:
+                            word_ngram[-1] = "</s>" # arpa lm file trained with </s>
+                            conditional_rv, target_rv = word_ngram[start_pos:-1], word_ngram[-1] # split into conditional probabilities
+                            if (not conditional_rv): conditional_rv = "<s>" # condition empty
+                            score = ngram_log_prob(ngram_tokens=word_ngram[start_pos:], model=self.model_lm, log10=False)
+                            ngram_score += score
+                            lm_score.append(("log_prob('{}'|{}) ".format(target_rv, conditional_rv), score))
+                    # else:
+                    #     Insert LM score whenever it has a <space> (increase punishment); the algorithm will not choose <space> any more.
+                    #     ngram_score = -100 # min unigram score
+
+                ngram_score = ngram_score / self.length_penalty(len(self.tokenid_path)+1, alpha=self.coeff_length_penalty) # '+1' for counting the length of the new expanded token
+                log_prob_t[i] = log_prob_t[i] + self.coeff_lm * ngram_score
+                lm_scores_vocab.append(self.lm_scores+lm_score) # Each vocab has an lm_scores to store a historical list of [(cond_prob_str, cond_prob_value)]
+
+######################################################################################################################################################################
+        # Default acoustic model
         if expand_size >= len(log_prob_t):
-            expand_size = len(log_prob_t) # expand all possible active nodes
+            expand_size = len(log_prob_t) # expand number of new nodes maximum to the vocab_size for any current active node
         topk_log_prob_t, topk_log_prob_t_indices = log_prob_t.topk(expand_size, dim=0) # shape [expand_size], [expand_size]
         log_seq_prob = self.log_prob + topk_log_prob_t # shape [expand_size]
         scores = log_seq_prob
@@ -270,79 +351,11 @@ class Node:
 
         expanded_nodes = []
         for i in range(expand_size):
-            # Language model
-            ngram_score = 0
-            lm_score = []
-
-            if (self.type_lm == "char_ngram" and self.coeff_lm != 0. and self.model_lm):
-                order_lm = self.model_lm.order
-                token_path = self.get_token_path()
-                expand_token = self.id2token[int(topk_log_prob_t_indices[i].item())]
-                expand_token_path = token_path + [expand_token]
-
-                char_ngram = expand_token_path[-order_lm:] # the last n chars as an char_ngram; [2, 3][-4:] => [2, 3] never out of range
-                if expand_token == eos_token: char_ngram[-1] = "</s>" # lm from srilm uses </s> as end of sentence
-                conditional_rv, target_rv = char_ngram[:-1], char_ngram[-1] # split into conditional probabilities
-                if (not conditional_rv): conditional_rv = "<s>" # condition empty
-                score = ngram_log_prob(ngram_tokens=char_ngram, model=self.model_lm, log10=False)
-                ngram_score += score
-                lm_score.append(("log_prob('{}'|{}) ".format(target_rv, conditional_rv), score))
-
-            elif (self.type_lm == "word_ngram" and self.coeff_lm != 0. and self.model_lm):
-                assert self.id2token, "language model with word_ngram needs the id2token dict in beam_search function"
-
-                order_lm = self.model_lm.order
-                token_path = self.get_token_path()
-                expand_token = self.id2token[int(topk_log_prob_t_indices[i].item())]
-                expand_token_path = token_path + [expand_token]
-
-                # Treat '<space>' as a word boundary
-                if expand_token == space_token:
-                    word_ngram = self.char_path_to_word_path(expand_token_path, space_token=space_token,
-                                                             sos_token=sos_token, eos_token=eos_token)[-order_lm:] # the last n words as an word_ngram; [2, 3][-4:] => [2, 3] never out of range
-                    token_path = self.get_token_path()
-
-                    # Avoid repeated addition of ngram with consecutive space tokens ('<space>'), e.g., expanded path is ['B', '<space>', '<space>', 'A', '<space>', '<space>']
-                    if len(expand_token_path) > 1 and expand_token_path[-2] != space_token and len(word_ngram) >= 1:
-                        conditional_rv, target_rv = word_ngram[:-1], word_ngram[-1] # split into conditional probabilities
-                        if (not conditional_rv): conditional_rv = "<s>" # condition empty
-                        score = ngram_log_prob(ngram_tokens=word_ngram, model=self.model_lm, log10=False)
-                        ngram_score += score
-                        lm_score.append(("log_prob('{}'|{}) ".format(target_rv, conditional_rv), score))
-
-                # Treat '<eos>' as a word boundary
-                elif expand_token == eos_token:
-                    word_ngram = self.char_path_to_word_path(expand_token_path, space_token=space_token,
-                                                             sos_token=sos_token, eos_token=eos_token)[-(order_lm+1):] # +1 for <eos>, e.g., ['A', 'B','<eos>'] logp(B|A) + logp(</s>|B)
-                    token_path = self.get_token_path()
-
-                    # Avoid repeated addition of ngram with consecutive space tokens ('<space>'), e.g., expanded path is ['B', '<space>', '<space>', 'A', '<space>', '<space>', '<eos>']
-                    if len(expand_token_path) > 1 and expand_token_path[-2] != space_token and len(word_ngram) >= 2:
-                        conditional_rv, target_rv = word_ngram[:-2], word_ngram[-2] # # split into conditional probabilities; -2 including removing <eos> ending
-                        if (not conditional_rv): conditional_rv = "<s>" # condition empty
-                        score = ngram_log_prob(ngram_tokens=word_ngram[:-1], model=self.model_lm, log10=False)
-                        ngram_score += score
-                        lm_score.append(("log_prob('{}'|{}) ".format(target_rv, conditional_rv), score))
-
-                    # Deal with ngram ending of '<eos>'
-                    start_pos = 1 if len(word_ngram) >= order_lm+1 else 0 # p(</s> | A B C) for 4-gram; word_gram (e.g., K A B C </s>), at least len 5 for start_pos 1
-                    if expand_token == eos_token:
-                        word_ngram[-1] = "</s>" # arpa lm file trained with </s>
-                        conditional_rv, target_rv = word_ngram[start_pos:-1], word_ngram[-1] # split into conditional probabilities
-                        if (not conditional_rv): conditional_rv = "<s>" # condition empty
-                        score = ngram_log_prob(ngram_tokens=word_ngram[start_pos:], model=self.model_lm, log10=False)
-                        ngram_score += score
-                        lm_score.append(("log_prob('{}'|{}) ".format(target_rv, conditional_rv), score))
-                # else:
-                #     Insert LM score whenever it has a <space> (increase punishment); the algorithm will not choose <space> any more.
-                #     ngram_score = -100 # min unigram score
-
-            ngram_score = ngram_score / self.length_penalty(len(self.tokenid_path)+1, alpha=self.coeff_length_penalty) # '+1' for counting the length of the new expanded token
             active = False if topk_log_prob_t_indices[i].item() == eos_id else True
             expand_node = Node(self.state + [state_t], # e.g. [1, 3] + [4] = [1, 3, 4]
                                self.tokenid_path + [topk_log_prob_t_indices[i].unsqueeze(-1)], # [tensor([1]),tensor([0])]+[tensor([2])]=[tensor([1]),tensor([0]),tensor([2])]
                                log_seq_prob[i].unsqueeze(-1), # e.g. torch.Tensor([0.4])
-                               (scores[i] + self.coeff_lm * ngram_score).unsqueeze(-1),
+                               scores[i].unsqueeze(-1),
                                coeff_length_penalty=self.coeff_length_penalty,
                                active=active,
                                coeff_lm=self.coeff_lm,
@@ -350,13 +363,12 @@ class Node:
                                type_lm=self.type_lm,
                                id2token=self.id2token,
                                const_token=self.const_token,
-                               lm_scores=self.lm_scores+lm_score) # list concatenation
+                               lm_scores=lm_scores_vocab[int(topk_log_prob_t_indices[i].item())] if self.model_lm else [])
 
-            # print(f"{ngram_score=}")
             # print(expand_node)
             # print(expand_node.get_token_path())
-            # print(f"{expand_node.lm_scores=}")
             # print(self.char_path_to_word_path(expand_node.get_token_path())) # for word_ngram
+            # print(f"expand_node.lm_scores = {expand_node.lm_scores}")
             # print()
 
             expanded_nodes.append(expand_node)
