@@ -1,0 +1,12 @@
+---
+class:
+    "<class '__main__.EncRNNDecRNNAtt'>"
+att_config:
+    type: mlp
+enc_fnn_sizes: [4, 9]
+enc_rnn_sizes: [5, 5, 5]
+enc_rnn_subsampling: [False, True, True]
+enc_rnn_subsampling_type: 'concat'
+dec_embedding_size: 6
+dec_rnn_sizes: [8, 8]
+dec_context_proj_size: 6
