@@ -1,0 +1,4 @@
+train: 'conf/data/test_small/utts.json'
+dev: 'conf/data/test_small/utts.json'
+test: 'conf/data/test_small/utts.json'
+token2id: 'conf/data/test_small/token2id.txt'

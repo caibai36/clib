@@ -1,0 +1,4 @@
+train: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/timit/s1/data/train_mel80/utts.json'
+dev: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/timit/s1/data/dev_mel80/utts.json'
+test: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/timit/s1/data/test_mel80/utts.json'
+token2id: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/timit/s1/data/lang_1char/train_units.txt'
