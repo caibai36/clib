@@ -7,6 +7,11 @@ set -uo pipefail
 stage=0  # start from 0 if you need to start from data preparation
 
 dataset_name="mit_sample"
+
+# "train_dev" is all uttids for training and development sets. Uttids are a sequence of animal pairs.
+# e.g., "A B C D", where "A" and "B" are the first pair; "C" and "D" are the second pair.
+# "dev_pair_ind" is the indices of pairs in train_dev array taken as the development set. Taking value 1 means take the second pair as the development set.
+# e.g., ["A", "B", "C", "D", "E", "F"] would take ["C", "D"] as the development set and the remaining pairs of ["A", "B", "E", "F"] as the training set.
 train_dev="Cricket Enid Setta Sailor"
 dev_pair_ind=1
 
