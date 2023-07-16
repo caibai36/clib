@@ -1,3 +1,5 @@
+# Modified interfaces and details of 'create_data_17.py' from https://marmosetbehavior.mit.edu/, preparing for scripts to run experiments on a new mit dataset.
+
 ''' Creates a dataset(numpy array of spectrograms and corresponding numpy array of labels) given a list of wav files
 and labels.'''
 #necessary if running on a server
@@ -11,19 +13,37 @@ import random
 import numpy as np
 import os
 
-#source directory for wav files and labels
-directory="Wave_files/"
-#result directory for saving the dataset
-save_dir="Data/"
+import argparse
+import json
+parser = argparse.ArgumentParser(description="Create a dataset of audios and labels stored with format of numpy array.")
+parser.add_argument("--info_json", type=str, default="data/mit_sample/info.json", help="json file that maps utterance id to key-value pairs. The keys should include 'wav' and 'aud' for locations of audio files and audacity labels. {'uttid1': {'wav1': wav1_path, 'aud1': audacity_label1_path}, 'uttid2': {'wav2': wav2_path, 'aud2': audacity_label2_path}}. Each line of audacity label file is 'begin_time_sec end_time_sec label'.")
+parser.add_argument("--train_dev", type=str, default=["Cricket", "Enid", "Setta", "Sailor"], nargs="+", help='all uttids for training and development sets. Uttids are a sequence of animal pairs. e.g., "--train_dev Cricket Enid Setta Sailor" where "Crick" and "Enid" are the first pair; "Setta" and "Sailor" are the second pair.')
+parser.add_argument("--dev_pair_ind", type=int, default=[1], nargs="+", help='the indices of pairs in train_dev array taken as the development set. Taking value 1 means take the second pair as the development set. e.g., ["Cricket", "Enid", "Setta", "Sailor"] would take ["Setta", "Sailor"] as the development set and the remaining pairs of ["Cricket", "Enid"] as the training set.')
+parser.add_argument("--out_dir", type=str, default="exp/data/mit_sample", help="Output directory to store the spectra and labels for training and development sets")
+args = parser.parse_args()
 
-#list of 16bit wav file names to be used in creating the dataset
-files=["20150814_Cricket_Enid/20150814_Cricket_aligned.wav","20150814_Cricket_Enid/20150814_Enid_aligned.wav",
-       "20150903_Setta_Sailor/Setta_aligned.wav","20150903_Setta_Sailor/Sailor_aligned.wav"]
+print(args)
 
-#list of label files associated with wav files, in the same order
-label_files=["20150814_Cricket_Enid/Cricket.txt","20150814_Cricket_Enid/Enid.txt",
-              "20150903_Setta_Sailor/Setta.txt","20150903_Setta_Sailor/Sailor.txt"]
+# #source directory for wav files and labels
+# directory="Wave_files/"
+# #result directory for saving the dataset
+# save_dir="Data/"
 
+# #list of 16bit wav file names to be used in creating the dataset
+# files=["20150814_Cricket_Enid/20150814_Cricket_aligned.wav","20150814_Cricket_Enid/20150814_Enid_aligned.wav",
+#        "20150903_Setta_Sailor/Setta_aligned.wav","20150903_Setta_Sailor/Sailor_aligned.wav"]
+
+# #list of label files associated with wav files, in the same order
+# label_files=["20150814_Cricket_Enid/Cricket.txt","20150814_Cricket_Enid/Enid.txt",
+#               "20150903_Setta_Sailor/Setta.txt","20150903_Setta_Sailor/Sailor.txt"]
+
+with open(args.info_json) as f:
+    info = json.load(f)
+files = [info[uttid]['wav'] for uttid in args.train_dev]
+label_files = [info[uttid]['aud'] for uttid in args.train_dev]
+save_dir = args.out_dir
+if not os.path.exists(save_dir):
+    os.makedirs(save_dir)
 
 #a dictionary for linking each call type to its nidex in label vector, symmetric to allow easy flipping
 #when randomizing input order
@@ -31,7 +51,8 @@ truth_values={'cha':0,'chi':1,'ek':2,'ph':3,'ts':4,'tr':5,'trph':6,'tw':7,'noise
               'tw2':9,'trph2':10,'tr2':11,'ts2':12,'ph2':13,'ek2':14,'chi2':15,'cha2':16}
 
 #sessions to be used for evaluation
-eval_sessions=[1]
+# eval_sessions=[1]
+eval_sessions = args.dev_pair_ind
 
 train_data1=[]
 train_data2=[]
@@ -48,7 +69,7 @@ for k in range(int(len(files)/2)):
     has not been labeled and would end up in calls being marked as noise'''
     first=1000000
     #creates a list of labels out of text files with 150ms step size for discretization
-    labels1=open(directory+label_files[2*k],'r')
+    labels1=open(label_files[2*k],'r')
     for line in labels1:
         start_t, end_t, typee=line.split('\t')
         '''there is no call in the middle 150ms of the window if the start of the next call is more than 325ms
@@ -64,10 +85,10 @@ for k in range(int(len(files)/2)):
                 first=current
             lines1.append(typee[:-1].lower())
             current+=1
-            
+
     lines2=[]
     current=0
-    labels2=open(directory+label_files[2*k+1],'r')
+    labels2=open(label_files[2*k+1],'r')
     for line in labels2:
         start_t, end_t, typee=line.split('\t')
         while float(start_t)-current*0.15>0.325:
@@ -82,7 +103,7 @@ for k in range(int(len(files)/2)):
     #lines is created to hold combination of lines1 and lines2
     lines=[]
     length=max(len(lines1),len(lines2))
-    
+
     #pad the smaller list with noise to get to same size
     if len(lines1)<length:
         for i in range(length-len(lines1)):
@@ -93,7 +114,7 @@ for k in range(int(len(files)/2)):
 
     '''creates a vector for each label initialized with 17 zeros. Changes the value at relevant index to one for each call type
     that is present and if no call present changes the value of noise to 1, call types not in the dictionary will be marked
-    as noise'''      
+    as noise'''
     for i in range(length):
         init_y=np.zeros(17)
         if lines1[i]!='noise':
@@ -106,24 +127,24 @@ for k in range(int(len(files)/2)):
                 init_y[truth_values[lines2[i]+'2']]=1
             except(KeyError):
                 pass
-        
+
         if np.sum(init_y)==0:
             init_y[truth_values['noise']]=1
         lines.append(init_y)
-        
+
     nfft_a=512
-    
-    rate, data = wavfile.read(directory+files[2*k])
-    rate2, data2 = wavfile.read(directory+files[2*k+1])
+
+    rate, data = wavfile.read(files[2*k])
+    rate2, data2 = wavfile.read(files[2*k+1])
 
     #only looks between first and last label
     for i in range(first,length):
         #cretes the spectrogram if current piece is not labeled as noise and for for every fifth piece regardless
         if lines[i][8]!=1 or i%5==0:
-            
+
             #take a 500ms piece out the data with step size of 150 ms
             signal_piece1=data[int(rate*i*0.15):int(rate*(i*0.15+0.5))]
-            #resamples the signal piece if the file has a rate that is not 48kHz 
+            #resamples the signal piece if the file has a rate that is not 48kHz
             if rate!=48000:
                 signal_piece1=signal.resample(signal_piece1,int(len(signal_piece1)*48000/rate))
 
@@ -136,12 +157,12 @@ for k in range(int(len(files)/2)):
             if np.shape(result1)!=(257,256):
                 print("invalid shape1", np.shape(result1))
                 continue
-            
+
             #the same for second wav file
             signal_piece2=data2[int(i*rate2*0.15):int(rate2*((i+1)*0.15+0.35))]
             if rate2!=48000:
                 signal_piece2=signal.resample(signal_piece2,int(len(signal_piece2)*48000/rate2))
-                
+
             spectrum2,freqs2,time2,image2=plt.specgram(signal_piece2, NFFT=nfft_a, Fs=48000,
                                                        window=np.hamming(nfft_a), noverlap=420,
                                                        scale='linear', detrend='none')
@@ -176,31 +197,30 @@ eval_correct=np.array(eval_correct,dtype=np.float16)
 
 if not os.path.exists(save_dir):
     os.mkdir(save_dir)
-                               
+
 #train specgrams for animal1
-save_fil1=open(save_dir+'train_xs1','wb')
+save_fil1=open(os.path.join(save_dir, 'train_input1'),'wb')
 np.save(save_fil1,train_data1)
 save_fil1.close()
 #train specgrams for animal2
-save_fil2=open(save_dir+'train_xs2','wb')
+save_fil2=open(os.path.join(save_dir, 'train_input2'),'wb')
 np.save(save_fil2,train_data2)
 save_fil2.close()
 #train labels
-save_fil3=open(save_dir+'train_ys_multi','wb')
+save_fil3=open(os.path.join(save_dir, 'train_target_multi'),'wb')
 np.save(save_fil3,correct)
 save_fil3.close()
 
 #evaluation pecgrams for animal1
-save_fil4=open(save_dir+'eval_xs1','wb')
+save_fil4=open(os.path.join(save_dir, 'dev_input1'),'wb')
 np.save(save_fil4,eval_data1)
 save_fil4.close()
 #evaluation pecgrams for animal2
-save_fil5=open(save_dir+'eval_xs2','wb')
+save_fil5=open(os.path.join(save_dir, 'dev_input2'),'wb')
 np.save(save_fil5,eval_data2)
 save_fil5.close()
 #evaluation labels
-save_fil6=open(save_dir+'eval_ys_multi','wb')
+save_fil6=open(os.path.join(save_dir, 'dev_target_multi'),'wb')
 np.save(save_fil6,eval_correct)
 save_fil6.close()
 print('Saved')
-

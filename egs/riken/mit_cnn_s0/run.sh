@@ -8,7 +8,7 @@ stage=0  # start from 0 if you need to start from data preparation
 
 # Data
 dataset_name=mit_sample # see https://marmosetbehavior.mit.edu
-mit_sample=/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit_cnn/original/Wave_files/
+mit_sample=/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit_cnn/original/Wave_files
 
 # Parse the options. (eg. ./run.sh --stage 1)
 # Note that the options should be defined as shell variable before parsing
