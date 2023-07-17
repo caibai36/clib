@@ -17,6 +17,6 @@ mit_sample=/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit_cnn/origin
 if [ ${stage} -le 1 ]; then
     date
     echo "Data preparation..."
-    ./local/mit_sample_data_prep.sh --mit_sample $mit_sample
+    ./local/mit_sample_data_prep.sh --mit_sample $mit_sample --stage 3
     date
 fi

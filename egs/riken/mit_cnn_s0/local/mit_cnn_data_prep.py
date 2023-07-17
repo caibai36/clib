@@ -15,7 +15,7 @@ import os
 
 import argparse
 import json
-parser = argparse.ArgumentParser(description="Create a dataset of audios and labels stored with format of numpy array.")
+parser = argparse.ArgumentParser(description="Create a training and development datasets of audios and labels stored with the format of the numpy array (reference: 'create_data_17.py' from https://marmosetbehavior.mit.edu/).")
 parser.add_argument("--info_json", type=str, default="data/mit_sample/info.json", help="json file that maps utterance id to key-value pairs. The keys should include 'wav' and 'aud' for locations of audio files and audacity labels. {'uttid1': {'wav1': wav1_path, 'aud1': audacity_label1_path}, 'uttid2': {'wav2': wav2_path, 'aud2': audacity_label2_path}}. Each line of audacity label file is 'begin_time_sec end_time_sec label'.")
 parser.add_argument("--train_dev", type=str, default=["Cricket", "Enid", "Setta", "Sailor"], nargs="+", help='all uttids for training and development sets. Uttids are a sequence of animal pairs. e.g., "--train_dev Cricket Enid Setta Sailor" where "Crick" and "Enid" are the first pair; "Setta" and "Sailor" are the second pair.')
 parser.add_argument("--dev_pair_ind", type=int, default=[1], nargs="+", help='the indices of pairs in train_dev array taken as the development set. Taking value 1 means take the second pair as the development set. e.g., ["Cricket", "Enid", "Setta", "Sailor"] would take ["Setta", "Sailor"] as the development set and the remaining pairs of ["Cricket", "Enid"] as the training set.')
