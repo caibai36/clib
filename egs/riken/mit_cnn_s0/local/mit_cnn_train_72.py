@@ -17,6 +17,48 @@ import datetime
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
+import argparse
+
+parser = argparse.ArgumentParser(description="train cnn 72")
+# common
+
+# data
+parser.add_argument("--train_input1", type=str, default="exp/data/mit_data/train_input1", help="training set's first stream input")
+parser.add_argument("--train_input2", type=str, default="exp/data/mit_data/train_input2", help="training set's second stream input")
+parser.add_argument("--train_target_single1", type=str, default="exp/data/mit_data/train_target_single1", help="training set's first stream target label")
+parser.add_argument("--train_target_single2", type=str, default="exp/data/mit_data/train_target_single2", help="training set's second stream target label")
+
+parser.add_argument("--dev_input1", type=str, default="exp/data/mit_data/dev_input1", help="development set's first stream input")
+parser.add_argument("--dev_input2", type=str, default="exp/data/mit_data/dev_input2", help="development set's second stream input")
+parser.add_argument("--dev_target_single1", type=str, default="exp/data/mit_data/dev_target_single1", help="development set's first stream target label")
+parser.add_argument("--dev_target_single2", type=str, default="exp/data/mit_data/dev_target_single2", help="development set's second stream target label")
+
+parser.add_argument('--batch_size', type=int, default=25, help="batch size for the dataloader")
+
+# model
+parser.add_argument('--dropout_rate', type=float, default=0.4, help="drop rate of dropout layer")
+
+# loss
+
+# optimizer
+parser.add_argument('--lr', type=float, default=0.0003, help="learning rate of adam optimizer")
+parser.add_argument('--epsilon', type=float, default=0.001, help="epsilon of adam optimizer for numerical stability. The default of tensorflow should be 1e-7. Here the default is 0.001 by mit_cnn author.")
+
+# training
+parser.add_argument('--num_iter', type=int, default=2601, help="number of iterations. Default is 2601. The full dataset was trained for 74001")
+parser.add_argument('--eval_interval', type=int, default=200, help='evaluate the development set every x iterations, Default is 200. The full dataset was 2000')
+
+# others
+parser.add_argument('--result', type=str, default="exp/sys/mit_sample/mit_sample0/mit_cnn_72-run0/bs25lr0.0003cutoff0.7/train/", help="result directory, e.g.,exp/tmp/test_small_att/train")
+
+args = parser.parse_args()
+
+print(args)
+
+if not os.path.exists(args.result):
+    os.makedirs(args.result)
+model_path = os.path.join(args.result, "model.ckpt")
+
 truth_values=['cha','chi','ek','ph','ts','tr','trph','tw','noise']
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -431,12 +473,12 @@ def predict(pred_data1,pred_data2,predictions_file1,predictions_file2,model_dir)
     np.save(predictions_file2,predictions2)
 
 
-if __name__=='__main__':
-  start=datetime.datetime.now()
-  train("Models/model_small.ckpt")
-  print("Time taken: ", datetime.datetime.now()-start)
-  # predict('Data/20161219_Athos_Porthos_x1_test',
-  #         'Data/20161219_Athos_Porthos_x2_test',
-  #         'Data/pred_20161219_Athos_model_small',
-  #         'Data/pred_20161219_Porthos_model_small',
-  #         model_dir="Models/model_small.ckpt")
+# if __name__=='__main__':
+#   start=datetime.datetime.now()
+#   train("Models/model_small.ckpt")
+#   print("Time taken: ", datetime.datetime.now()-start)
+#   # predict('Data/20161219_Athos_Porthos_x1_test',
+#   #         'Data/20161219_Athos_Porthos_x2_test',
+#   #         'Data/pred_20161219_Athos_model_small',
+#   #         'Data/pred_20161219_Porthos_model_small',
+#   #         model_dir="Models/model_small.ckpt")
