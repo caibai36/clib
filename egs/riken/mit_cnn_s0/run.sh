@@ -4,7 +4,7 @@
 set -uo pipefail
 
 # general configuration
-stage=2  # start from 0 if you need to start from data preparation
+stage=4  # start from 0 if you need to start from data preparation
 
 # Data and model options
 # model: mit_cnn_72
@@ -52,6 +52,7 @@ if [ ${stage} -le 1 ]; then
 fi
 
 result_dir=$exp_dir/$dataset_name/$data_name/${model_name}-${run}/bs${batch_size}lr${lr}evalinterval${eval_interval}avgpredwin${avg_pred_win}/train
+mkdir -p $result_dir
 if [ ${stage} -le 2 ]; then
     date
     echo "Train mit cnn 72..."
@@ -71,5 +72,23 @@ if [ ${stage} -le 2 ]; then
 	   --eval_interval $eval_interval \
 	   --avg_pred_win $avg_pred_win \
 	   --result $result_dir
+    date
+fi
+
+eval_dir=$exp_dir/$dataset_name/$data_name/${model_name}-${run}/bs${batch_size}lr${lr}evalinterval${eval_interval}avgpredwin${avg_pred_win}/eval
+mkdir -p $eval_dir
+if [ ${stage} -le 3 ]; then
+    date
+    echo "Test mit cnn 72..."
+    python local/mit_cnn_test_72.py --test_input1 exp/data/$dataset_name/test_input1_Athos \
+	   --test_input2 exp/data/$dataset_name/test_input2_Porthos \
+	   --test_pred1 $eval_dir/test_pred1_Athos \
+	   --test_pred2 $eval_dir/test_pred2_Porthos \
+	   --batch_size $batch_size \
+	   --dropout_rate 0.4 \
+	   --lr $lr \
+	   --epsilon 0.001 \
+	   --avg_pred_win $avg_pred_win \
+	   --eval_model $result_dir/model.ckpt
     date
 fi
