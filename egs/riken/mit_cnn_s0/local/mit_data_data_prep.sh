@@ -14,7 +14,7 @@ dataset_name="mit_data"
 # e.g., ["A", "B", "C", "D", "E", "F"] would take ["C", "D"] as the development set and the remaining pairs of ["A", "B", "E", "F"] as the training set.
 train_dev="p2a1_toget p2a2_toget p3a1_toget p3a2_toget p4a1_toget p4a2_toget p5a1_toget p5a2_toget p6a1_toget p6a2_toget p7a1_toget p7a2_toget p8a1_toget p8a2_toget p9a1_toget p9a2_toget p10a1_toget p10a2_toget"
 dev_pair_ind=0
-test="p1a1_toget p1a2_toget"
+test_wav_uttids="p1a1_toget p1a2_toget" # a sequence of pairs
 
 # Data
 mit_data=/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit
@@ -58,5 +58,14 @@ if [ ${stage} -le 3 ]; then
 	   --train_target_single2 exp/data/$dataset_name/train_target_single2 \
 	   --dev_target_single1 exp/data/$dataset_name/dev_target_single1 \
 	   --dev_target_single2 exp/data/$dataset_name/dev_target_single2
+    date
+fi
+
+if [ ${stage} -le 4 ]; then
+    date
+    echo "Create 2500ms spectral segments to prepare the inputs of test sets..."
+    python local/mit_cnn_wav_into_test_2500_raw.py --info_json data/$dataset_name/info.json \
+	   --test_wav_uttids  $test_wav_uttids \
+	   --out_dir exp/data/$dataset_name
     date
 fi
