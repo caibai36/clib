@@ -48,7 +48,7 @@ if [ ${stage} -le 2 ]; then
     date
 fi
 
-if [ ${stage} -le 2 ]; then
+if [ ${stage} -le 3 ]; then
     date
     echo "Converting an onehot target into two onehot targets of an animal pair for training and development sets..."
     python local/mit_cnn_target_norm_single2.py --train_target_multi exp/data/$dataset_name/train_target_multi \
@@ -56,6 +56,6 @@ if [ ${stage} -le 2 ]; then
 	   --train_target_single1 exp/data/$dataset_name/train_target_single1 \
 	   --train_target_single2 exp/data/$dataset_name/train_target_single2 \
 	   --dev_target_single1 exp/data/$dataset_name/dev_target_single1 \
-	   --dev_target_single2 exp/data/$dataset_name/dev_target_single2 \
+	   --dev_target_single2 exp/data/$dataset_name/dev_target_single2
     date
 fi
