@@ -18,7 +18,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import argparse
 
-parser = argparse.ArgumentParser(description="train or eval mit cnn 72. When training, use training options; when predicting, use evaluation options.")
+parser = argparse.ArgumentParser(description="train or eval mit cnn 72. When training, use training options; when predicting, use evaluation options. (reference: 'new_train_72.py' from https://marmosetbehavior.mit.edu/, supporting tensorflow 2)")
 # common
 
 # data
@@ -41,7 +41,7 @@ parser.add_argument("--test_pred2", type=str, default="exp/data/mit_sample/test_
 
 # model
 parser.add_argument("--dropout_rate", type=float, default=0.4, help="train/dev option: drop rate of dropout layer")
-parser.add_argument("--eval_model", type=str, default="exp/sys/mit_sample/mit_sample0/mit_cnn_72-run0/bs25lr0.0003cutoff0.7/train/model.ckpt", help="model path for prediction or evaluation.")
+parser.add_argument("--eval_model", type=str, default="", help="model path for prediction or evaluation.")
 
 # loss
 
@@ -56,7 +56,7 @@ parser.add_argument("--eval_interval", type=int, default=200, help="train option
 #
 parser.add_argument("--avg_pred_win", type=int, default=5, help="eval option: collect predicted probabilities by averaging across x consecutive predictions with step size of 1.")
 # others
-parser.add_argument("--result", type=str, default="exp/sys/mit_sample/mit_sample0/mit_cnn_72-run0/bs25lr0.0003evalinterval2601avgpredwin5/train/", help="train option: result directory, e.g.,exp/tmp/test_small_att/train")
+parser.add_argument("--result", type=str, default="exp/sys/mit_sample/mit_sample0/mit_cnn_72-run0/bs25lr0.0003evalinterval200avgpredwin5/train/", help="train option: result directory, e.g.,exp/tmp/test_small_att/train")
 
 args = parser.parse_args()
 
@@ -85,8 +85,9 @@ eval_interval=args.eval_interval
 # others
 result=args.result
 
-if not os.path.exists(args.result):
-    os.makedirs(args.result)
+is_training = (not args.eval_model)
+if not os.path.exists(args.result) and is_training:
+     os.makedirs(args.result)
 model_path = os.path.join(args.result, "model.ckpt")
 
 # Prediction or Evaluation
@@ -528,4 +529,4 @@ if __name__=='__main__':
   start=datetime.datetime.now()
   train(model_path)
   print("Time taken: ", datetime.datetime.now()-start)
-  # predict(test_input1, test_input2, test_pred1, test_pred2, model_dir=eval_model)
+#  predict(test_input1, test_input2, test_pred1, test_pred2, model_dir=eval_model)
