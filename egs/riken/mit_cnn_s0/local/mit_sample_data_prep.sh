@@ -42,8 +42,20 @@ if [ ${stage} -le 2 ]; then
     date
     echo "Preparing spectra and labels for training and development sets..."
     python local/mit_cnn_data_prep.py --info_json data/$dataset_name/info.json \
-	   --train_dev  $train_dev\
+	   --train_dev  $train_dev \
 	   --dev_pair_ind $dev_pair_ind \
 	   --out_dir exp/data/$dataset_name
+    date
+fi
+
+if [ ${stage} -le 2 ]; then
+    date
+    echo "Converting an onehot target into two onehot targets of an animal pair for training and development sets..."
+    python local/mit_cnn_target_norm_single2.py --train_target_multi exp/data/$dataset_name/train_target_multi \
+	   --dev_target_multi exp/data/$dataset_name/dev_target_multi \
+	   --train_target_single1 exp/data/$dataset_name/train_target_single1 \
+	   --train_target_single2 exp/data/$dataset_name/train_target_single2 \
+	   --dev_target_single1 exp/data/$dataset_name/dev_target_single1 \
+	   --dev_target_single2 exp/data/$dataset_name/dev_target_single2 \
     date
 fi
