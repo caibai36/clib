@@ -11,7 +11,6 @@ import pickle
 import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 
-
 import os
 import datetime
 
@@ -19,45 +18,87 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 import argparse
 
-parser = argparse.ArgumentParser(description="train cnn 72")
+parser = argparse.ArgumentParser(description="train or eval mit cnn 72. When training, use training options; when predicting, use evaluation options.")
 # common
 
 # data
-parser.add_argument("--train_input1", type=str, default="exp/data/mit_data/train_input1", help="training set's first stream input")
-parser.add_argument("--train_input2", type=str, default="exp/data/mit_data/train_input2", help="training set's second stream input")
-parser.add_argument("--train_target_single1", type=str, default="exp/data/mit_data/train_target_single1", help="training set's first stream target label")
-parser.add_argument("--train_target_single2", type=str, default="exp/data/mit_data/train_target_single2", help="training set's second stream target label")
+parser.add_argument("--train_input1", type=str, default="exp/data/mit_sample/train_input1", help="train option: training set's first stream input")
+parser.add_argument("--train_input2", type=str, default="exp/data/mit_sample/train_input2", help="train option: training set's second stream input")
+parser.add_argument("--train_target_single1", type=str, default="exp/data/mit_sample/train_target_single1", help="train option: training set's first stream target label")
+parser.add_argument("--train_target_single2", type=str, default="exp/data/mit_sample/train_target_single2", help="train option: training set's second stream target label")
 
-parser.add_argument("--dev_input1", type=str, default="exp/data/mit_data/dev_input1", help="development set's first stream input")
-parser.add_argument("--dev_input2", type=str, default="exp/data/mit_data/dev_input2", help="development set's second stream input")
-parser.add_argument("--dev_target_single1", type=str, default="exp/data/mit_data/dev_target_single1", help="development set's first stream target label")
-parser.add_argument("--dev_target_single2", type=str, default="exp/data/mit_data/dev_target_single2", help="development set's second stream target label")
+parser.add_argument("--dev_input1", type=str, default="exp/data/mit_sample/dev_input1", help="train option: development set's first stream input")
+parser.add_argument("--dev_input2", type=str, default="exp/data/mit_sample/dev_input2", help="train option: development set's second stream input")
+parser.add_argument("--dev_target_single1", type=str, default="exp/data/mit_sample/dev_target_single1", help="train option: development set's first stream target label")
+parser.add_argument("--dev_target_single2", type=str, default="exp/data/mit_sample/dev_target_single2", help="train option: development set's second stream target label")
 
-parser.add_argument('--batch_size', type=int, default=25, help="batch size for the dataloader")
+parser.add_argument("--batch_size", type=int, default=25, help="train/dev option: batch size for the dataloader")
+
+parser.add_argument("--test_input1", type=str, default="exp/data/mit_sample/test_input1_Athos", help="eval option: testing set's first stream input")
+parser.add_argument("--test_input2", type=str, default="exp/data/mit_sample/test_input2_Porthos", help="eval option: testing set's second stream input")
+parser.add_argument("--test_pred1", type=str, default="exp/data/mit_sample/test_pred1_Athos", help="eval option: test set's first stream predicted label")
+parser.add_argument("--test_pred2", type=str, default="exp/data/mit_sample/test_pred2_Porthos", help="eval option: test set's second stream predicted label")
 
 # model
-parser.add_argument('--dropout_rate', type=float, default=0.4, help="drop rate of dropout layer")
+parser.add_argument("--dropout_rate", type=float, default=0.4, help="train/dev option: drop rate of dropout layer")
+parser.add_argument("--eval_model", type=str, default="exp/sys/mit_sample/mit_sample0/mit_cnn_72-run0/bs25lr0.0003cutoff0.7/train/model.ckpt", help="model path for prediction or evaluation.")
 
 # loss
 
 # optimizer
-parser.add_argument('--lr', type=float, default=0.0003, help="learning rate of adam optimizer")
-parser.add_argument('--epsilon', type=float, default=0.001, help="epsilon of adam optimizer for numerical stability. The default of tensorflow should be 1e-7. Here the default is 0.001 by mit_cnn author.")
+parser.add_argument("--lr", type=float, default=0.0003, help="train/dev option: learning rate of adam optimizer")
+parser.add_argument("--epsilon", type=float, default=0.001, help="train/dev option: epsilon of adam optimizer for numerical stability. The default of tensorflow should be 1e-7. Here the default is 0.001 by mit_cnn author.")
 
 # training
-parser.add_argument('--num_iter', type=int, default=2601, help="number of iterations. Default is 2601. The full dataset was trained for 74001")
-parser.add_argument('--eval_interval', type=int, default=200, help='evaluate the development set every x iterations, Default is 200. The full dataset was 2000')
+parser.add_argument("--num_iter", type=int, default=2601, help="train option: number of iterations. Default is 2601. The full dataset was trained for 74001")
+parser.add_argument("--eval_interval", type=int, default=200, help="train option: evaluate the development set every x iterations and lr = lr * 0.97, Default is 200. The full dataset was 2000")
 
+#
+parser.add_argument("--avg_pred_win", type=int, default=5, help="eval option: collect predicted probabilities by averaging across x consecutive predictions with step size of 1.")
 # others
-parser.add_argument('--result', type=str, default="exp/sys/mit_sample/mit_sample0/mit_cnn_72-run0/bs25lr0.0003cutoff0.7/train/", help="result directory, e.g.,exp/tmp/test_small_att/train")
+parser.add_argument("--result", type=str, default="exp/sys/mit_sample/mit_sample0/mit_cnn_72-run0/bs25lr0.0003evalinterval2601avgpredwin5/train/", help="train option: result directory, e.g.,exp/tmp/test_small_att/train")
 
 args = parser.parse_args()
 
 print(args)
 
+# Training
+# data
+train_input1=args.train_input1
+train_input2=args.train_input2
+train_target_single1=args.train_target_single1
+train_target_single2=args.train_target_single2
+dev_input1=args.dev_input1
+dev_input2=args.dev_input2
+dev_target_single1=args.dev_target_single1
+dev_target_single2=args.dev_target_single2
+batch_size=args.batch_size
+# model
+dropout_rate=args.dropout_rate
+# loss
+# optimizer
+lr=args.lr
+epsilon=args.epsilon
+# training
+num_iter=args.num_iter
+eval_interval=args.eval_interval
+# others
+result=args.result
+
 if not os.path.exists(args.result):
     os.makedirs(args.result)
 model_path = os.path.join(args.result, "model.ckpt")
+
+# Prediction or Evaluation
+# data
+test_input1=args.test_input1
+test_input2=args.test_input2
+test_pred1=args.test_pred1
+test_pred2=args.test_pred2
+# model
+eval_model=args.eval_model
+# eval
+avg_pred_win=args.avg_pred_win
 
 truth_values=['cha','chi','ek','ph','ts','tr','trph','tw','noise']
 tf.logging.set_verbosity(tf.logging.INFO)
@@ -147,7 +188,7 @@ def pred_input_function(xs1,xs2, i):
       new_features[key]=np.array(new_features[key],dtype=np.float32)
     return new_features
 
-def main(xs1=None,xs2=None, batch_size=10, mode='predict', model_dir='Models/model.ckpt'):
+def main(xs1=None,xs2=None, batch_size=10, mode='predict', model_dir='Models/model.ckpt', lr=lr):
   '''the main function for using the network,
   -xs1 and xs2 are used to feed input files when in prediction mode,
   -batch_size refers to the minibatch size to be used when training,
@@ -157,31 +198,31 @@ def main(xs1=None,xs2=None, batch_size=10, mode='predict', model_dir='Models/mod
   -model_dir is the path to where the model should be saved/loaded from'''
   #loads training data, done here to minimize memory usage
   if mode=='train':
-      fil_tr_x1=open('Data/train_xs1','rb')
+      fil_tr_x1=open(train_input1,'rb')
       xs1=np.load(fil_tr_x1)
       fil_tr_x1.close()
-      fil_ev_x1=open('Data/eval_xs1','rb')
+      fil_ev_x1=open(dev_input1,'rb')
       eval_xs1=np.load(fil_ev_x1)
       fil_ev_x1.close()
 
-      fil_tr_x2=open('Data/train_xs2','rb')
+      fil_tr_x2=open(train_input2,'rb')
       xs2=np.load(fil_tr_x2)
       fil_tr_x2.close()
-      fil_ev_x2=open('Data/eval_xs2','rb')
+      fil_ev_x2=open(dev_input2,'rb')
       eval_xs2=np.load(fil_ev_x2)
       fil_ev_x2.close()
 
-      fil_tr_y=open('Data/train_ys_single','rb')
+      fil_tr_y=open(train_target_single1,'rb')
       labels=np.load(fil_tr_y)
       fil_tr_y.close()
-      fil_ev_y=open('Data/eval_ys_single','rb')
+      fil_ev_y=open(dev_target_single1,'rb')
       eval_labels=np.load(fil_ev_y)
       fil_ev_y.close()
 
-      fil_tr_y2=open('Data/train_ys_single2','rb')
+      fil_tr_y2=open(train_target_single2,'rb')
       labels2=np.load(fil_tr_y2)
       fil_tr_y2.close()
-      fil_ev_y2=open('Data/eval_ys_single2','rb')
+      fil_ev_y2=open(dev_target_single2,'rb')
       eval_labels2=np.load(fil_ev_y2)
       fil_ev_y2.close()
     
@@ -327,7 +368,7 @@ def main(xs1=None,xs2=None, batch_size=10, mode='predict', model_dir='Models/mod
   #adds a 1024 fully connected layer with droupout
   dense = tf.layers.dense(inputs=final_pool_flat, units=1024, activation=tf.nn.relu)
   dropout = tf.layers.dropout(
-      inputs=dense, rate=0.4, training=mode == 'train')
+      inputs=dense, rate=dropout_rate, training=mode == 'train')
   #Creates the two output layers(logits, logits2)
   logits = tf.layers.dense(inputs=dropout, units=9)
   logits2= tf.layers.dense(inputs=dropout, units=9)
@@ -346,9 +387,9 @@ def main(xs1=None,xs2=None, batch_size=10, mode='predict', model_dir='Models/mod
   
   loss1 = tf.losses.softmax_cross_entropy(onehot_labels=y, logits=logits)
   loss=loss1+tf.losses.softmax_cross_entropy(onehot_labels=y2, logits=logits2)
-  lr=0.0003
+  # lr=0.0003
   lrate=tf.placeholder(tf.float32,None)
-  optimizer = tf.train.AdamOptimizer(learning_rate=lrate,epsilon=0.001)
+  optimizer = tf.train.AdamOptimizer(learning_rate=lrate,epsilon=epsilon)
 
   #needed if using batch normalization to make sure it works properly
   update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -384,9 +425,9 @@ def main(xs1=None,xs2=None, batch_size=10, mode='predict', model_dir='Models/mod
     '''After getting predictions for each timestep, makes final lists(predictions,predictions2)
     by averaging across 5 consecutive predictions,(step size of 1)'''
     
-    for i in range(len(preds_list)-4):
-        mean_preds=np.mean(preds_list[i:i+5],axis=0)
-        mean_preds2=np.mean(preds_list2[i:i+5],axis=0)
+    for i in range(len(preds_list)-(avg_pred_win-1)):
+        mean_preds=np.mean(preds_list[i:i+avg_pred_win],axis=0)
+        mean_preds2=np.mean(preds_list2[i:i+avg_pred_win],axis=0)
         predictions.append(mean_preds)
         predictions2.append(mean_preds2)
         
@@ -403,7 +444,7 @@ def main(xs1=None,xs2=None, batch_size=10, mode='predict', model_dir='Models/mod
     accuracies=[]
     for j in range(length):
         s.append(j)
-    for i in range(2601):
+    for i in range(num_iter):
         numb=i%(length//batch_size)
         #shuffles training data after a full epoch
         if numb==0:
@@ -424,7 +465,7 @@ def main(xs1=None,xs2=None, batch_size=10, mode='predict', model_dir='Models/mod
                 accuracies.append(0)
         #prints training accuracy and evaluates evaluation accuracy every 2000 steps
         #also multiplies learning rate by 0.97
-        if i%200==0:
+        if i%eval_interval==0:
             print("Step {} Train accuracy: {:.4f}".format(i,np.mean(accuracies)))
             mode='eval'
             lr=lr*0.97
@@ -447,7 +488,7 @@ def main(xs1=None,xs2=None, batch_size=10, mode='predict', model_dir='Models/mod
                 
 
 def train(model_dire):
-  main(batch_size=25,mode='train',model_dir=model_dire)
+  main(batch_size=batch_size,mode='train',model_dir=model_dire)
  
 def predict(pred_data1,pred_data2,predictions_file1,predictions_file2,model_dir):
     '''function for predicting with the network
@@ -466,7 +507,7 @@ def predict(pred_data1,pred_data2,predictions_file1,predictions_file2,model_dir)
     else:
         predict_x2=np.zeros(np.shape(predict_x1),dtype=np.float16)
         
-    predictions1,predictions2=main(predict_x1,predict_x2,batch_size=25,mode='predict',
+    predictions1,predictions2=main(predict_x1,predict_x2,batch_size=batch_size,mode='predict',
                      model_dir=model_dir)
     
     np.save(predictions_file1,predictions1)
@@ -482,3 +523,9 @@ def predict(pred_data1,pred_data2,predictions_file1,predictions_file2,model_dir)
 #   #         'Data/pred_20161219_Athos_model_small',
 #   #         'Data/pred_20161219_Porthos_model_small',
 #   #         model_dir="Models/model_small.ckpt")
+
+if __name__=='__main__':
+  start=datetime.datetime.now()
+  train(model_path)
+  print("Time taken: ", datetime.datetime.now()-start)
+  # predict(test_input1, test_input2, test_pred1, test_pred2, model_dir=eval_model)
