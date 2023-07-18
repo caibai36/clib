@@ -106,8 +106,8 @@ fi
 
 if [ ${stage} -le 5 ]; then
     date
-    echo "Evalute mit cnn 72..."
-    rm $eval_dir/results.txt
+    echo "Evaluate mit cnn 72..."
+    rm -rf $eval_dir/results.txt
 
     for cutoff in $cutoffs; do
 	echo Cutoff: $cutoff | tee -a $eval_dir/results.txt
