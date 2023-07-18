@@ -39,6 +39,8 @@ avg_pred_win=5 # collect predicted probabilities by averaging across x consecuti
 
 # Data
 mit_sample=/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit_cnn/original/Wave_files
+first="Athos" # first uttid of a test pair
+sec="Porthos" # second uttid of a test pair
 
 # Parse the options. (eg. ./run.sh --stage 1)
 # Note that the options should be defined as shell variable before parsing
@@ -80,10 +82,10 @@ mkdir -p $eval_dir
 if [ ${stage} -le 3 ]; then
     date
     echo "Test mit cnn 72..."
-    python local/mit_cnn_test_72.py --test_input1 exp/data/$dataset_name/test_input1_Athos \
-	   --test_input2 exp/data/$dataset_name/test_input2_Porthos \
-	   --test_pred1 $eval_dir/test_pred1_Athos \
-	   --test_pred2 $eval_dir/test_pred2_Porthos \
+    python local/mit_cnn_test_72.py --test_input1 exp/data/$dataset_name/test_input1_$first \
+	   --test_input2 exp/data/$dataset_name/test_input2_$sec \
+	   --test_pred1 $eval_dir/test_pred1_$first \
+	   --test_pred2 $eval_dir/test_pred2_$sec \
 	   --batch_size $batch_size \
 	   --dropout_rate 0.4 \
 	   --lr $lr \
