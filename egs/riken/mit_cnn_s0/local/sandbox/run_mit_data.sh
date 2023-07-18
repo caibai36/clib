@@ -4,7 +4,7 @@
 set -uo pipefail
 
 # general configuration
-stage=3  # start from 0 if you need to start from data preparation
+stage=4  # start from 0 if you need to start from data preparation
 
 # Data and model options
 # model: mit_cnn_72
@@ -34,7 +34,7 @@ batch_size=25
 lr=0.0003
 # dropout=0.4 # for dropout layer
 # eps=0.001 # for adam optimizer
-cutoffs="0.7 0.8"
+cutoffs="0 0.3 0.4 0.5 0.6 0.65 0.7 0.75 0.8 0.85 0.9 0.95" # "0.7 0.8"
 num_iter=74001
 eval_interval=2000 # evaluate every x iterations and lr = lr * 0.97
 avg_pred_win=5 # collect predicted probabilities by averaging across x consecutive predictions with step size of 1
@@ -95,5 +95,14 @@ if [ ${stage} -le 3 ]; then
 	   --epsilon 0.001 \
 	   --avg_pred_win $avg_pred_win \
 	   --eval_model $result_dir/model.ckpt
+    date
+fi
+
+if [ ${stage} -le 4 ]; then
+    date
+    echo "cutoff mit cnn 72..."
+    python local/mit_cnn_cutoff_predictor_single.py --cutoffs $cutoffs \
+	   --pred_files $eval_dir/test_pred1_$first.npy $eval_dir/test_pred2_$sec.npy \
+	   --out_dir $eval_dir
     date
 fi
