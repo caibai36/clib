@@ -66,6 +66,7 @@ for cutoff in args.cutoffs:
     for pred_file in args.pred_files:
         file_name = os.path.splitext(os.path.basename(pred_file))[0]
         cutoff_file_name = file_name + "_cutoff{}".format(cutoff) + ".txt"
+        if int(cutoff) == cutoff: cutoff_file_name = file_name + "_cutoff{}".format(int(cutoff)) + ".txt" # Avoid float converting cutoff 0 into cutoff 0.0
         cutoff_file = os.path.join(args.out_dir, cutoff_file_name)
 
         print("Pred file: {}".format(pred_file))
