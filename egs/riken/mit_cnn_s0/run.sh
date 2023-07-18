@@ -4,9 +4,9 @@
 set -uo pipefail
 
 # general configuration
-stage=4  # start from 0 if you need to start from data preparation
+stage=8  # start from 0 if you need to start from data preparation
 
-# Data and model options
+# data and model options
 # model: mit_cnn_72
 # 72: 2 stream with 9+9 output layers, where
 # 72 is model index from website https://marmosetbehavior.mit.edu/
@@ -18,7 +18,7 @@ model_name=mit_cnn_72
 exp_dir=exp/sys
 
 # options for training classificaton
-# cutoffs: a list of cutoffs. e.g., cutoffs="0 0.3 0.4 0.5 0.6 0.65 0.7 0.75 0.8 0.85 0.9 0.95"
+# cutoffs: a list of cutoffs. e.g., cutoffs="0 0.3 0.4 0.5 0.6 0.65 0.7 0.75 0.8 0.85 0.9 0.95"; NOTE: DO NOT add zero at the end: 0.0 or 8.50
 # # predicted as a "noise" type when the confidence, the maximum prob. of all target types, is less than cutoff.
 #
 # Model setup on the paper of [oikarinen, 2019]
@@ -97,9 +97,24 @@ fi
 
 if [ ${stage} -le 4 ]; then
     date
-    echo "cutoff mit cnn 72..."
+    echo "Cut off mit cnn 72..."
     python local/mit_cnn_cutoff_predictor_single.py --cutoffs $cutoffs \
 	   --pred_files $eval_dir/test_pred1_$first.npy $eval_dir/test_pred2_$sec.npy \
 	   --out_dir $eval_dir
+    date
+fi
+
+if [ ${stage} -le 5 ]; then
+    date
+    echo "Evalute mit cnn 72..."
+    rm $eval_dir/results.txt
+
+    for cutoff in $cutoffs; do
+	echo Cutoff: $cutoff | tee -a $eval_dir/results.txt
+	python local/mit_cnn_eval_acc.py --info_json data/$dataset_name/info.json \
+	       --hypo_files $eval_dir/test_pred1_${first}_cutoff$cutoff.txt $eval_dir/test_pred2_${sec}_cutoff$cutoff.txt \
+	       --ref_uttids $first $sec | tee -a $eval_dir/results.txt
+	echo | tee -a $eval_dir/results.txt
+    done
     date
 fi
