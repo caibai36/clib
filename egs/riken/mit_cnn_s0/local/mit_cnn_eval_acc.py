@@ -14,7 +14,6 @@ default_hypo_files=["exp/sys/mit_sample/mit_sample0/mit_cnn_72-run0/bs25lr0.0003
 parser = argparse.ArgumentParser(description="Compute accuracy and f-score. Prediction/hypothesis and reference files are splited into 50ms segments for label comparison (reference: 'accuracy_tester.py' from https://marmosetbehavior.mit.edu/).")
 parser.add_argument("--hypo_files", type=str, default=default_hypo_files, nargs="+", help='a sequence of pred files in the audacity label format (with a "begin_sec end_sec label" if each line)')
 parser.add_argument("--ref_files", type=str, default=[], nargs="+", help='a sequence of reference files in the audacity label format with the same order as pred files')
-parser.add_argument("--out_dir", type=str, default="exp/sys/mit_sample/mit_sample0/mit_cnn_72-run0/bs25lr0.0003evalinterval200avgpredwin5/eval", help="output directory to store the result")
 
 # Optionally, use the uttids
 parser.add_argument("--info_json", type=str, default="data/mit_sample/info.json", help="(optional) json file that maps utterance id to key-value pairs. The keys should include 'wav' and 'aud' for locations of audio files and audacity labels. {'uttid1': {'wav1': wav1_path, 'aud1': audacity_label1_path}, 'uttid2': {'wav2': wav2_path, 'aud2': audacity_label2_path}}. Each line of audacity label file is 'begin_time_sec end_time_sec label'.")
