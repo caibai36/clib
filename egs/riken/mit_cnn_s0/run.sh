@@ -38,7 +38,8 @@ eval_interval=200 # 2000 # evaluate every x iterations and lr = lr * 0.97
 avg_pred_win=5 # collect predicted probabilities by averaging across x consecutive predictions with step size of 1
 
 # Data
-mit_sample=/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit_cnn/original/Wave_files
+mit_sample=P:/\riken/\share/\data/\marmoset_mit_cnn/\original/\Wave_files # windows git shell
+# mit_sample=/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit_cnn/original/Wave_files # linux shell
 first="Athos" # first uttid of a test pair
 sec="Porthos" # second uttid of a test pair
 
