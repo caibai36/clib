@@ -188,7 +188,7 @@ def audacitysegment2framelabel(audacity_segment_file, window_size=0.025, window_
 
     if not num_frames:
         last_frame =  time2index(segments[-1].end_sec, precision=precision, window_size=window_size, window_shift=window_shift, ndigits=ndigits, center=center)
-        num_frames = last_frame
+        num_frames = last_frame + 1
 
     frame_labels = ["noise"] * num_frames # copy all labels as 'noise', then assign frame labels according to the audacity segments    
     for segment in segments:
@@ -226,7 +226,7 @@ def framelabel2audacitysegment(frame_label_list, window_size=0.025, window_shift
     center : True when origin is the frame center, False when origin is the frame start. (default True)
     precision : the round precision when cutting the float to interger (default: 0.00001)
     frame_center_extension: extend segment's beginning time or end time to make different segments connected together. (default: "center")
-        takea a value from ['right', 'center', 'left', None]
+        take a value from ['right', 'center', 'left', None]
         "right": [begin_frame_center_time, end_frame_center_time+window_shift]
         "center": [begin_frame_center_time-0.5*window_shift, end_frame_center_time+0.5*window_shift]
         "left": [begin_frame_center_time-window_shift, end_frame_center_time]
