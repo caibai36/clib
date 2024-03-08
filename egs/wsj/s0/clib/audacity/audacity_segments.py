@@ -214,7 +214,7 @@ from collections import namedtuple
 Seg = namedtuple('Seg', ['begin_sec', 'end_sec', 'label', 'begin_frame', 'end_frame']) # A segment includes its end frame.
 # s = Seg(begin_sec=0, end_sec=3.4, label='tr', begin_frame=0, end_frame=4)
 
-def framelabel2audacitysegment(frame_label_list, window_size=0.025, window_shift=0.01, ndigits=7, center=True, precision=0.00001, frame_extension_mode='right'):
+def framelabel2audacitysegment(frame_label_list, window_size=0.025, window_shift=0.01, ndigits=7, center=True, precision=0.00001, frame_extension_mode='center'):
     """Convert a list of frame labels to a list of audacity segments
 
     Parameters
@@ -225,7 +225,7 @@ def framelabel2audacitysegment(frame_label_list, window_size=0.025, window_shift
     ndigits : the number of decimals to use when rounding the time (default 7)
     center : True when origin is the frame center, False when origin is the frame start. (default True)
     precision : the round precision when cutting the float to interger (default: 0.00001)
-    frame_center_extension: extend segment's beginning time or end time to make different segments connected together. (default: "right")
+    frame_center_extension: extend segment's beginning time or end time to make different segments connected together. (default: "center")
         takea a value from ['right', 'center', 'left', None]
         "right": [begin_frame_center_time, end_frame_center_time+window_shift]
         "center": [begin_frame_center_time-0.5wndow_shift, end_frame_center_time+0.5window_shift]
@@ -241,12 +241,25 @@ def framelabel2audacitysegment(frame_label_list, window_size=0.025, window_shift
     --------
     frame_label_list = ['tr', 'tr']
     center=True
-    frame_extension_mode="right" # None # "center" # "left" # "right"
+    frame_extension_mode="center" # None # "center" # "left" # "right"
     # segs = framelabel2audacitysegment(frame_label_list, window_size=window_size_ms/1000, window_shift=window_shift_ms/1000, center=True, frame_extension_mode=frame_extension_mode)
     segs = framelabel2audacitysegment(frame_label_list, center=center, frame_extension_mode=frame_extension_mode)
     print("center:{}; frame_extension model: {}; frame_label_list: {}".format(center, frame_extension_mode, frame_label_list))
     print(segs)
     ###
+    center:True; frame_extension model: center; frame_label_list: ['tr']
+    [Seg(begin_sec=0.0, end_sec=0.005, label='tr', begin_frame=0, end_frame=0)]
+    center:False; frame_extension model: center; frame_label_list: ['tr']
+    [Seg(begin_sec=0.0075, end_sec=0.0175, label='tr', begin_frame=0, end_frame=0)]
+    center:True; frame_extension model: center; frame_label_list: ['tr', 'tr']
+    [Seg(begin_sec=0.0, end_sec=0.015, label='tr', begin_frame=0, end_frame=1)]
+    center:False; frame_extension model: center; frame_label_list: ['tr', 'tr']
+    [Seg(begin_sec=0.0075, end_sec=0.0275, label='tr', begin_frame=0, end_frame=1)]
+    center:True; frame_extension model: center; frame_label_list: ['tr', 'ph']
+    [Seg(begin_sec=0.0, end_sec=0.005, label='tr', begin_frame=0, end_frame=0), Seg(begin_sec=0.005, end_sec=0.015, label='ph', begin_frame=1, end_frame=1)]
+    center:True; frame_extension model: center; frame_label_list: ['tr', 'ph', 'ph', 'tr', 'tr', 'tr', 'tr', 'pp', 'pp', 'noise']
+    [Seg(begin_sec=0.0, end_sec=0.005, label='tr', begin_frame=0, end_frame=0), Seg(begin_sec=0.005, end_sec=0.025, label='ph', begin_frame=1, end_frame=2), Seg(begin_sec=0.025, end_sec=0.065, label='tr', begin_frame=3, end_frame=6), Seg(begin_sec=0.065, end_sec=0.085, label='pp', begin_frame=7, end_frame=8), Seg(begin_sec=0.085, end_sec=0.095, label='noise', begin_frame=9, end_frame=9)]
+
     center:True; frame_extension model: right; frame_label_list: ['tr']
     [Seg(begin_sec=0.0, end_sec=0.01, label='tr', begin_frame=0, end_frame=0)]
     center:False; frame_extension model: right; frame_label_list: ['tr']
