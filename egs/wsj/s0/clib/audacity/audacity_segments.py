@@ -228,8 +228,8 @@ def framelabel2audacitysegment(frame_label_list, window_size=0.025, window_shift
     frame_center_extension: extend segment's beginning time or end time to make different segments connected together. (default: "center")
         takea a value from ['right', 'center', 'left', None]
         "right": [begin_frame_center_time, end_frame_center_time+window_shift]
-        "center": [begin_frame_center_time-0.5wndow_shift, end_frame_center_time+0.5window_shift]
-        "left": [begin_frame_center_time-wndow_shift, end_frame_center_time]
+        "center": [begin_frame_center_time-0.5*window_shift, end_frame_center_time+0.5*window_shift]
+        "left": [begin_frame_center_time-window_shift, end_frame_center_time]
         None: [begin_frame_center_time, end_frame_center_time]
 
     Returns
