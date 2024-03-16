@@ -1,5 +1,6 @@
 # Implmented by bin-wu on 2023 and March 2024
 import re
+from math import ceil
 
 class Segment:
     def __init__(self, begin_sec, end_sec, label, low_freq=None, high_freq=None):
@@ -163,7 +164,7 @@ def time2index(time, precision=0.00001, window_size=0.025, window_shift=0.01, nd
 
     return (index, begin_window_sec, end_window_sec) if verbose else index
 
-def audacitysegment2framelabel(audacity_segment_file, window_size=0.025, window_shift=0.01, num_frames=None, ndigits=7, center=True, precision=0.00001):
+def audacitysegment2framelabel(audacity_segment_file, window_size=0.025, window_shift=0.01, num_frames=None, ndigits=7, center=True, precision=0.00001, default_label="noise"):
     """Convert audacity segment file to frame labels (Assume that the segments have no overlap in time).
 
     Parameters
@@ -172,15 +173,16 @@ def audacitysegment2framelabel(audacity_segment_file, window_size=0.025, window_
     window_size : the window size of a frame (second)
     window_shift : the window shift of a frame (second)
     num_frames : the number of frame.
-        if num_frame is None, assign it as the nearest frame to end time of the last segment 
+        if num_frame is None, assign it as the nearest frame to end time of the last segment
     ndigits : the number of decimals to use when rounding the time (default 7)
     center : True when origin is the frame center, False when origin is the frame start.
     precision : the round precision when cutting the float to interger (default: 0.00001)
+    default_label: the default label that to be filled between the segments (the noise or silence label. default: 'noise')
 
     Returns
     -------
     A list of frame labels
-    
+
     Examples
     --------
     frame_labels = audacitysegment2framelabel(seg_file, window_size=window_size_ms/1000, window_shift=window_shift_ms/1000, num_frames=None, ndigits=7, center=center, precision=0.00001)
@@ -191,7 +193,7 @@ def audacitysegment2framelabel(audacity_segment_file, window_size=0.025, window_
         last_frame =  time2index(segments[-1].end_sec, precision=precision, window_size=window_size, window_shift=window_shift, ndigits=ndigits, center=center)
         num_frames = last_frame + 1
 
-    frame_labels = ["noise"] * num_frames # copy all labels as 'noise', then assign frame labels according to the audacity segments    
+    frame_labels = [default_label] * num_frames # copy all labels as the default label (e.g., 'noise'), then assign frame labels according to the audacity segments
     for segment in segments:
         begin_frame = time2index(segment.begin_sec, precision=precision, window_size=window_size, window_shift=window_shift, ndigits=ndigits, center=center)
         end_frame = time2index(segment.end_sec, precision=precision, window_size=window_size, window_shift=window_shift, ndigits=ndigits, center=center)
@@ -199,12 +201,12 @@ def audacitysegment2framelabel(audacity_segment_file, window_size=0.025, window_
 
         if (end_frame > (num_frames-1)) and (begin_frame <= (num_frames-1)) :
             print("Warning: The index of the end of segment {} with frame index {} is larger than (num_of_frames-1) {}. Set the index of the end of frame of the segment as the (num_of_frames-1) {}".format(segment, end_frame, (num_frames-1), num_frames-1))
-            end_frame = num_frames -1 
+            end_frame = num_frames -1
         elif (begin_frame > (num_frames-1)):
             print("Warning: The beginning of segment {} with frame index {} is larger than (num_of_frames-1) {}. Skip the frame".format(segment, begin_frame, num_frames-1))
         else:
             pass
-        
+
         if (begin_frame <= (num_frames-1)):
             assert begin_frame <= (end_frame + 1)
             frame_labels[begin_frame: end_frame+1] = [label] * (end_frame+1-begin_frame) # copy label from the begin to the end frame including the end frame
@@ -237,7 +239,7 @@ def framelabel2audacitysegment(frame_label_list, window_size=0.025, window_shift
     -------
     A list of audacity segments; each segment with attributes of ['begin_sec', 'end_sec', 'label', 'begin_frame', 'end_frame']
     A segment includes its end frame.
-    
+
     Examples
     --------
     frame_label_list = ['tr', 'tr']
@@ -326,3 +328,43 @@ def framelabel2audacitysegment(frame_label_list, window_size=0.025, window_shift
             segs.append(s)
 
     return segs
+
+def overlapped_chunks(seq, chunk_size=5, chunk_shift=2, verbose=False):
+    """Use a sliding window to convert a sequence (list) of objects into overlapped chunks (sub-lists)
+
+    Parameters
+    ----------
+    seq : a list of object
+    chunk_size : the chunk window size of a sliding window
+    chunk_shift : the chunk window shift of a sliding window
+    verbose : print chunk list (default False)
+
+    Examples
+    --------
+    seq = "ab"
+    seq = "abcdefg"
+    seq = "abcdefgh"
+    # seq = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12]]
+    overlapped_chunks(seq, chunk_size=5, chunk_shift=2, verbose=True)
+
+    Outputs:
+    seq: ab; chunks: ['ab']; chunk_size: 5; chunk_shift: 2
+    seq: abcdefg; chunks: ['abcde', 'cdefg']; chunk_size: 5; chunk_shift: 2
+    seq: abcdefgh; chunks: ['abcde', 'cdefg', 'efgh']; chunk_size: 5; chunk_shift: 2
+    seq: [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12]]; chunks: [[[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]], [[5, 6], [7, 8], [9, 10], [11, 12]]]; chunk_size: 5; chunk_shift: 2
+
+    Implmented by bin-wu at 12:48 on 16 March 2024
+    """
+
+    num_chunks = ceil(float(len(seq) - chunk_size) / chunk_shift) + 1 if (len(seq) - chunk_size) >= 0 else 1
+
+    chunks = []
+    for i in range(0, num_chunks):
+        start_index = i * chunk_shift
+        stop_index = min(start_index+chunk_size, len(seq)) # not included
+        chunks.append(seq[start_index:stop_index])
+
+    if verbose:
+        print("seq: {}; chunks: {}; chunk_size: {}; chunk_shift: {}".format(seq, chunks, chunk_size, chunk_shift))
+
+    return chunks
