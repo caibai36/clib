@@ -186,6 +186,12 @@ def audacitysegment2framelabel(audacity_segment_file, window_size=0.025, window_
     Examples
     --------
     frame_labels = audacitysegment2framelabel(seg_file, window_size=window_size_ms/1000, window_shift=window_shift_ms/1000, num_frames=None, ndigits=7, center=center, precision=0.00001)
+
+    Notes
+    --------
+    Assume that the segments have no overlap in time.
+    When segment intervals have overlaps, the later segments will overwrite the previous segments.
+    The segments need not be sorted by their beginning times in the segment files.
     """
     segments = read_audacity_segments(audacity_segment_file)
 
