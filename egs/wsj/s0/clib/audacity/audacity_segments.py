@@ -1,3 +1,4 @@
+# Implmented by bin-wu on 2023 and March 2024
 import re
 
 class Segment:
@@ -273,7 +274,7 @@ def framelabel2audacitysegment(frame_label_list, window_size=0.025, window_shift
     center:True; frame_extension model: right; frame_label_list: ['tr', 'ph', 'ph', 'tr', 'tr', 'tr', 'tr', 'pp', 'pp', 'noise']
     [Seg(begin_sec=0.0, end_sec=0.01, label='tr', begin_frame=0, end_frame=0), Seg(begin_sec=0.01, end_sec=0.03, label='ph', begin_frame=1, end_frame=2), Seg(begin_sec=0.03, end_sec=0.07, label='tr', begin_frame=3, end_frame=6), Seg(begin_sec=0.07, end_sec=0.09, label='pp', begin_frame=7, end_frame=8), Seg(begin_sec=0.09, end_sec=0.1, label='noise', begin_frame=9, end_frame=9)]
 
-    Implemneted by bin-wu at 12:13 on 3 Aug. 2024.
+    Implemented by bin-wu at 12:13 on 3 March. 2024.
     """
     # frame tracer
     begin_pointer = 0
