@@ -185,7 +185,7 @@ def audacitysegment2framelabel(audacity_segment_file, window_size=0.025, window_
     --------
     frame_labels = audacitysegment2framelabel(seg_file, window_size=window_size_ms/1000, window_shift=window_shift_ms/1000, num_frames=None, ndigits=7, center=center, precision=0.00001)
     """
-    segments = read_audacity_segments(seg_file)
+    segments = read_audacity_segments(audacity_segment_file)
 
     if not num_frames:
         last_frame =  time2index(segments[-1].end_sec, precision=precision, window_size=window_size, window_shift=window_shift, ndigits=ndigits, center=center)
