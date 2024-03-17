@@ -2,6 +2,9 @@
 import re
 from math import ceil
 
+import torch
+import torchaudio
+
 class Segment:
     def __init__(self, begin_sec, end_sec, label, low_freq=None, high_freq=None):
         """A segment structure in audacity format
@@ -169,7 +172,7 @@ def audacitysegment2framelabel(audacity_segment_file, window_size=0.025, window_
 
     Parameters
     ----------
-    audacity_segment_file : the path the segment file of audacity
+    audacity_segment_file : the path the segment file of audacity or a list of Segment objects
     window_size : the window size of a frame (second)
     window_shift : the window shift of a frame (second)
     num_frames : the number of frame.
@@ -193,10 +196,14 @@ def audacitysegment2framelabel(audacity_segment_file, window_size=0.025, window_
     When segment intervals have overlaps, the later segments will overwrite the previous segments.
     The segments need not be sorted by their beginning times in the segment files.
     """
-    segments = read_audacity_segments(audacity_segment_file)
+    if type(audacity_segment_file) == str:
+        segments = read_audacity_segments(audacity_segment_file)
+    else:
+        segments = audacity_segment_file
 
     if not num_frames:
-        last_frame =  time2index(segments[-1].end_sec, precision=precision, window_size=window_size, window_shift=window_shift, ndigits=ndigits, center=center)
+        end_second = max([segment.end_sec for segment in segments])
+        last_frame =  time2index(end_second, precision=precision, window_size=window_size, window_shift=window_shift, ndigits=ndigits, center=center)
         num_frames = last_frame + 1
 
     frame_labels = [default_label] * num_frames # copy all labels as the default label (e.g., 'noise'), then assign frame labels according to the audacity segments
@@ -374,3 +381,153 @@ def overlapped_chunks(seq, chunk_size=5, chunk_shift=2, verbose=False):
         print("seq: {}; chunks: {}; chunk_size: {}; chunk_shift: {}".format(seq, chunks, chunk_size, chunk_shift))
 
     return chunks
+
+def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame_size_sec=50/1000, frame_shift_sec=12.5/1000, feat_dim=80, min_freq=None, feat_type="mel", chunk_size_sec=0.5, chunk_shift_sec=0.4):
+    """Convert long wavs and its segment files into chunks of features and labels using the sliding window.
+
+    Parameters
+    ----------
+    wav1 : the first wav file
+    wav2 : the second wav file
+    seg1 : the first audacity segment file (each line: begin_sec end_sec label)
+    seg2 : the second audacity segment file
+    sampling_rate : Sampling rate of the audio
+    frame_size_sec : the frame size (second)
+    frame_shift_sec : the frame shift
+    feat_dim : the feature dimension
+    min_freq : the minimum frequency of the feature
+    feat_type : the feature type (default "mel")
+    chunk_size_sec : the chunk size (a chunk consists of frames)
+    chunk_shift_sec : the chunk shift
+
+    Examples
+    --------
+    sampling_rate = 44100
+    frame_size_ms = 50
+    frame_shift_ms = 12.5
+    num_mels = 80
+    min_freq = 3000
+    train_chunk_size_ms = 500 / 1000
+    train_chunk_shift_ms = 400 / 1000
+    wav1 = '/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit/data/pair10/pair10_animal1_together.wav'
+    wav2 = '/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit/data/pair10/pair10_animal2_together.wav'
+    seg1 = '/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit/processed/audacity/audacity_labels/p10a1_toget.txt'
+    seg2 = '/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit/processed/audacity/audacity_labels/p10a2_toget.txt'
+
+    # feat_chunks1, _, feat_chunks12, _, _, _ = processing(wav1=wav1, wav2=None, seg1=None, seg2=None, sampling_rate=sampling_rate, frame_size_sec=frame_size_sec, frame_shift_sec=frame_shift_sec, feat_dim=num_mels, min_freq=min_freq, feat_type="mel", chunk_size_sec=train_chunk_size_sec, chunk_shift_sec=train_chunk_shift_sec)
+    # feat_chunks1, feat_chunks2, feat_chunks12, _, _, _ = processing(wav1=wav1, wav2=wav2, seg1=None, seg2=None, sampling_rate=sampling_rate, frame_size_sec=frame_size_sec, frame_shift_sec=frame_shift_sec, feat_dim=num_mels, min_freq=min_freq, feat_type="mel", chunk_size_sec=train_chunk_size_sec, chunk_shift_sec=train_chunk_shift_sec)
+    # feat_chunks1, feat_chunks2, feat_chunks12, label_chunks1, _, _ = processing(wav1=wav1, wav2=wav2, seg1=seg1, seg2=None, sampling_rate=sampling_rate, frame_size_sec=frame_size_sec, frame_shift_sec=frame_shift_sec, feat_dim=num_mels, min_freq=min_freq, feat_type="mel", chunk_size_sec=train_chunk_size_sec, chunk_shift_sec=train_chunk_shift_sec)
+    feat_chunks1, feat_chunks2, feat_chunks12, label_chunks1, label_chunks2, label_chunks12 = processing(wav1=wav1, wav2=wav2, seg1=seg1, seg2=seg2, sampling_rate=sampling_rate, frame_size_sec=frame_size_sec, frame_shift_sec=frame_shift_sec, feat_dim=num_mels, min_freq=min_freq, feat_type="mel", chunk_size_sec=train_chunk_size_sec, chunk_shift_sec=train_chunk_shift_sec)
+    print(f"{len(feat_chunks1)=} {feat_chunks1[0].shape=}")
+    print(f"{len(feat_chunks2)=} {feat_chunks2[0].shape=}")
+    print(f"{len(feat_chunks12)=} {feat_chunks12[0].shape=}")
+    print(f"{len(label_chunks1)=} {len(label_chunks1[0])=}")
+    print(f"{len(label_chunks2)=} {len(label_chunks2[0])=}")
+    print(f"{len(label_chunks12)=} {len(label_chunks12[0])=}")
+    # with open('label.txt', 'w') as f:
+    #     for line in label_chunks12:
+    #         f.write(f"{line}\n")
+
+    Outputs:
+    len(feat_chunks1)=46677 feat_chunks1[0].shape=torch.Size([50, 80])
+    len(feat_chunks2)=46677 feat_chunks2[0].shape=torch.Size([50, 80])
+    len(feat_chunks12)=46677 feat_chunks12[0].shape=torch.Size([100, 80])
+    len(label_chunks1)=46677 len(label_chunks1[0])=50
+    len(label_chunks2)=46677 len(label_chunks2[0])=50
+    len(label_chunks12)=46677 len(label_chunks12[0])=50
+
+    Returns
+    --------
+    feat_chunks1, feat_chunks2, feat_chunks12, label_chunks1, label_chunks2, label_chunks12
+    Lists of chunks or merged chunks, each element with size (chunk_size_num_frames, feat_dim) or (chunk_size_num_frames)
+    or  (chunk_size_num_frames*2, feat_dim) or (chunk_size_num_frames*2)
+    Merged chunk of feat_chunks12 is the concatenated by the first dimension feat_chunks1 and feat_chunks2 (a zero matrix when wav2 is empty).
+    Merged label of label_chunks12 would keep the first segment labels same and modify the second segment labels by adding '2':
+    # e.g. a 'tr' of the second segment labels becomes 'tr2'.
+    """
+    feat_chunks1 = []
+    feat_chunks2 = []
+    feat_chunks12 = []
+    label_chunks1 = []
+    label_chunks2 = []
+    label_chunks12 = []
+
+    frame_size_num_samples = int(frame_size_sec * sampling_rate)
+    frame_shift_num_samples = int(frame_shift_sec * sampling_rate)
+    n_fft = frame_size_num_samples
+
+    assert feat_type == 'mel'
+
+    if (wav1):
+        audio_file = wav1
+        waveform, sr = torchaudio.load(audio_file)
+        assert sampling_rate == sr, f"sampling_rate of config file: '{sampling_rate}', different from sampling_rate of ({audio_file}): '{sr}'"
+        transform = torchaudio.transforms.MelSpectrogram(sample_rate=sampling_rate,
+                                                         n_fft=n_fft,
+                                                         win_length=frame_size_num_samples,
+                                                         hop_length=frame_shift_num_samples,
+                                                         f_min=min_freq,
+                                                         n_mels=feat_dim,
+                                                         center=True)
+        logmel = transform(waveform).log()[0].T  # (num_frames, feature_size)
+
+        chunk_size_num_frames = time2index(chunk_size_sec, frame_size_sec, frame_shift_sec) + 1
+        chunk_shift_num_frames = time2index(chunk_shift_sec, frame_size_sec, frame_shift_sec) + 1
+        feat_chunks = overlapped_chunks(logmel, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
+        logmel1 = logmel
+        num_frames = logmel1.shape[0]
+        feat_chunks1 = feat_chunks
+
+    if (wav2):
+        assert wav1, f"When wav2 ({wav2}) exists, wav1 should exist."
+        audio_file = wav2
+        waveform, sr = torchaudio.load(audio_file)
+        assert sampling_rate == sr, f"sampling_rate of config file: '{sampling_rate}', different from sampling_rate of ({audio_file}): '{sr}'"
+        transform = torchaudio.transforms.MelSpectrogram(sample_rate=sampling_rate,
+                                                         n_fft=n_fft,
+                                                         win_length=frame_size_num_samples,
+                                                         hop_length=frame_shift_num_samples,
+                                                         f_min=min_freq,
+                                                         n_mels=feat_dim,
+                                                         center=True)
+        logmel = transform(waveform).log()[0].T  # (num_frames, feature_size)
+
+        chunk_size_num_frames = time2index(chunk_size_sec, frame_size_sec, frame_shift_sec) + 1
+        chunk_shift_num_frames = time2index(chunk_shift_sec, frame_size_sec, frame_shift_sec) + 1
+        feat_chunks = overlapped_chunks(logmel, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
+        logmel2 = logmel
+        if (logmel1.shape[0] != logmel2.shape[0]): print(f"Warning: logmel1 of '{wav1}' and logmel2 of '{wav2}' has different different shapes of {logmel1.shape} and {logmel2.shape}")
+        num_frames = min(logmel1.shape[0], logmel2.shape[0])
+        feat_chunks2 = feat_chunks
+
+    # Merge two chunks
+    if (not wav2): feat_chunks2 = [feat_chunks1[i].new_zeros(feat_chunks1[i].shape) for i in range(0, len(feat_chunks1))] # padding the second chunks as zeros when the second wav is None
+    if len(feat_chunks1) != len(feat_chunks2):
+        print(f"Warning: different sizes of feature chunks for wav1: '{wav1}' has num_chunks of {len(feat_chunks1)} and wav2 '{wav2}' has num_chunks of {len(feat_chunks2)}.")
+    feat_chunks12 = [torch.cat([feat_chunks1[i], feat_chunks2[i]], dim=0) for i in range(0, min(len(feat_chunks1), len(feat_chunks2)))]
+
+    if (seg1):
+        assert wav1, f"When seg1 ({seg1}) exists, wav1 should exist."
+        seg_file = seg1
+        frame_labels = audacitysegment2framelabel(seg_file, frame_size_sec, frame_shift_sec, num_frames=num_frames)
+        label_chunks = overlapped_chunks(frame_labels, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
+        label_chunks1 = label_chunks
+
+    if (seg2):
+        assert wav1 and wav2 and seg1, f"When seg2 ({seg2}) exists, wav1, wav2, and seg1 should exist."
+        seg_file = seg2
+        frame_labels = audacitysegment2framelabel(seg_file, frame_size_sec, frame_shift_sec, num_frames=num_frames)
+        label_chunks = overlapped_chunks(frame_labels, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
+        label_chunks2 = label_chunks
+
+    if (seg1 and seg2):
+        # Merge two labels, the second labels overwrites the first ones when overlapping.
+        segments1 = read_audacity_segments(seg1)
+        segments2 = read_audacity_segments(seg2)
+        for i, segment in enumerate(segments2):
+              segments2[i].label = segment.label + "2" # e.g. a 'tr' of the second segment labels becomes 'tr2'
+        frame_labels = audacitysegment2framelabel(segments1+segments2, frame_size_sec, frame_shift_sec, num_frames=num_frames) # concatenate two segment lists
+        label_chunks = overlapped_chunks(frame_labels, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
+        label_chunks12 = label_chunks
+
+    return feat_chunks1, feat_chunks2, feat_chunks12, label_chunks1, label_chunks2, label_chunks12
