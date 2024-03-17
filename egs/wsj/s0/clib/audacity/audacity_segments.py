@@ -83,7 +83,7 @@ def time2sample(time, sr=16000):
     sample_index = time * sr
     return int(sample_index)
 
-def index2time(frame_index, window_size=0.025, window_shift=0.01, ndigits=7, center=False):
+def index2time(frame_index, window_size=0.025, window_shift=0.01, ndigits=7, center=True):
     """ Find time of a frame center according to its index (index2framecentertime).
 
     Parameters
@@ -115,7 +115,7 @@ def index2time(frame_index, window_size=0.025, window_shift=0.01, ndigits=7, cen
         time = window_size / 2 + frame_index * window_shift
     return round(time, ndigits)
 
-def time2index(time, precision=0.00001, window_size=0.025, window_shift=0.01, ndigits=7, center=False, verbose=False):
+def time2index(time, window_size=0.025, window_shift=0.01, precision=0.00001, ndigits=7, center=True, verbose=False):
     """ Find the nearest frame index to the given time (time2nearestindex).
 
     Parameters
@@ -203,13 +203,13 @@ def audacitysegment2framelabel(audacity_segment_file, window_size=0.025, window_
 
     if not num_frames:
         end_second = max([segment.end_sec for segment in segments])
-        last_frame =  time2index(end_second, precision=precision, window_size=window_size, window_shift=window_shift, ndigits=ndigits, center=center)
+        last_frame =  time2index(end_second, window_size=window_size, window_shift=window_shift, precision=precision, ndigits=ndigits, center=center)
         num_frames = last_frame + 1
 
     frame_labels = [default_label] * num_frames # copy all labels as the default label (e.g., 'noise'), then assign frame labels according to the audacity segments
     for segment in segments:
-        begin_frame = time2index(segment.begin_sec, precision=precision, window_size=window_size, window_shift=window_shift, ndigits=ndigits, center=center)
-        end_frame = time2index(segment.end_sec, precision=precision, window_size=window_size, window_shift=window_shift, ndigits=ndigits, center=center)
+        begin_frame = time2index(segment.begin_sec, window_size=window_size, window_shift=window_shift, precision=precision, ndigits=ndigits, center=center)
+        end_frame = time2index(segment.end_sec, window_size=window_size, window_shift=window_shift, precision=precision, ndigits=ndigits, center=center)
         label = segment.label
 
         if (end_frame > (num_frames-1)) and (begin_frame <= (num_frames-1)) :
@@ -403,12 +403,12 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
     Examples
     --------
     sampling_rate = 44100
-    frame_size_ms = 50
-    frame_shift_ms = 12.5
+    frame_size_sec = 50 / 1000
+    frame_shift_sec = 12.5 / 1000
     num_mels = 80
     min_freq = 3000
-    train_chunk_size_ms = 500 / 1000
-    train_chunk_shift_ms = 400 / 1000
+    train_chunk_size_sec = 500 / 1000 # 'train_chunk_size_num_frames': 41
+    train_chunk_shift_sec = 150 / 1000 # 'train_chunk_shift_num_frames': 13
     wav1 = '/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit/data/pair10/pair10_animal1_together.wav'
     wav2 = '/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit/data/pair10/pair10_animal2_together.wav'
     seg1 = '/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit/processed/audacity/audacity_labels/p10a1_toget.txt'
@@ -429,12 +429,12 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
     #         f.write(f"{line}\n")
 
     Outputs:
-    len(feat_chunks1)=46677 feat_chunks1[0].shape=torch.Size([50, 80])
-    len(feat_chunks2)=46677 feat_chunks2[0].shape=torch.Size([50, 80])
-    len(feat_chunks12)=46677 feat_chunks12[0].shape=torch.Size([100, 80])
-    len(label_chunks1)=46677 len(label_chunks1[0])=50
-    len(label_chunks2)=46677 len(label_chunks2[0])=50
-    len(label_chunks12)=46677 len(label_chunks12[0])=50
+    len(feat_chunks1)=53859 feat_chunks1[0].shape=torch.Size([41, 80])
+    len(feat_chunks2)=53859 feat_chunks2[0].shape=torch.Size([41, 80])
+    len(feat_chunks12)=53859 feat_chunks12[0].shape=torch.Size([82, 80])
+    len(label_chunks1)=53859 len(label_chunks1[0])=41
+    len(label_chunks2)=53859 len(label_chunks2[0])=41
+    len(label_chunks12)=53859 len(label_chunks12[0])=41
 
     Returns
     --------
