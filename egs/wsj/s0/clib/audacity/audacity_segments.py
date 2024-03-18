@@ -413,8 +413,8 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
     --------
     feat_chunks1, feat_chunks2, feat_chunks12, label_chunks1, label_chunks2, label_chunks12
     Lists of chunks or merged chunks, each element with size of (chunk_size_num_frames, feat_dim) for feature-chunks or (chunk_size_num_frames) for [merged] label chunks
-    or (chunk_size_num_frames*2, feat_dim) for the merged feature-chunks (feat_chunks12) with merge order from the first chunks to the second ones.
-    Merged chunk of feat_chunks12 is concatenated by the first dimension feat_chunks1 and feat_chunks2 (a zero matrix when wav2 is empty).
+    or (chunk_size_num_frames, feat_dim*2) for the merged feature-chunks (feat_chunks12) with merge order from the first chunks to the second ones.
+    Merged chunk of feat_chunks12 is concatenated by the feature dimension of the feat_chunks1 and the feat_chunks2 (a zero matrix when wav2 is empty).
     Merged label of label_chunks12 would keep the first segment labels same and modify the second segment labels by adding '2':
     # e.g. a 'tr' of the second segment labels becomes 'tr2'.
     The second segment labels would overwrite the first segment labels if overlaps exist.
@@ -450,7 +450,7 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
     Outputs:
     len(feat_chunks1)=53859 feat_chunks1[0].shape=torch.Size([41, 80])
     len(feat_chunks2)=53859 feat_chunks2[0].shape=torch.Size([41, 80])
-    len(feat_chunks12)=53859 feat_chunks12[0].shape=torch.Size([82, 80])
+    len(feat_chunks12)=53859 feat_chunks12[0].shape=torch.Size([41, 160])
     len(label_chunks1)=53859 len(label_chunks1[0])=41
     len(label_chunks2)=53859 len(label_chunks2[0])=41
     len(label_chunks12)=53859 len(label_chunks12[0])=41
@@ -525,7 +525,7 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
     if (not wav2): feat_chunks2 = [feat_chunks1[i].new_zeros(feat_chunks1[i].shape) for i in range(0, len(feat_chunks1))] # padding the second chunks as zeros when the second wav is None
     if len(feat_chunks1) != len(feat_chunks2) and verbose:
         print(f"Warning: different sizes of feature chunks for wav1: '{wav1}' has num_chunks of {len(feat_chunks1)} and wav2 '{wav2}' has num_chunks of {len(feat_chunks2)}.")
-    feat_chunks12 = [torch.cat([feat_chunks1[i], feat_chunks2[i]], dim=0) for i in range(0, min(len(feat_chunks1), len(feat_chunks2)))] # a potental problem when the last chunk of logmel1 and logmel2 have different sizes.
+    feat_chunks12 = [torch.cat([feat_chunks1[i], feat_chunks2[i]], dim=1) for i in range(0, min(len(feat_chunks1), len(feat_chunks2)))] # a potental problem when the last chunk of logmel1 and logmel2 have different sizes.
 
     if (seg1):
         assert wav1, f"When seg1 ({seg1}) exists, wav1 should exist."
