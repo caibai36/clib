@@ -517,15 +517,22 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
         feat_chunks = overlapped_chunks(logmel, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
         logmel2 = logmel
 
-        if (logmel1.shape[0] != logmel2.shape[0]) and verbose: print(f"Warning: logmel1 of '{wav1}' and logmel2 of '{wav2}' has different different shapes of {logmel1.shape} and {logmel2.shape}")
         num_frames = min(logmel1.shape[0], logmel2.shape[0])
         feat_chunks2 = feat_chunks
+
+        if (logmel1.shape[0] != logmel2.shape[0]) and verbose:
+            print(f"Warning: logmel1 of '{wav1}' and logmel2 of '{wav2}' has different different shapes of {logmel1.shape} and {logmel2.shape}")
+            num_frames = min(logmel1.shape[0], logmel2.shape[0])
+            logmel1 = logmel1[:num_frames]
+            logmel2 = logmel2[:num_frames]
+            feat_chunks1 = overlapped_chunks(logmel1, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
+            feat_chunks2 = overlapped_chunks(logmel2, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
 
     # Merge two chunks
     if (not wav2): feat_chunks2 = [feat_chunks1[i].new_zeros(feat_chunks1[i].shape) for i in range(0, len(feat_chunks1))] # padding the second chunks as zeros when the second wav is None
     if len(feat_chunks1) != len(feat_chunks2) and verbose:
         print(f"Warning: different sizes of feature chunks for wav1: '{wav1}' has num_chunks of {len(feat_chunks1)} and wav2 '{wav2}' has num_chunks of {len(feat_chunks2)}.")
-    feat_chunks12 = [torch.cat([feat_chunks1[i], feat_chunks2[i]], dim=1) for i in range(0, min(len(feat_chunks1), len(feat_chunks2)))] # a potental problem when the last chunk of logmel1 and logmel2 have different sizes.
+    feat_chunks12 = [torch.cat([feat_chunks1[i], feat_chunks2[i]], dim=1) for i in range(0, min(len(feat_chunks1), len(feat_chunks2)))]
 
     if (seg1):
         assert wav1, f"When seg1 ({seg1}) exists, wav1 should exist."
