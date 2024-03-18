@@ -391,7 +391,7 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
     wav2 : the second wav file
     seg1 : the first audacity segment file (each line: begin_sec end_sec label)
     seg2 : the second audacity segment file
-    sampling_rate : Sampling rate of the audio
+    sampling_rate : the sampling rate of the audio
     frame_size_sec : the frame size (second)
     frame_shift_sec : the frame shift
     feat_dim : the feature dimension
@@ -399,6 +399,16 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
     feat_type : the feature type (default "mel")
     chunk_size_sec : the chunk size (a chunk consists of frames)
     chunk_shift_sec : the chunk shift
+
+    Returns
+    --------
+    feat_chunks1, feat_chunks2, feat_chunks12, label_chunks1, label_chunks2, label_chunks12
+    Lists of chunks or merged chunks, each element with size of (chunk_size_num_frames, feat_dim) for feature-chunks or (chunk_size_num_frames) for [merged] label chunks
+    or (chunk_size_num_frames*2, feat_dim) for the merged feature-chunks (feat_chunks12) with merge order from the first chunks to the second ones.
+    Merged chunk of feat_chunks12 is concatenated by the first dimension feat_chunks1 and feat_chunks2 (a zero matrix when wav2 is empty).
+    Merged label of label_chunks12 would keep the first segment labels same and modify the second segment labels by adding '2':
+    # e.g. a 'tr' of the second segment labels becomes 'tr2'.
+    The second segment labels would overwrite the first segment labels if overlaps exist.
 
     Examples
     --------
@@ -436,14 +446,7 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
     len(label_chunks2)=53859 len(label_chunks2[0])=41
     len(label_chunks12)=53859 len(label_chunks12[0])=41
 
-    Returns
-    --------
-    feat_chunks1, feat_chunks2, feat_chunks12, label_chunks1, label_chunks2, label_chunks12
-    Lists of chunks or merged chunks, each element with size (chunk_size_num_frames, feat_dim) or (chunk_size_num_frames)
-    or  (chunk_size_num_frames*2, feat_dim) or (chunk_size_num_frames*2)
-    Merged chunk of feat_chunks12 is the concatenated by the first dimension feat_chunks1 and feat_chunks2 (a zero matrix when wav2 is empty).
-    Merged label of label_chunks12 would keep the first segment labels same and modify the second segment labels by adding '2':
-    # e.g. a 'tr' of the second segment labels becomes 'tr2'.
+    Implemented by bin-wu at 16:39 on 17 March 2024
     """
     feat_chunks1 = []
     feat_chunks2 = []
