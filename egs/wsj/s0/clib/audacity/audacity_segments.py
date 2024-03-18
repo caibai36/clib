@@ -390,7 +390,7 @@ def overlapped_chunks(seq, chunk_size=5, chunk_shift=2, verbose=False):
 
     return chunks
 
-def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame_size_sec=50/1000, frame_shift_sec=12.5/1000, feat_dim=80, min_freq=None, feat_type="mel", chunk_size_sec=0.5, chunk_shift_sec=0.4, verbose=True):
+def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame_size_sec=50/1000, frame_shift_sec=12.5/1000, feat_dim=80, min_freq=None, feat_type="mel", chunk_size_sec=0.5, chunk_shift_sec=0.4, feat_mean_norm=False, verbose=True):
     """Convert long wavs and its segment files into chunks of features and labels using the sliding window.
 
     Parameters
@@ -407,6 +407,7 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
     feat_type : the feature type (default "mel")
     chunk_size_sec : the chunk size (a chunk consists of frames)
     chunk_shift_sec : the chunk shift
+    feat_mean_norm: Apply the mean normalization on the feature (default in cmvn of kaldi) at the audio level, not needed when a batch norm layer exists.
 
     Returns
     --------
@@ -469,6 +470,11 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
 
     assert feat_type == 'mel'
 
+    def apply_mean_norm(feat):
+        """ # cmvn by subtracting the mean, default to the kaldi.
+        the feat tensor with size (num_frames, feature dim)."""
+        return feat - feat.mean(axis=0)
+
     if (wav1):
         audio_file = wav1
         waveform, sr = torchaudio.load(audio_file)
@@ -481,11 +487,13 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
                                                          n_mels=feat_dim,
                                                          center=True)
         logmel = transform(waveform).log()[0].T  # (num_frames, feature_size)
+        if feat_mean_norm: logmel = apply_mean_norm(logmel)
 
         chunk_size_num_frames = time2index(chunk_size_sec, frame_size_sec, frame_shift_sec) + 1
         chunk_shift_num_frames = time2index(chunk_shift_sec, frame_size_sec, frame_shift_sec) + 1
         feat_chunks = overlapped_chunks(logmel, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
         logmel1 = logmel
+
         num_frames = logmel1.shape[0]
         feat_chunks1 = feat_chunks
 
@@ -502,11 +510,13 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
                                                          n_mels=feat_dim,
                                                          center=True)
         logmel = transform(waveform).log()[0].T  # (num_frames, feature_size)
+        if feat_mean_norm: logmel = apply_mean_norm(logmel)
 
         chunk_size_num_frames = time2index(chunk_size_sec, frame_size_sec, frame_shift_sec) + 1
         chunk_shift_num_frames = time2index(chunk_shift_sec, frame_size_sec, frame_shift_sec) + 1
         feat_chunks = overlapped_chunks(logmel, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
         logmel2 = logmel
+
         if (logmel1.shape[0] != logmel2.shape[0]) and verbose: print(f"Warning: logmel1 of '{wav1}' and logmel2 of '{wav2}' has different different shapes of {logmel1.shape} and {logmel2.shape}")
         num_frames = min(logmel1.shape[0], logmel2.shape[0])
         feat_chunks2 = feat_chunks
@@ -515,7 +525,7 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
     if (not wav2): feat_chunks2 = [feat_chunks1[i].new_zeros(feat_chunks1[i].shape) for i in range(0, len(feat_chunks1))] # padding the second chunks as zeros when the second wav is None
     if len(feat_chunks1) != len(feat_chunks2) and verbose:
         print(f"Warning: different sizes of feature chunks for wav1: '{wav1}' has num_chunks of {len(feat_chunks1)} and wav2 '{wav2}' has num_chunks of {len(feat_chunks2)}.")
-    feat_chunks12 = [torch.cat([feat_chunks1[i], feat_chunks2[i]], dim=0) for i in range(0, min(len(feat_chunks1), len(feat_chunks2)))]
+    feat_chunks12 = [torch.cat([feat_chunks1[i], feat_chunks2[i]], dim=0) for i in range(0, min(len(feat_chunks1), len(feat_chunks2)))] # a potental problem when the last chunk of logmel1 and logmel2 have different sizes.
 
     if (seg1):
         assert wav1, f"When seg1 ({seg1}) exists, wav1 should exist."
