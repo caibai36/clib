@@ -167,7 +167,7 @@ def time2index(time, window_size=0.025, window_shift=0.01, precision=0.00001, nd
 
     return (index, begin_window_sec, end_window_sec) if verbose else index
 
-def audacitysegment2framelabel(audacity_segment_file, window_size=0.025, window_shift=0.01, num_frames=None, ndigits=7, center=True, precision=0.00001, default_label="noise"):
+def audacitysegment2framelabel(audacity_segment_file, window_size=0.025, window_shift=0.01, num_frames=None, ndigits=7, center=True, precision=0.00001, default_label="noise", verbose=True):
     """Convert audacity segment file to frame labels (Assume that the segments have no overlap in time).
 
     Parameters
@@ -212,16 +212,24 @@ def audacitysegment2framelabel(audacity_segment_file, window_size=0.025, window_
         end_frame = time2index(segment.end_sec, window_size=window_size, window_shift=window_shift, precision=precision, ndigits=ndigits, center=center)
         label = segment.label
 
-        if (end_frame > (num_frames-1)) and (begin_frame <= (num_frames-1)) :
+        if (end_frame > (num_frames-1)) and (begin_frame <= (num_frames-1)) and verbose:
             print("Warning: The index of the end of segment {} with frame index {} is larger than (num_of_frames-1) {}. Set the index of the end of frame of the segment as the (num_of_frames-1) {}".format(segment, end_frame, (num_frames-1), num_frames-1))
             end_frame = num_frames -1
-        elif (begin_frame > (num_frames-1)):
+        elif (begin_frame > (num_frames-1)) and verbose:
             print("Warning: The beginning of segment {} with frame index {} is larger than (num_of_frames-1) {}. Skip the frame".format(segment, begin_frame, num_frames-1))
         else:
             pass
 
         if (begin_frame <= (num_frames-1)):
             assert begin_frame <= (end_frame + 1)
+
+            # The current segment and a previous segment have overlaps, overwriting the previous one.
+            if not all(frame_label == default_label for frame_label in frame_labels[begin_frame: end_frame+1]) and verbose:
+                seg_file_name = audacity_segment_file if type(audacity_segment_file) == str else "segment_list"
+                print(f"Warning: Segments from '{seg_file_name}' overlap. "
+                f"frame_labels[{begin_frame}: {end_frame+1}]: '{frame_labels[begin_frame: end_frame+1]}' "
+                f"overwritten by labels: '[{label}] * {end_frame+1-begin_frame}' from {segment.begin_sec} sec to {segment.end_sec} sec.")
+
             frame_labels[begin_frame: end_frame+1] = [label] * (end_frame+1-begin_frame) # copy label from the begin to the end frame including the end frame
 
     return frame_labels
@@ -382,7 +390,7 @@ def overlapped_chunks(seq, chunk_size=5, chunk_shift=2, verbose=False):
 
     return chunks
 
-def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame_size_sec=50/1000, frame_shift_sec=12.5/1000, feat_dim=80, min_freq=None, feat_type="mel", chunk_size_sec=0.5, chunk_shift_sec=0.4):
+def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame_size_sec=50/1000, frame_shift_sec=12.5/1000, feat_dim=80, min_freq=None, feat_type="mel", chunk_size_sec=0.5, chunk_shift_sec=0.4, verbose=True):
     """Convert long wavs and its segment files into chunks of features and labels using the sliding window.
 
     Parameters
@@ -499,27 +507,27 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
         chunk_shift_num_frames = time2index(chunk_shift_sec, frame_size_sec, frame_shift_sec) + 1
         feat_chunks = overlapped_chunks(logmel, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
         logmel2 = logmel
-        if (logmel1.shape[0] != logmel2.shape[0]): print(f"Warning: logmel1 of '{wav1}' and logmel2 of '{wav2}' has different different shapes of {logmel1.shape} and {logmel2.shape}")
+        if (logmel1.shape[0] != logmel2.shape[0]) and verbose: print(f"Warning: logmel1 of '{wav1}' and logmel2 of '{wav2}' has different different shapes of {logmel1.shape} and {logmel2.shape}")
         num_frames = min(logmel1.shape[0], logmel2.shape[0])
         feat_chunks2 = feat_chunks
 
     # Merge two chunks
     if (not wav2): feat_chunks2 = [feat_chunks1[i].new_zeros(feat_chunks1[i].shape) for i in range(0, len(feat_chunks1))] # padding the second chunks as zeros when the second wav is None
-    if len(feat_chunks1) != len(feat_chunks2):
+    if len(feat_chunks1) != len(feat_chunks2) and verbose:
         print(f"Warning: different sizes of feature chunks for wav1: '{wav1}' has num_chunks of {len(feat_chunks1)} and wav2 '{wav2}' has num_chunks of {len(feat_chunks2)}.")
     feat_chunks12 = [torch.cat([feat_chunks1[i], feat_chunks2[i]], dim=0) for i in range(0, min(len(feat_chunks1), len(feat_chunks2)))]
 
     if (seg1):
         assert wav1, f"When seg1 ({seg1}) exists, wav1 should exist."
         seg_file = seg1
-        frame_labels = audacitysegment2framelabel(seg_file, frame_size_sec, frame_shift_sec, num_frames=num_frames)
+        frame_labels = audacitysegment2framelabel(seg_file, frame_size_sec, frame_shift_sec, num_frames=num_frames, verbose=verbose)
         label_chunks = overlapped_chunks(frame_labels, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
         label_chunks1 = label_chunks
 
     if (seg2):
         assert wav1 and wav2 and seg1, f"When seg2 ({seg2}) exists, wav1, wav2, and seg1 should exist."
         seg_file = seg2
-        frame_labels = audacitysegment2framelabel(seg_file, frame_size_sec, frame_shift_sec, num_frames=num_frames)
+        frame_labels = audacitysegment2framelabel(seg_file, frame_size_sec, frame_shift_sec, num_frames=num_frames, verbose=verbose)
         label_chunks = overlapped_chunks(frame_labels, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
         label_chunks2 = label_chunks
 
@@ -529,7 +537,7 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
         segments2 = read_audacity_segments(seg2)
         for i, segment in enumerate(segments2):
               segments2[i].label = segment.label + "2" # e.g. a 'tr' of the second segment labels becomes 'tr2'
-        frame_labels = audacitysegment2framelabel(segments1+segments2, frame_size_sec, frame_shift_sec, num_frames=num_frames) # concatenate two segment lists
+        frame_labels = audacitysegment2framelabel(segments1+segments2, frame_size_sec, frame_shift_sec, num_frames=num_frames, verbose=verbose) # concatenate two segment lists
         label_chunks = overlapped_chunks(frame_labels, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
         label_chunks12 = label_chunks
 
