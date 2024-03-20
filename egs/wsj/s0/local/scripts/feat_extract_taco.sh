@@ -59,7 +59,7 @@ if [ $stage -le 1 ]; then
     rm -rf data/${dataset}/{feats,raw}.scp # avoid confusion of scp files in make_cmvn.sh
 
     # Do Mel-frequency cepstral coefficients (mel) feature extraction.
-    python local/scripts/make_mel_taco.py \
+    python3 local/scripts/make_mel_taco.py \
 	   --feat_config $mel_conf \
 	   --write_utt2num_frames true \
 	   --data_dir data/${dataset} \
