@@ -79,6 +79,7 @@ if [ ${stage} -le 2 ]; then
 
     for dataset in test_eval92 train_si284 train_si84 test_dev93; do
     	x=${dataset}_mel80
+	mkdir -p data/${x}
 	cp -r data/${dataset}/* data/${x} # Fail to overwrite with command `cp -r data/${dataset} data/${x}'
     	./local/scripts/feat_extract_taco.sh --dataset ${x} --cmvn true --mel_conf $mel_config  # 80-dim mel
     done
@@ -172,7 +173,7 @@ if [ ${stage} -le 6 ]; then
 
 	# comment out the --exit option if you are not sure how many epochs to run
 	# comment out the --overwrite option when you do not want to overwrite the previous runs
-	python local/scripts/train_asr.py \
+	python3 local/scripts/train_asr.py \
 	       --gpu $gpu \
 	       --data_config $data_config \
 	       --batch_size $batch_size \
@@ -200,7 +201,7 @@ if [ ${stage} -le 7 ]; then
 	data_config=clib/conf/data/${dataset_name}/${data_name}/asr_tts/data_${feat}.yaml
 	result_dir=${model_path%/train/*}/eval/beamsize${beam_size} # ${string%substring} # Deletes shortest match of $substring from back of $string.
 
-	python local/scripts/eval_asr.py \
+	python3 local/scripts/eval_asr.py \
 	       --gpu $gpu \
 	       --data_config $data_config \
 	       --set_uttid $set_uttid \

@@ -111,7 +111,8 @@ class PyramidRNNEncoder(nn.Module):
         output_lengths = input_lengths
         for i in range(self.num_enc_rnn_layers):
             layer = self.enc_rnn_layers[i]
-            packed_sequence = pack(output, output_lengths, batch_first=True)
+            # packed_sequence = pack(output, output_lengths, batch_first=True)
+            packed_sequence = pack(output, output_lengths.cpu(), batch_first=True)
             output, _ = layer(packed_sequence) # LSTM returns '(output, [hn ,cn])'
             output, _ = unpack(output, batch_first=True, padding_value=self.enc_input_padding_value) # unpack returns (data, length)
             # dropout of lstm module behaves randomly even with same torch seed, so we'll append dropout layer.
