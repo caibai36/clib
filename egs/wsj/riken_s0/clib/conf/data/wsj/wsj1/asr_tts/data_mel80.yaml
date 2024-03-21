@@ -1,0 +1,8 @@
+# train: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s0/data/train_si284_mel80/utts.json'
+# dev: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s0/data/test_dev93_mel80/utts.json'
+# test: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s0/data/test_eval92_mel80/utts.json'
+# token2id: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s0/data/lang_1char/train_si284_units.txt'
+train: '/home/bin-wu/workspace/projects/clib/egs/wsj/riken_s0/data/train_si284_mel80/utts.json'
+dev: '/home/bin-wu/workspace/projects/clib/egs/wsj/riken_s0/data/test_dev93_mel80/utts.json'
+test: '/home/bin-wu/workspace/projects/clib/egs/wsj/riken_s0/data/test_eval92_mel80/utts.json'
+token2id: '/home/bin-wu/workspace/projects/clib/egs/wsj/riken_s0/data/lang_1char/train_si284_units.txt'

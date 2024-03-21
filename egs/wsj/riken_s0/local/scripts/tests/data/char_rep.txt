@@ -1,0 +1,6 @@
+T t
+O o
+ABOUT <UNK>
+ｘ x
+ｙ y
+ｚ z
