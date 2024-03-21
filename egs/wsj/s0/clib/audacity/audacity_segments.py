@@ -380,15 +380,17 @@ def overlapped_chunks(seq, chunk_size=5, chunk_shift=2, verbose=False):
     num_chunks = ceil(float(len(seq) - chunk_size) / chunk_shift) + 1 if (len(seq) - chunk_size) >= 0 else 1
 
     chunks = []
+    chunk_begin_end_indices = []
     for i in range(0, num_chunks):
         start_index = i * chunk_shift
         stop_index = min(start_index+chunk_size, len(seq)) # not included
         chunks.append(seq[start_index:stop_index])
+        chunk_begin_end_indices.append((start_index, stop_index))
 
     if verbose:
         print("seq: {}; chunks: {}; chunk_size: {}; chunk_shift: {}".format(seq, chunks, chunk_size, chunk_shift))
 
-    return chunks
+    return {"chunks": chunks, "chunk_begin_end_indices": chunk_begin_end_indices, "chunk_size": chunk_size, "chunk_shift": chunk_shift}
 
 def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame_size_sec=50/1000, frame_shift_sec=12.5/1000, feat_dim=80, min_freq=None, feat_type="mel", chunk_size_sec=0.5, chunk_shift_sec=0.4, feat_mean_norm=False, verbose=True):
     """Convert long wavs and its segment files into chunks of features and labels using the sliding window.
@@ -411,13 +413,15 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
 
     Returns
     --------
-    feat_chunks1, feat_chunks2, feat_chunks12, label_chunks1, label_chunks2, label_chunks12
+    feat_chunks1, feat_chunks2, feat_chunks12, label_chunks1, label_chunks2, label_chunks12, chunk_info
     Lists of chunks or merged chunks, each element with size of (chunk_size_num_frames, feat_dim) for feature-chunks or (chunk_size_num_frames) for [merged] label chunks
     or (chunk_size_num_frames, feat_dim*2) for the merged feature-chunks (feat_chunks12) with merge order from the first chunks to the second ones.
+    The length of the final chunk might be less than or equal to the chunk_size_num_frames.
     Merged chunk of feat_chunks12 is concatenated by the feature dimension of the feat_chunks1 and the feat_chunks2 (a zero matrix when wav2 is empty).
     Merged label of label_chunks12 would keep the first segment labels same and modify the second segment labels by adding '2':
     # e.g. a 'tr' of the second segment labels becomes 'tr2'.
     The second segment labels would overwrite the first segment labels if overlaps exist.
+    chunk_info is a map with keys of ['chunk_begin_end_indices', 'chunk_begin_end_seconds', 'chunk_size_num_frames', 'chunk_shift_num_frames', 'frame_size_sec', 'frame_shift_sec']
 
     Examples
     --------
@@ -433,10 +437,10 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
     seg1 = '/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit/processed/audacity/audacity_labels/p10a1_toget.txt'
     seg2 = '/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit/processed/audacity/audacity_labels/p10a2_toget.txt'
 
-    # feat_chunks1, _, feat_chunks12, _, _, _ = processing(wav1=wav1, wav2=None, seg1=None, seg2=None, sampling_rate=sampling_rate, frame_size_sec=frame_size_sec, frame_shift_sec=frame_shift_sec, feat_dim=num_mels, min_freq=min_freq, feat_type="mel", chunk_size_sec=train_chunk_size_sec, chunk_shift_sec=train_chunk_shift_sec)
-    # feat_chunks1, feat_chunks2, feat_chunks12, _, _, _ = processing(wav1=wav1, wav2=wav2, seg1=None, seg2=None, sampling_rate=sampling_rate, frame_size_sec=frame_size_sec, frame_shift_sec=frame_shift_sec, feat_dim=num_mels, min_freq=min_freq, feat_type="mel", chunk_size_sec=train_chunk_size_sec, chunk_shift_sec=train_chunk_shift_sec)
-    # feat_chunks1, feat_chunks2, feat_chunks12, label_chunks1, _, _ = processing(wav1=wav1, wav2=wav2, seg1=seg1, seg2=None, sampling_rate=sampling_rate, frame_size_sec=frame_size_sec, frame_shift_sec=frame_shift_sec, feat_dim=num_mels, min_freq=min_freq, feat_type="mel", chunk_size_sec=train_chunk_size_sec, chunk_shift_sec=train_chunk_shift_sec)
-    feat_chunks1, feat_chunks2, feat_chunks12, label_chunks1, label_chunks2, label_chunks12 = processing(wav1=wav1, wav2=wav2, seg1=seg1, seg2=seg2, sampling_rate=sampling_rate, frame_size_sec=frame_size_sec, frame_shift_sec=frame_shift_sec, feat_dim=num_mels, min_freq=min_freq, feat_type="mel", chunk_size_sec=train_chunk_size_sec, chunk_shift_sec=train_chunk_shift_sec)
+    # feat_chunks1, _, feat_chunks12, _, _, _, _ = processing(wav1=wav1, wav2=None, seg1=None, seg2=None, sampling_rate=sampling_rate, frame_size_sec=frame_size_sec, frame_shift_sec=frame_shift_sec, feat_dim=num_mels, min_freq=min_freq, feat_type="mel", chunk_size_sec=train_chunk_size_sec, chunk_shift_sec=train_chunk_shift_sec)
+    # feat_chunks1, feat_chunks2, feat_chunks12, _, _, _, _ = processing(wav1=wav1, wav2=wav2, seg1=None, seg2=None, sampling_rate=sampling_rate, frame_size_sec=frame_size_sec, frame_shift_sec=frame_shift_sec, feat_dim=num_mels, min_freq=min_freq, feat_type="mel", chunk_size_sec=train_chunk_size_sec, chunk_shift_sec=train_chunk_shift_sec)
+    # feat_chunks1, feat_chunks2, feat_chunks12, label_chunks1, _, _, _ = processing(wav1=wav1, wav2=wav2, seg1=seg1, seg2=None, sampling_rate=sampling_rate, frame_size_sec=frame_size_sec, frame_shift_sec=frame_shift_sec, feat_dim=num_mels, min_freq=min_freq, feat_type="mel", chunk_size_sec=train_chunk_size_sec, chunk_shift_sec=train_chunk_shift_sec)
+    feat_chunks1, feat_chunks2, feat_chunks12, label_chunks1, label_chunks2, label_chunks12, _ = processing(wav1=wav1, wav2=wav2, seg1=seg1, seg2=seg2, sampling_rate=sampling_rate, frame_size_sec=frame_size_sec, frame_shift_sec=frame_shift_sec, feat_dim=num_mels, min_freq=min_freq, feat_type="mel", chunk_size_sec=train_chunk_size_sec, chunk_shift_sec=train_chunk_shift_sec)
     print(f"{len(feat_chunks1)=} {feat_chunks1[0].shape=}")
     print(f"{len(feat_chunks2)=} {feat_chunks2[0].shape=}")
     print(f"{len(feat_chunks12)=} {feat_chunks12[0].shape=}")
@@ -491,7 +495,10 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
 
         chunk_size_num_frames = time2index(chunk_size_sec, frame_size_sec, frame_shift_sec) + 1
         chunk_shift_num_frames = time2index(chunk_shift_sec, frame_size_sec, frame_shift_sec) + 1
+#        feat_chunks = overlapped_chunks(logmel, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)['chunks']
         feat_chunks = overlapped_chunks(logmel, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
+        chunk_begin_end_indices = feat_chunks['chunk_begin_end_indices']
+        feat_chunks = feat_chunks['chunks']
         logmel1 = logmel
 
         num_frames = logmel1.shape[0]
@@ -514,7 +521,7 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
 
         chunk_size_num_frames = time2index(chunk_size_sec, frame_size_sec, frame_shift_sec) + 1
         chunk_shift_num_frames = time2index(chunk_shift_sec, frame_size_sec, frame_shift_sec) + 1
-        feat_chunks = overlapped_chunks(logmel, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
+        feat_chunks = overlapped_chunks(logmel, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)['chunks']
         logmel2 = logmel
 
         num_frames = min(logmel1.shape[0], logmel2.shape[0])
@@ -525,8 +532,8 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
             num_frames = min(logmel1.shape[0], logmel2.shape[0])
             logmel1 = logmel1[:num_frames]
             logmel2 = logmel2[:num_frames]
-            feat_chunks1 = overlapped_chunks(logmel1, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
-            feat_chunks2 = overlapped_chunks(logmel2, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
+            feat_chunks1 = overlapped_chunks(logmel1, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)['chunks']
+            feat_chunks2 = overlapped_chunks(logmel2, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)['chunks']
 
     # Merge two chunks
     if (not wav2): feat_chunks2 = [feat_chunks1[i].new_zeros(feat_chunks1[i].shape) for i in range(0, len(feat_chunks1))] # padding the second chunks as zeros when the second wav is None
@@ -538,14 +545,14 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
         assert wav1, f"When seg1 ({seg1}) exists, wav1 should exist."
         seg_file = seg1
         frame_labels = audacitysegment2framelabel(seg_file, frame_size_sec, frame_shift_sec, num_frames=num_frames, verbose=verbose)
-        label_chunks = overlapped_chunks(frame_labels, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
+        label_chunks = overlapped_chunks(frame_labels, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)['chunks']
         label_chunks1 = label_chunks
 
     if (seg2):
         assert wav1 and wav2 and seg1, f"When seg2 ({seg2}) exists, wav1, wav2, and seg1 should exist."
         seg_file = seg2
         frame_labels = audacitysegment2framelabel(seg_file, frame_size_sec, frame_shift_sec, num_frames=num_frames, verbose=verbose)
-        label_chunks = overlapped_chunks(frame_labels, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
+        label_chunks = overlapped_chunks(frame_labels, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)['chunks']
         label_chunks2 = label_chunks
 
     if (seg1 and seg2):
@@ -555,7 +562,15 @@ def processing(wav1, wav2=None, seg1=None, seg2=None, sampling_rate=48000, frame
         for i, segment in enumerate(segments2):
               segments2[i].label = segment.label + "2" # e.g. a 'tr' of the second segment labels becomes 'tr2'
         frame_labels = audacitysegment2framelabel(segments1+segments2, frame_size_sec, frame_shift_sec, num_frames=num_frames, verbose=verbose) # concatenate two segment lists
-        label_chunks = overlapped_chunks(frame_labels, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)
+        label_chunks = overlapped_chunks(frame_labels, chunk_size=chunk_size_num_frames, chunk_shift=chunk_shift_num_frames)['chunks']
         label_chunks12 = label_chunks
 
-    return feat_chunks1, feat_chunks2, feat_chunks12, label_chunks1, label_chunks2, label_chunks12
+    chunk_begin_end_seconds = []
+    if len(feat_chunks12) > 0: chunk_begin_end_indices = chunk_begin_end_indices[:len(feat_chunks12)] # when input two wavs have different lengths, use the smaller length
+    for begin_index, end_index in chunk_begin_end_indices:
+        begin_time = index2time(begin_index, window_size=frame_size_sec, window_shift=frame_shift_sec, center=True)
+        end_time = index2time(end_index, window_size=frame_size_sec, window_shift=frame_shift_sec, center=True)
+        chunk_begin_end_seconds.append((begin_time, end_time))
+
+    chunk_info = {"chunk_begin_end_indices": chunk_begin_end_indices, "chunk_begin_end_seconds": chunk_begin_end_seconds, "chunk_size_num_frames": chunk_size_num_frames, "chunk_shift_num_frames": chunk_shift_num_frames, "frame_size_sec": frame_size_sec, "frame_shift_sec": frame_shift_sec}
+    return feat_chunks1, feat_chunks2, feat_chunks12, label_chunks1, label_chunks2, label_chunks12, chunk_info
