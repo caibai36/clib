@@ -61,7 +61,12 @@ def read_audacity_segments(segment_file):
         segments = []
         for line in f:
             line = line.strip()
-            first, second, third = re.split("\s+", line)
+            # first, second, third = re.split("\s+", line)
+            elem = re.split("\s+", line)
+            if len(elem) != 3:
+                print(f"Warning: wrong format of a line in the segment file: {segment_file}\nThe line: '{line}' is not in the format of 'begin_sec end_sec label' or '\\ min_freq high_freq'")
+            else:
+                first, second , third = elem
 
             if first != "\\":
                 s = Segment(begin_sec=float(first), end_sec=float(second), label=str(third))
