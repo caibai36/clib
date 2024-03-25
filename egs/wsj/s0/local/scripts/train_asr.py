@@ -129,7 +129,9 @@ logger.info("\n" + pprint.pformat(data_config))
 token2id, id2token = {}, {}
 with open(data_config['token2id'], encoding='utf8') as ft2d:
     for line in ft2d:
-        token, token_id = line.split()
+        # token, token_id = line.split()
+        line = line.strip()
+        token, token_id = re.split('[\s:]+', line)
         token2id[token] = int(token_id)
         id2token[int(token_id)] = token
 assert len(token2id) == len(id2token), \
