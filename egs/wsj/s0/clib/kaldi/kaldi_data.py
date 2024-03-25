@@ -1,11 +1,15 @@
 # kaldi_data.py implemented by bin-wu at 23:43 in 2019.01.13
 
 from typing import List, Dict, Any, Callable, Optional, TypeVar, Tuple
+import os
+
 import logging
 import collections
 import json
 import pprint
 import logging
+
+import numpy as np
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -241,7 +245,7 @@ class KaldiDataLoader(DataLoader):
                     tokenid = [torch.LongTensor(list(map(int, d[key].split()))) for d in batch]
                     batch_dict[key] = pad_sequence(tokenid, batch_first=True, padding_value=self.padding_tokenid)
                 elif key == 'feat':
-                    feat = [torch.FloatTensor(kaldi_io.read_mat(d['feat'])) for d in batch]
+                    feat = [torch.FloatTensor(np.load(d['feat']) if os.path.splitext(d['feat'])[-1] == ".npy" else kaldi_io.read_mat(d['feat'])) for d in batch]
                     batch_dict[key] = pad_sequence(feat, batch_first=True)
                 else:
                     batch_dict[key] = default_collate([d[key] for d in batch])
