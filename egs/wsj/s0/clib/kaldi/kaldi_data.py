@@ -3,6 +3,7 @@
 from typing import List, Dict, Any, Callable, Optional, TypeVar, Tuple
 import os
 
+import re
 import logging
 import collections
 import json
@@ -34,6 +35,20 @@ class KaldiDataset(Dataset):
         # Sorting by length makes each batch has instances with similar lengths in DataLoader.
         #    1. less padded elements, thus less time wasted on the padded elements
         #    2. Instances sorted by lengths within a batch is required by 'pad_packed_sequence' of LSTM (pytorch < 1.3)
+    label_downsampling: downsample the labels by token[::label_downsampling], tokenid[::label_downsampling], and num_tokens(token[::label_downsampling]) (default 1)
+    e.g., print(len(tokenid), len(tokenid[::1]), len(tokenid[::2]), len(tokenid[::3])) # 126 126 63 42
+    Note: the 'token' or 'tokenid' field in a instance should be a string, e.g., instance['token'] = '<sos> tr tr <eos>' and instance['tokenid' ] = '2 4 4 3'
+    Note: <sos> and <eos> tokens are not included in downsampling
+    In [21]: for downsampling in range(1, 10): utts_json = json.load(open(json_file, encoding='utf8'));print(f"{downsampling=} {list(KaldiDataset(list(utts_json.values()), label_downsampling=downsampling))[0]['num_tokens']=}")
+    downsampling=1 list(KaldiDataset(list(utts_json.values()), label_downsampling=downsampling))[0]['num_tokens']=43
+    downsampling=2 list(KaldiDataset(list(utts_json.values()), label_downsampling=downsampling))[0]['num_tokens']=23
+    downsampling=3 list(KaldiDataset(list(utts_json.values()), label_downsampling=downsampling))[0]['num_tokens']=16
+    downsampling=4 list(KaldiDataset(list(utts_json.values()), label_downsampling=downsampling))[0]['num_tokens']=13
+    downsampling=5 list(KaldiDataset(list(utts_json.values()), label_downsampling=downsampling))[0]['num_tokens']=11
+    downsampling=6 list(KaldiDataset(list(utts_json.values()), label_downsampling=downsampling))[0]['num_tokens']=9
+    downsampling=7 list(KaldiDataset(list(utts_json.values()), label_downsampling=downsampling))[0]['num_tokens']=8
+    downsampling=8 list(KaldiDataset(list(utts_json.values()), label_downsampling=downsampling))[0]['num_tokens']=8
+    downsampling=9 list(KaldiDataset(list(utts_json.values()), label_downsampling=downsampling))[0]['num_tokens']=7
 
     Example
     -------
@@ -49,18 +64,43 @@ class KaldiDataset(Dataset):
 
     def __init__(self,
                  instances: List[Instance],
-                 field_to_sort: str = "num_frames") -> None:
+                 field_to_sort: str = "num_frames",
+                 label_downsampling: int = 1) -> None:
         super().__init__()
 
         self.instances: List[Instance] = []
         # We remove instances with empty sequences, as pytorch can not deal with the empty targets.
         for instance in instances:
+            # Apply label downsampling
+            has_sos_eos = False
+            if 'token' in instance:
+                token = re.split("\s+", instance['token'])
+                has_sos_eos = token[-1] == "<eos>" and token[0] == "<sos>"
+            if has_sos_eos:
+                if 'token' in instance and type(instance['token']) == str:
+                    token = re.split("\s+", instance['token'])
+                    instance['token'] = " ".join([token[0]] + token[1:-1:label_downsampling] + [token[-1]]) # exclude <sos> and <eos> in downsampling
+                    # print(f"{len(token)=} {len(token[1:-1:label_downsampling])=} {len(instance['token'].split())=}")
+                if 'tokenid' in instance and type(instance['tokenid']) == str:
+                    tokenid = re.split("\s+", instance['tokenid'])
+                    instance['tokenid'] = " ".join([tokenid[0]] + tokenid[1:-1:label_downsampling] + [tokenid[-1]])
+                if 'num_tokens' in instance:
+                    instance['num_tokens'] = len(re.split("\s+", instance['token']))
+            else:
+                if 'token' in instance and type(instance['token']) == str:
+                    instance['token'] = " ".join(re.split("\s+", instance['token'])[::label_downsampling])
+                if 'tokenid' in instance and type(instance['tokenid']) == str:
+                    instance['tokenid'] = " ".join(re.split("\s+", instance['tokenid'])[::label_downsampling])
+                if 'num_tokens' in instance:
+                    instance['num_tokens'] = len(re.split("\s+", instance['token']))
+
             if 'num_frames' in instance and int(instance['num_frames']) == 0:
                 logging.warning(f"The utterance with id {instance['uttid']} has an empty frame sequence. Discard it.")
                 continue
             if 'num_tokens' in instance and int(instance['num_tokens']) == 0:
                 logging.warning(f"The utterance with id {instance['uttid']} has an empty token sequence. Discard it.")
                 continue
+
             self.instances.append(instance)
 
         if field_to_sort:
