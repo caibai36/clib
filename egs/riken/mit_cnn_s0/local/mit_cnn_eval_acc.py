@@ -7,6 +7,7 @@ import sklearn.metrics
 
 import os
 import argparse
+import re
 
 import json
 
@@ -34,7 +35,7 @@ else:
 # for num in [0,0.3,0.4,0.5,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95]:
 #     prediction_list=['results/20161219_Athos_model_small_{}%.txt'.format(int(100*num)),
 #                      'results/20161219_Porthos_model_small_{}%.txt'.format(int(100*num))]
-    
+
 #     correct_list=["Wave_files/20161219_Athos_Porthos/Athos_20161219.txt",
 #                   "Wave_files/20161219_Athos_Porthos/Porthos_20161219.txt"]
 
@@ -63,7 +64,8 @@ for k in range(len(prediction_list)):
     '''current keeps track of the start of our window, start time can be calculated as 50ms*current'''
     current=0
     for line in predictions:
-        start_t, end_t, typee=line.split('\t')
+        line = line.strip()
+        start_t, end_t, typee=re.split("\s+", line) # line.split('\t')
         '''if the start of the next call is more than 274ms away from the start of our window
         there is no call in the middle 50ms of our 500ms window'''
         while float(start_t)-current*0.05>0.274:
@@ -82,7 +84,8 @@ for k in range(len(prediction_list)):
     since calls before a certain point were not labeled in the experiment'''
     first=None
     for line in correct:
-        start_t, end_t, typee=line.split('\t')
+        line = line.strip()
+        start_t, end_t, typee=re.split("\s+", line) # line.split('\t')
         typee=typee.lower()
         while float(start_t)-current*0.05>0.274:
             current+=1
@@ -108,10 +111,10 @@ for k in range(len(prediction_list)):
         #No call
         if lines_corr[j]=='noise':
             if lines_pred[j]=='noise':
-                noise_correct.append(1)  
+                noise_correct.append(1)
             else:
                 noise_correct.append(0)
-        #Call   
+        #Call
         elif lines_corr[j]!='noise':
             if lines_corr[j]==lines_pred[j]:
                 signal_correct.append(1)
