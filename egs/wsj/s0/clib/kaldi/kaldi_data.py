@@ -72,27 +72,28 @@ class KaldiDataset(Dataset):
         # We remove instances with empty sequences, as pytorch can not deal with the empty targets.
         for instance in instances:
             # Apply label downsampling
-            has_sos_eos = False
-            if 'token' in instance:
-                token = re.split("\s+", instance['token'])
-                has_sos_eos = token[-1] == "<eos>" and token[0] == "<sos>"
-            if has_sos_eos:
-                if 'token' in instance and type(instance['token']) == str:
+            if label_downsampling != 1:
+                has_sos_eos = False
+                if 'token' in instance:
                     token = re.split("\s+", instance['token'])
-                    instance['token'] = " ".join([token[0]] + token[1:-1:label_downsampling] + [token[-1]]) # exclude <sos> and <eos> in downsampling
-                    # print(f"{len(token)=} {len(token[1:-1:label_downsampling])=} {len(instance['token'].split())=}")
-                if 'tokenid' in instance and type(instance['tokenid']) == str:
-                    tokenid = re.split("\s+", instance['tokenid'])
-                    instance['tokenid'] = " ".join([tokenid[0]] + tokenid[1:-1:label_downsampling] + [tokenid[-1]])
-                if 'num_tokens' in instance:
-                    instance['num_tokens'] = len(re.split("\s+", instance['token']))
-            else:
-                if 'token' in instance and type(instance['token']) == str:
-                    instance['token'] = " ".join(re.split("\s+", instance['token'])[::label_downsampling])
-                if 'tokenid' in instance and type(instance['tokenid']) == str:
-                    instance['tokenid'] = " ".join(re.split("\s+", instance['tokenid'])[::label_downsampling])
-                if 'num_tokens' in instance:
-                    instance['num_tokens'] = len(re.split("\s+", instance['token']))
+                    has_sos_eos = token[-1] == "<eos>" and token[0] == "<sos>"
+                if has_sos_eos:
+                    if 'token' in instance and type(instance['token']) == str:
+                        token = re.split("\s+", instance['token'])
+                        instance['token'] = " ".join([token[0]] + token[1:-1:label_downsampling] + [token[-1]]) # exclude <sos> and <eos> in downsampling
+                        # print(f"{len(token)=} {len(token[1:-1:label_downsampling])=} {len(instance['token'].split())=}")
+                    if 'tokenid' in instance and type(instance['tokenid']) == str:
+                        tokenid = re.split("\s+", instance['tokenid'])
+                        instance['tokenid'] = " ".join([tokenid[0]] + tokenid[1:-1:label_downsampling] + [tokenid[-1]])
+                    if 'num_tokens' in instance:
+                        instance['num_tokens'] = len(re.split("\s+", instance['token']))
+                else:
+                    if 'token' in instance and type(instance['token']) == str:
+                        instance['token'] = " ".join(re.split("\s+", instance['token'])[::label_downsampling])
+                    if 'tokenid' in instance and type(instance['tokenid']) == str:
+                        instance['tokenid'] = " ".join(re.split("\s+", instance['tokenid'])[::label_downsampling])
+                    if 'num_tokens' in instance:
+                        instance['num_tokens'] = len(re.split("\s+", instance['token']))
 
             if 'num_frames' in instance and int(instance['num_frames']) == 0:
                 logging.warning(f"The utterance with id {instance['uttid']} has an empty frame sequence. Discard it.")
