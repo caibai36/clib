@@ -297,7 +297,7 @@ while epoch < num_epochs:
         logger.info("Get the better dev loss {:.3f} at epoch {} ... saving the model".format(best_dev_loss, best_dev_epoch))
         save_model_with_config(model, os.path.join(opts['result'], "best_model.mdl"))
 
-    logger.info("\n" + tabulate.tabulate(info_table, headers=['epoch', 'dataset', 'loss', 'acc'], floatfmt='.3f', tablefmt='rst'))
+    logger.info("\n" + tabulate.tabulate(info_table, headers=['epoch', 'dataset', 'loss', 'acc'], floatfmt='.4f', tablefmt='rst'))
     writer.add_scalar("Loss/train", mean_loss['train'], epoch)
     writer.add_scalar("Loss/dev", mean_loss['dev'], epoch)
     writer.add_scalar("Loss/test", mean_loss['test'], epoch)
