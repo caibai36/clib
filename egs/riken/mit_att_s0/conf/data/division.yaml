@@ -1,0 +1,24 @@
+# Lists of wave ids ([pair1_first, pair1_second, pair2_first, pair2_second, ...]) for training, development, and test sets
+train:
+- p3a1_toget
+- p3a2_toget
+- p4a1_toget
+- p4a2_toget
+- p5a1_toget
+- p5a2_toget
+- p6a1_toget
+- p6a2_toget
+- p7a1_toget
+- p7a2_toget
+- p8a1_toget
+- p8a2_toget
+- p9a1_toget
+- p9a2_toget
+- p10a1_toget
+- p10a2_toget
+dev:
+- p2a1_toget
+- p2a2_toget
+test:
+- p1a1_toget
+- p1a2_toget

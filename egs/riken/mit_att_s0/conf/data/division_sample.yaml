@@ -1,0 +1,10 @@
+# Lists of wave ids ([pair1_first, pair1_second, pair2_first, pair2_second, ...]) for training, development, and test sets
+train:
+- Cricket
+- Enid
+dev:
+- Setta
+- Sailor
+test:
+- Athos
+- Porthos

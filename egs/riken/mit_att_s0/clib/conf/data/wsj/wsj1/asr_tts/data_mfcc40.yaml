@@ -1,0 +1,4 @@
+train: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s0/data/train_si284/utts.json'
+dev: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s0/data/test_dev93/utts.json'
+test: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s0/data/test_eval92/utts.json'
+token2id: '/project/nakamura-lab08/Work/bin-wu/workspace/projects/clib/egs/wsj/s0/data/lang_1char/train_si284_units.txt'

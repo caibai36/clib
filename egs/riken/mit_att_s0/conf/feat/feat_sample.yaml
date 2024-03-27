@@ -1,0 +1,7 @@
+feat_type: mel
+sampling_rate: 48000
+frame_size_ms: 50
+frame_shift_ms: 12.5
+feat_dim: 40 # 80
+min_freq: 3000
+feat_mean_norm: True # Apply the mean normalization on the feature (default in cmvn of kaldi) at the audio level, not needed when a batch norm layer exists.
