@@ -4,10 +4,10 @@ The script loops through the prediction files made using each cutoff to print ou
 '''
 import numpy as np
 import sklearn.metrics
+import re
 
 import os
 import argparse
-import re
 
 import json
 
@@ -35,7 +35,7 @@ else:
 # for num in [0,0.3,0.4,0.5,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95]:
 #     prediction_list=['results/20161219_Athos_model_small_{}%.txt'.format(int(100*num)),
 #                      'results/20161219_Porthos_model_small_{}%.txt'.format(int(100*num))]
-
+    
 #     correct_list=["Wave_files/20161219_Athos_Porthos/Athos_20161219.txt",
 #                   "Wave_files/20161219_Athos_Porthos/Porthos_20161219.txt"]
 
@@ -75,7 +75,7 @@ for k in range(len(prediction_list)):
         a call can be considered to be at the middle 50ms of our window. After it passes that we loop to next
         call in the prediction file'''
         while float(end_t)-0.05*current>0.226:
-            lines_pred.append(typee[:-1])
+            lines_pred.append(typee)
             current+=1
 
     lines_corr=[]
@@ -93,10 +93,10 @@ for k in range(len(prediction_list)):
         while float(end_t)-0.05*current>0.226:
             if first==None:
                 first=current
-            if typee[:-1] not in classes:
+            if typee not in classes:
                 lines_corr.append('noise')
             else:
-                lines_corr.append(typee[:-1])
+                lines_corr.append(typee)
             current+=1
 
     last=len(lines_corr)
@@ -111,10 +111,10 @@ for k in range(len(prediction_list)):
         #No call
         if lines_corr[j]=='noise':
             if lines_pred[j]=='noise':
-                noise_correct.append(1)
+                noise_correct.append(1)  
             else:
                 noise_correct.append(0)
-        #Call
+        #Call   
         elif lines_corr[j]!='noise':
             if lines_corr[j]==lines_pred[j]:
                 signal_correct.append(1)

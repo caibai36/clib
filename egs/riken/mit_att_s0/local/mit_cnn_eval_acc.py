@@ -4,10 +4,10 @@ The script loops through the prediction files made using each cutoff to print ou
 '''
 import numpy as np
 import sklearn.metrics
+import re
 
 import os
 import argparse
-import re
 
 import json
 
@@ -75,7 +75,7 @@ for k in range(len(prediction_list)):
         a call can be considered to be at the middle 50ms of our window. After it passes that we loop to next
         call in the prediction file'''
         while float(end_t)-0.05*current>0.226:
-            lines_pred.append(typee[:-1])
+            lines_pred.append(typee)
             current+=1
 
     lines_corr=[]
@@ -93,10 +93,10 @@ for k in range(len(prediction_list)):
         while float(end_t)-0.05*current>0.226:
             if first==None:
                 first=current
-            if typee[:-1] not in classes:
+            if typee not in classes:
                 lines_corr.append('noise')
             else:
-                lines_corr.append(typee[:-1])
+                lines_corr.append(typee)
             current+=1
 
     last=len(lines_corr)
