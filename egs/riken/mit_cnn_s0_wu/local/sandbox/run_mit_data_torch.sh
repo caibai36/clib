@@ -12,8 +12,10 @@ stage=8  # start from 0 if you need to start from data preparation
 # 72 is model index from website https://marmosetbehavior.mit.edu/
 # 9 types include "noise" and "trill, twitter, phee, triphee, tsik, ek, chirp, and chatter"
 run=run0
-dataset_name=mit_sample # see https://marmosetbehavior.mit.edu
-data_name=mit_sample0 # training:20150814_Cricket_Enid; eval/dev:20150903_Setta_Sailor;test/prediction:20161219_Athos_Porthos
+# dataset_name=mit_sample # see https://marmosetbehavior.mit.edu
+# data_name=mit_sample0 # training:20150814_Cricket_Enid; eval/dev:20150903_Setta_Sailor;test/prediction:20161219_Athos_Porthos
+dataset_name=mit_data # see dataset shared by the paper of 'Close range vocal interaction in the common marmoset (Callithrix Jacchus)'
+data_name=mit_data0 # training:pair3-10;eval/dev:pair2;test/prediction:pair1
 model_name=mit_cnn_72
 exp_dir=exp/sys
 
@@ -33,15 +35,15 @@ lr=0.0003
 # dropout=0.4 # for dropout layer
 # eps=0.001 # for adam optimizer
 cutoffs="0 0.3 0.4 0.5 0.6 0.65 0.7 0.75 0.8 0.85 0.9 0.95" # "0.7 0.8"
-num_iter=2601 # 74001
-eval_interval=200 # 2000 # evaluate every x iterations and lr = lr * 0.97
+num_iter=74001
+eval_interval=2000 # evaluate every x iterations and lr = lr * 0.97
 avg_pred_win=5 # collect predicted probabilities by averaging across x consecutive predictions with step size of 1
 
 # Data
-# mit_sample=P:/\riken/\share/\data/\marmoset_mit_cnn/\original/\Wave_files # windows git shell
-mit_sample=/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit_cnn/original/Wave_files # linux shell
-first="Athos" # first uttid of a test pair
-sec="Porthos" # second uttid of a test pair
+# mit_sample=/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit_cnn/original/Wave_files
+mit_data=/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit
+first="p1a1_toget" # first uttid of a test pair
+sec="p1a2_toget" # second uttid of a test pair
 
 # Parse the options. (eg. ./run.sh --stage 1)
 # Note that the options should be defined as shell variable before parsing
@@ -50,7 +52,7 @@ sec="Porthos" # second uttid of a test pair
 if [ ${stage} -le 1 ]; then
     date
     echo "Data preparation..."
-    ./local/mit_sample_data_prep.sh --mit_sample $mit_sample --stage 0
+    ./local/mit_data_data_prep.sh --mit_data $mit_data --stage 0
     date
 fi
 
@@ -107,8 +109,8 @@ fi
 
 if [ ${stage} -le 5 ]; then
     date
-    echo "Evaluate mit cnn 72..."
-    rm -rf $eval_dir/results.txt
+    echo "Evalute mit cnn 72..."
+    rm $eval_dir/results.txt
 
     for cutoff in $cutoffs; do
 	echo Cutoff: $cutoff | tee -a $eval_dir/results.txt

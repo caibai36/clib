@@ -59,7 +59,7 @@ mkdir -p $result_dir
 if [ ${stage} -le 2 ]; then
     date
     echo "Train mit cnn 72..."
-    python local/mit_cnn_train_72_torch.py --train_input1 exp/data/$dataset_name/train_input1 \
+    python local/mit_cnn_train_72.py --train_input1 exp/data/$dataset_name/train_input1 \
 	   --train_input2 exp/data/$dataset_name/train_input2 \
 	   --train_target_single1 exp/data/$dataset_name/train_target_single1 \
 	   --train_target_single2 exp/data/$dataset_name/train_target_single2 \
@@ -83,7 +83,7 @@ mkdir -p $eval_dir
 if [ ${stage} -le 3 ]; then
     date
     echo "Test mit cnn 72..."
-    python local/mit_cnn_test_72_torch.py --test_input1 exp/data/$dataset_name/test_input1_$first \
+    python local/mit_cnn_test_72.py --test_input1 exp/data/$dataset_name/test_input1_$first \
 	   --test_input2 exp/data/$dataset_name/test_input2_$sec \
 	   --test_pred1 $eval_dir/test_pred1_$first \
 	   --test_pred2 $eval_dir/test_pred2_$sec \
