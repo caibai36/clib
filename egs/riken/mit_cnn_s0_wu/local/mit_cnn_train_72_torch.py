@@ -25,24 +25,24 @@ import torch.nn.functional as F
 parser = argparse.ArgumentParser(description=("Train or evaluate MIT CNN 72. (Reference: 'new_train_72.py' from https://marmosetbehavior.mit.edu/, supporting TensorFlow 2)"))
 
 # Data arguments
-parser.add_argument("--train_input1", type=str, default="exp/data/mit_sample/train_input1", help="Training set's first stream input")
-parser.add_argument("--train_input2", type=str, default="exp/data/mit_sample/train_input2", help="Training set's second stream input")
-parser.add_argument("--train_target_single1", type=str, default="exp/data/mit_sample/train_target_single1", help="Training set's first stream target label")
-parser.add_argument("--train_target_single2", type=str, default="exp/data/mit_sample/train_target_single2", help="Training set's second stream target label")
-parser.add_argument("--dev_input1", type=str, default="exp/data/mit_sample/dev_input1", help="Development set's first stream input")
-parser.add_argument("--dev_input2", type=str, default="exp/data/mit_sample/dev_input2", help="Development set's second stream input")
-parser.add_argument("--dev_target_single1", type=str, default="exp/data/mit_sample/dev_target_single1", help="Development set's first stream target label")
-parser.add_argument("--dev_target_single2", type=str, default="exp/data/mit_sample/dev_target_single2", help="Development set's second stream target label")
-parser.add_argument("--test_input1", type=str, default="exp/data/mit_sample/test_input1_Athos", help="Testing set's first stream input")
-parser.add_argument("--test_input2", type=str, default="exp/data/mit_sample/test_input2_Porthos", help="Testing set's second stream input")
-parser.add_argument("--test_pred1", type=str, default="exp/sys/mit_sample/mit_sample0/mit_cnn_72-run0/bs25lr0.0003evalinterval200avgpredwin5/eval/test_pred1_Athos", help="Test set's first stream predicted label probabilities")
-parser.add_argument("--test_pred2", type=str, default="exp/sys/mit_sample/mit_sample0/mit_cnn_72-run0/bs25lr0.0003evalinterval200avgpredwin5/eval/test_pred2_Porthos", help="Test set's second stream predicted label probabilities")
+parser.add_argument("--train_input1", type=str, default="exp/data/mit_sample/train_input1", help="Path to the first stream input of the training set")
+parser.add_argument("--train_input2", type=str, default="exp/data/mit_sample/train_input2", help="Path to the second stream input of the training set")
+parser.add_argument("--train_target_single1", type=str, default="exp/data/mit_sample/train_target_single1", help="Path to the first stream target labels of the training set")
+parser.add_argument("--train_target_single2", type=str, default="exp/data/mit_sample/train_target_single2", help="Path to the second stream target labels of the training set")
+parser.add_argument("--dev_input1", type=str, default="exp/data/mit_sample/dev_input1", help="Path to the first stream input of the development set")
+parser.add_argument("--dev_input2", type=str, default="exp/data/mit_sample/dev_input2", help="Path to the second stream input of the development set")
+parser.add_argument("--dev_target_single1", type=str, default="exp/data/mit_sample/dev_target_single1", help="Path to the first stream target labels of the development set")
+parser.add_argument("--dev_target_single2", type=str, default="exp/data/mit_sample/dev_target_single2", help="Path to the second stream target labels of the development set")
+parser.add_argument("--test_input1", type=str, default="exp/data/mit_sample/test_input1_Athos", help="Path to the first stream input of the testing set")
+parser.add_argument("--test_input2", type=str, default="exp/data/mit_sample/test_input2_Porthos", help="Path to the second stream input of the testing set")
+parser.add_argument("--test_pred1", type=str, default="exp/sys/mit_sample/mit_sample0/mit_cnn_72-run0/bs25lr0.0003evalinterval200avgpredwin5/eval/test_pred1_Athos", help="Path to save the predicted label probabilities of the first stream for the test set")
+parser.add_argument("--test_pred2", type=str, default="exp/sys/mit_sample/mit_sample0/mit_cnn_72-run0/bs25lr0.0003evalinterval200avgpredwin5/eval/test_pred2_Porthos", help="Path to save the predicted label probabilities of the second stream for the test set")
 
 # Model arguments
 parser.add_argument("--batch_size", type=int, default=25, help="Batch size for the dataloader")
 parser.add_argument("--dropout_rate", type=float, default=0.4, help="Drop rate of dropout layer")
-parser.add_argument("--eval_model", type=str, default="", help="Model path for prediction or evaluation") # train
-# parser.add_argument("--eval_model", type=str, default="exp/sys/mit_sample/mit_sample0/mit_cnn_72-run0/bs25lr0.0003evalinterval200avgpredwin5/train/model.ckpt", help="Model path for prediction or evaluation") # pred
+# parser.add_argument("--eval_model", type=str, default="", help="Model path for prediction or evaluation") # train
+parser.add_argument("--eval_model", type=str, default="exp/sys/mit_sample/mit_sample0/mit_cnn_72-run0/bs25lr0.0003evalinterval200avgpredwin5/train/model.ckpt", help="Model path for prediction or evaluation") # pred
 
 # Optimizer arguments
 parser.add_argument("--lr", type=float, default=0.0003, help="Learning rate of Adam optimizer")
@@ -63,13 +63,7 @@ parser.add_argument("--result", type=str, default="exp/sys/mit_sample/mit_sample
 
 # Parse arguments
 args = parser.parse_args()
-
-# Check if training or evaluation
-is_training = not args.eval_model
-if not os.path.exists(args.result) and is_training:
-    os.makedirs(args.result)
-
-model_path = os.path.join(args.result, "model.ckpt")
+model_path = os.path.join(args.result, "model.ckpt") # Save the training model
 
 # Assign arguments to variables
 # Training data
@@ -456,7 +450,10 @@ def main(xs1=None, xs2=None, batch_size=10, mode='predict', model_path='Models/m
         model.load_state_dict(torch.load(model_path, map_location=device)["model"])
         print(f'Model restored from {model_path}')
     else:
-        # Initialize variables for training a new model
+        # Initialize the directory of path to save the model
+        result_dir = os.path.dirname(model_path)
+        if not os.path.exists(result_dir):
+            os.makedirs(result_dir)
         print('Training new model')
 
     if mode == 'predict':
