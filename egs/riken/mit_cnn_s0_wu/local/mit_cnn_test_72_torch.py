@@ -463,6 +463,8 @@ def main(xs1=None, xs2=None, batch_size=10, mode='predict', model_path='Models/m
         predictions = []
         predictions2 = []
         print('Predicting')
+        model.train(False)
+
         length = min(xs1.shape[0], xs2.shape[0])
         num_batches = length
         for i in range(num_batches - 1):

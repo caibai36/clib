@@ -582,6 +582,8 @@ def predict(model, pred_data1, pred_data2, predictions_file1, predictions_file2,
     predictions = []
     predictions2 = []
     logger.info('Predicting')
+    model.train(False)
+
     length = min(predict_x1.shape[0], predict_x2.shape[0])
     num_batches = length
     for i in range(num_batches-1):
