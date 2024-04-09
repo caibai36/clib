@@ -725,8 +725,8 @@ def predict(model, pred_data1, pred_data2, predictions_file1, predictions_file2,
     np.save(predictions_file2, predictions2)
 
 if __name__ == '__main__':
-    # model = TwoStreamCNNModel(dropout_rate).to(device)
-    # optimizer = torch.optim.Adam(model.parameters(), lr=lr, eps=epsilon)
+    model = TwoStreamCNNModel(dropout_rate).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, eps=epsilon)
 
     # # Create data loaders for training and development sets
     # start_time = datetime.datetime.now()
