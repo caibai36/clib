@@ -1,4 +1,4 @@
-# Implemented by bin-wu at 16:21 on 9 April 2024 from the MIT's implementation
+# Implemented by bin-wu at 02:52 on 10 April 2024 from the MIT's implementation
 #    -> v1: Separate the training and the testing codes.
 #           Add a logger.
 #    -> v2: Change interations to epochs
@@ -201,7 +201,8 @@ def continue_train(message=""):
 
 def overwrite_result_directory(result_dir, overwrite=False):
     """
-    Prompts the user to decide whether to overwrite the result directory or not.
+    Prompts the user to decide whether to overwrite the result directory or not when it exists.
+    If the result directory does not exist, make the directory
 
     Args:
         result_dir (str): The path to the result directory.
@@ -213,25 +214,27 @@ def overwrite_result_directory(result_dir, overwrite=False):
         Overwriting the result directory ('output/experiment1') [y/n]? y
         !!!Overwriting the result directory: 'output/experiment1'
     """
-    overwrite_or_not = 'yes' if overwrite else None
-
-    # Prompt the user to decide whether to overwrite the result directory
-    # Valid responses are 'yes', 'y', 'no', or 'n' (case-insensitive)
-    while overwrite_or_not not in {'yes', 'no', 'n', 'y'}:
-        overwrite_or_not = input(f"Overwriting the result directory ('{result_dir}') [y/n]?").lower().strip()
-
-    if overwrite_or_not in {'yes', 'y'}:
-        # If the user confirms to overwrite the result directory
-        for x in glob.glob(os.path.join(result_dir, "*")):
-            if os.path.isdir(x):
-                shutil.rmtree(x)  # Remove subdirectories recursively
-            if os.path.isfile(x):
-                os.remove(x)  # Remove files
-        overwrite_warning = f"!!!Overwriting the result directory: '{result_dir}'"
-        print(overwrite_warning)
+    if not os.path.exists(result_dir):
+        os.makedirs(result_dir)
     else:
-        # If the user decides not to overwrite the result directory
-        sys.exit(0)  # Exit the script with a status code of 0
+        overwrite_or_not = 'yes' if overwrite else None
+        # Prompt the user to decide whether to overwrite the result directory
+        # Valid responses are 'yes', 'y', 'no', or 'n' (case-insensitive)
+        while overwrite_or_not not in {'yes', 'no', 'n', 'y'}:
+            overwrite_or_not = input(f"Overwriting the result directory ('{result_dir}') [y/n]?").lower().strip()
+
+        if overwrite_or_not in {'yes', 'y'}:
+            # If the user confirms to overwrite the result directory
+            for x in glob.glob(os.path.join(result_dir, "*")):
+                if os.path.isdir(x):
+                    shutil.rmtree(x)  # Remove subdirectories recursively
+                if os.path.isfile(x):
+                    os.remove(x)  # Remove files
+            overwrite_warning = f"!!!Overwriting the result directory: '{result_dir}'"
+            print(overwrite_warning)
+        else:
+            # If the user decides not to overwrite the result directory
+            sys.exit(0)  # Exit the script with a status code of 0
 
 class TwoStreamCNNModel(nn.Module):
     """
@@ -244,7 +247,7 @@ class TwoStreamCNNModel(nn.Module):
     def __init__(self, dropout_rate=0.5):
         super(TwoStreamCNNModel, self).__init__()
         self.dropout_rate = dropout_rate
-        
+
         # First convolutional stream
         self.conv1 = nn.Sequential(
             nn.MaxPool2d(kernel_size=2, stride=2),
@@ -269,7 +272,7 @@ class TwoStreamCNNModel(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2)
         )
-        
+
         # Second convolutional stream
         self.conv2 = nn.Sequential(
             nn.MaxPool2d(kernel_size=2, stride=2),
@@ -294,7 +297,7 @@ class TwoStreamCNNModel(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2)
         )
-        
+
         # Fully connected layers
         self.fc1 = nn.Linear(8 * 8 * 64 * 2, 1024)
         self.dropout = nn.Dropout(p=self.dropout_rate)
@@ -513,7 +516,7 @@ def pred_input_function(xs1, xs2, i, window_size=256, step_size=26):
 def train(model, optimizer, train_loader, dev_loader, num_epochs, eval_epoch_interval, lr, model_path):
     """
     Function for training the network using the training and evaluation/development data loaders.
-    
+
     Args:
         model (TwoStreamCNNModel): The model to be trained.
         optimizer (torch.optim.Optimizer): The optimizer used for training.
@@ -526,9 +529,8 @@ def train(model, optimizer, train_loader, dev_loader, num_epochs, eval_epoch_int
     """
     # Initialize the directory of path to save the model
     result_dir = os.path.dirname(model_path)
-    overwrite_result_directory(result_dir, overwrite)
-    if not os.path.exists(result_dir):
-        os.makedirs(result_dir)
+    # Whether to overwrite the result directory when it exists. Make a new directory when it does not exists.
+    overwrite_result_directory(result_dir, args.overwrite)
 
     logger = init_logger(os.path.join(os.path.dirname(model_path), "report.log"))  # logger for training
     logger.info(args)
@@ -607,10 +609,10 @@ def train(model, optimizer, train_loader, dev_loader, num_epochs, eval_epoch_int
         # logger.info(f"Eval loss: {eval_loss:.4f} Eval accuracy: {eval_accuracy:.4f}")
         info_table.append([epoch, "dev_set", eval_loss, eval_accuracy])
         logger.info("\n" + tabulate.tabulate(info_table, headers=['epoch', 'dataset', 'loss', 'acc'], floatfmt='.4f', tablefmt='rst'))
-        
+
         # Record evaluation loss and accuracy in TensorBoard
-        writer.add_scalar('Loss/eval', eval_loss, epoch)
-        writer.add_scalar('Accuracy/eval', eval_accuracy, epoch)
+        writer.add_scalar('Loss/dev', eval_loss, epoch)
+        writer.add_scalar('Accuracy/dev', eval_accuracy, epoch)
 
         # Save the checkpoints at specified intervals
         if epoch % eval_epoch_interval == 0:
@@ -629,7 +631,7 @@ def train(model, optimizer, train_loader, dev_loader, num_epochs, eval_epoch_int
             torch.save(checkpoint, model_path)
             logger.info(f"Model saved: {model_path}")
 
-        # Continue training 
+        # Continue training
         if epoch == num_epochs - 1 and not args.exit:
             command = "python " + ' '.join([x for x in sys.argv])
             message = f"command: '{command}'\nresult: '{result_dir}'\n"
@@ -723,8 +725,8 @@ def predict(model, pred_data1, pred_data2, predictions_file1, predictions_file2,
     np.save(predictions_file2, predictions2)
 
 if __name__ == '__main__':
-    model = TwoStreamCNNModel(dropout_rate).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, eps=epsilon)
+    # model = TwoStreamCNNModel(dropout_rate).to(device)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=lr, eps=epsilon)
 
     # # Create data loaders for training and development sets
     # start_time = datetime.datetime.now()
