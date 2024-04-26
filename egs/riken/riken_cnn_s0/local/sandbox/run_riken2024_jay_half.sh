@@ -114,7 +114,7 @@ fi
 
 if [ ${stage} -le 5 ]; then
     date
-    echo "Cut off riken cnn..."
+    echo "Get segments from riken cnn..."
     python local/riken_cnn_predictor.py \
 	   --label2id_yaml $label2id_yaml \
            --pred_files $eval_dir/test_pred_${test_id}.npy \
@@ -124,7 +124,7 @@ fi
 
 if [ ${stage} -le 6 ]; then
     date
-    echo "Evaluate riken cnn..."
+    echo "Evaluate segments from riken cnn..."
     rm -rf "$eval_dir/results.txt"
 
     python local/riken_cnn_eval_acc_confmat.py \

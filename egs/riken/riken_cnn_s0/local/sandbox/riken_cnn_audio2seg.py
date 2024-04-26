@@ -461,4 +461,4 @@ with codecs.open(merged_seg_file, 'w', 'utf-8') as f_merged:
     for start_time, end_time, label in merged_segments:
         f_merged.write(f"{start_time}\t{end_time}\t{label}\n")
 
-logger.info(f"segment file saved at: {os.path.abspath(merged_seg_file)}")
+logger.info(f"Segment file saved at: {os.path.abspath(merged_seg_file)}")

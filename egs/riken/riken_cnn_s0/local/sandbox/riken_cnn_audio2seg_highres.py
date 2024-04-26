@@ -645,7 +645,7 @@ parser.add_argument("--avg_pred_win", type=int, default=5, help="Collect predict
 # Other arguments
 parser.add_argument("--pred_resolution", type=float, default=0.05, help="The resolution of the prediction. The final segments are merged from predicted labels of x-seconds middle parts of a sliding window with the window shift x-seconds. The resolution would be safe when less than 0.05 seconds")
 parser.add_argument("--complete", action="store_true", help="May have bugs, keep the last potentially incomplete segment (used by fast prediction)")
-parser.add_argument("--fast_pred", action="store_true", help="Fast prediction using 50ms prediction resolution by creating dataloader from 2500ms segments")
+parser.add_argument("--fast_pred", action="store_true", help="Fast prediction using 50ms prediction resolution by creating a dataloader from 2500ms segments")
 
 args = parser.parse_args()
 
@@ -668,7 +668,7 @@ logger.info(f"Device: {device}")
 model = OneStreamCNNModel(num_classes=len(label2id)).to(device)
 
 if (args.fast_pred):
-    logger.info("Using the fast prediction with 50ms prediction resolution by creating dataloader from 2500ms segments...")
+    logger.info("Using the fast prediction with the 50ms prediction resolution by creating a dataloader from the 2500ms segments...")
     spec = create_spec_data(wav_file, keep_last_incomplete_segment=args.complete)
     pred_prob = predict(model, spec, model_path=eval_model, avg_pred_win=avg_pred_win)
     _, merged_segments = predict_segments(pred_prob, label2id)
@@ -692,4 +692,4 @@ with codecs.open(merged_seg_file, 'w', 'utf-8') as f_merged:
     for start_time, end_time, label in merged_segments:
         f_merged.write(f"{start_time}\t{end_time}\t{label}\n")
 
-logger.info(f"segment file saved at: {os.path.abspath(merged_seg_file)}")
+logger.info(f"Segment file saved at: {os.path.abspath(merged_seg_file)}")
