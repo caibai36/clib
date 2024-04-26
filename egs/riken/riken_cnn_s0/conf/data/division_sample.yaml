@@ -1,0 +1,10 @@
+# Lists of wave ids for training, development, and test sets
+train:
+- Cricket
+- Enid
+- Setta
+dev:
+- Sailor
+test:
+- Athos
+- Porthos
