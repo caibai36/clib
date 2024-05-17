@@ -268,8 +268,8 @@ def plot_confusion_matrix(confusion_matrix, labels, output_file):
     ax.xaxis.set_label_position('top')
 
     # Add labels for x-axis and y-axis
-    ax.set_xlabel('Predicted Labels', fontsize=14)
-    ax.set_ylabel('True Labels', fontsize=14)
+    ax.set_xlabel('Predicted labels', fontsize=14)
+    ax.set_ylabel('True labels', fontsize=14)
 
     # Add values to each cell
     for i in range(len(labels)):
@@ -277,7 +277,7 @@ def plot_confusion_matrix(confusion_matrix, labels, output_file):
             ax.text(j, i, confusion_matrix[i, j], ha='center', va='center', color='black', fontsize=12)
 
     # Add a title to the plot
-    ax.set_title('Confusion Matrix', fontsize=16)
+    ax.set_title('Confusion matrix', fontsize=16)
 
     plt.tight_layout()
     plt.savefig(output_file)
@@ -292,7 +292,7 @@ confusion_matrix, labels = compute_confusion_matrix(prediction_list, correct_lis
 
 output_dir = os.path.dirname(prediction_list[0])
 output_file = os.path.join(output_dir, "confusion_matrix.png")
-print(f"Confusion matrix saved at: {output_file}")
+print(f"Confusion matrix saved at: {os.path.abspath(output_file)}")
 plot_confusion_matrix(confusion_matrix, labels, output_file)
 
 save_file = os.path.join(output_dir, "confusion_matrix.yaml")
