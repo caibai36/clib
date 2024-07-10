@@ -10,12 +10,12 @@ stage=8 # Start from 0 if you need to start from data preparation
 # Data and model options
 run=run0
 dataset_name=riken2024
-data_dir_name=riken2024_jay_family
+data_dir_name=riken2024_all
 model_name=cnn
 exp_dir=exp/sys
 
 # Options for data
-data_div_yaml="conf/data/division_jay_family.yaml"  # YAML file containing data division by IDs for train, dev, and test sets
+data_div_yaml="conf/data/division_riken2024_all.yaml"  # YAML file containing data division by IDs for train, dev, and test sets
 label2id_yaml="conf/dict/label2id.yaml"  # YAML file containing label-to-labelID mapping
 # When the middle part of a sliding window overlaps with an interval of a label from an given Audacity segment file, assign the label to the window.
 middle_part=0.05  # Proportion of the middle part of the sliding window in seconds for label assignment.

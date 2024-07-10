@@ -124,7 +124,13 @@ def discretize_segments(file, classes, return_indices=False):
     # Iterate over each line in the file
     for line in file:
         # Split the line into start time, end time, and label
-        start_t, end_t, label = re.split(r'\s+', line.strip())
+        # start_t, end_t, label = re.split(r'\s+', line.strip())
+        seg = re.split(r'\s+', line.strip())
+        if len(seg) != 3:
+            print(f"Warning: ignoring the segment '{seg}', right format should be 'begin_sec, end_sec, label'")
+        else:
+            start_t, end_t, label = seg
+
         start_t, end_t = float(start_t), float(end_t)
         label = label.lower()
 

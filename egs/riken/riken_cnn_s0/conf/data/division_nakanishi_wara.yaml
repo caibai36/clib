@@ -1,0 +1,17 @@
+train:
+# - 230731_0623S12_ch1_1h_split002
+- 230806_0647S12_ch1_1h_split002
+- 230813_0144S34_ch1_1h_split000
+- 230813_0656S12_ch1_1h_split002
+- 230814_0656S12_ch1_1h_split000
+- 230815_0159S34_ch1_1h_split000
+- 230827_0704S12_ch1_1h_split000
+- 230827_0704S12_ch1_1h_split001
+- 230829_0698S12_ch1_1h_split001
+- 230903_0733S12_ch1_1h_split001
+- 230904_0741S12_ch1_1h_split000
+- 230905_0749S12_ch1_1h_split000
+dev:
+- 230731_0623S12_ch1_1h_split002
+test:
+- nakanishi_balanced

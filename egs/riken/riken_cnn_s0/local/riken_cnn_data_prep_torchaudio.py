@@ -2,6 +2,7 @@
 import os
 import sys
 import random
+import re
 
 import logging
 # Configure the logging system
@@ -109,7 +110,8 @@ def process_audio_segment(audio_file, segment_file, label2id, middle_part=0.15, 
     first = float('inf')  # The chunk index of the first label
 
     with open(segment_file, 'r') as labels:
-        segments = [line.split('\t') for line in labels if line.split('\t')[0] != "\\"]  # Some audacity files contain lines of "\ min_freq max_freq"
+        # segments = [line.strip().split('\t') for line in labels if line.strip().split('\t')[0] != "\\"]  # Some audacity files contain lines of "\ min_freq max_freq"
+        segments = [re.split(r"\s+", line.strip()) for line in labels if re.split(r"\s+", line.strip())[0] != "\\"]  # Some audacity files contain lines of "\ min_freq max_freq"
 
     current = 0
     # The middle part of the window
@@ -118,7 +120,12 @@ def process_audio_segment(audio_file, segment_file, label2id, middle_part=0.15, 
     middle_start = start_window + (window_size - middle_part) / 2
     middle_end = start_window + (window_size + middle_part) / 2
 
-    for start_t, end_t, label in segments:
+    for seg in segments:
+        if len(seg) != 3:
+            logger.warning(f"Warning: ignoring the segment '{seg}', right format should be 'begin_sec, end_sec, label'")
+        else:
+            start_t, end_t, label = seg
+
         # Slide a window with size window_size and shift window_shift.
         # When the middle part of the current window overlaps with the label segment,
         # assign the label to the window; otherwise, assign "noise".
@@ -331,6 +338,12 @@ logger.info(args)
 info = OmegaConf.load(args.info_json)
 data = OmegaConf.load(args.data_div_yaml)
 label2id = OmegaConf.load(args.label2id_yaml)
+
+# You can alternatively remove the other .lower() method in this script for uppercase labels.
+# The .lower() method originally meant to fix the typo problems of annotators such as annotating 'Cr' instead of 'cr' in INTERGROUP's annotation, not needed for the general case.
+for label in label2id.keys():
+    if label != "NA" and label !="NA2":
+        assert label == label.lower(), f"Error: labels should be lowercase (you can convert labels in your label2id file lowercase: '{args.label2id_yaml}'). \nBut label2id is {label2id}."
 
 train_wav_files = [info[uttid]['wav'] for uttid in data['train']]
 train_seg_files = [info[uttid]['seg'] for uttid in data['train']]

@@ -10,7 +10,7 @@ stage=8 # Start from 0 if you need to start from data preparation
 # Data and model options
 run=run0
 dataset_name=riken2024
-data_dir_name=riken2024_jay_family
+data_dir_name=riken2024_jay_half
 model_name=cnn
 exp_dir=exp/sys
 
@@ -21,7 +21,7 @@ label2id_yaml="conf/dict/label2id.yaml"  # YAML file containing label-to-labelID
 middle_part=0.05  # Proportion of the middle part of the sliding window in seconds for label assignment.
 window_size=0.5  # DO NOT CHANGE; Size of the sliding window in seconds for label assignment. Be careful to modify window_size due to consistency to 2500ms chunks.
 window_shift=0.05  # Shift of the sliding window in seconds for label assignment
-noise_preserve_steps=1  # Number of steps to skip between preserved all-noise-no-label chunks # 1 means keeping all noise segments
+noise_preserve_steps=5  # Number of steps to skip between preserved all-noise-no-label chunks # 1 means keeping all noise segments
 
 test_id=230807_001_ch1 # One test id in $data_div_yaml file
 
@@ -36,20 +36,21 @@ cutoffs="0 0.9 0.8"
 
 # Data
 # mit_sample=P:/riken/share/data/marmoset_mit_cnn/original/Wave_files # Windows Git shell
-riken2024=/home/bin-wu/share/data/riken/riken2024/ # Linux shell
+riken2024=/data/share/bin-wu/data/marmoset/vocalization/riken2024 # Linux shell
 
 # Parse the options. (e.g., ./run.sh --stage 1)
 # Note that the options should be defined as shell variables before parsing
 . local/scripts/parse_options.sh || exit 1
 
-if [ ${stage} -le 1 ]; then
+if [ ${stage} -le -1 ]; then
     date
     echo "Data preparation..."
-    ./local/riken2024_data_prep_jay.sh --riken2024 "$riken2024" --data_name ${data_dir_name} --stage 0
+    ./local/riken2024_data_prep.sh --riken2024 "$riken2024" --stage 0
     date
 fi
 
-info_json="data/${data_dir_name}/info.json"  # JSON file mapping IDs to audio and label file paths
+# info_json="data/${data_dir_name}/info.json"  # JSON file mapping IDs to audio and label file paths
+info_json="data/riken2024/info.json"  # JSON file mapping IDs to audio and label file paths
 data_name=$(basename $data_div_yaml .yaml)_winmid${middle_part}size${window_size}shift${window_shift}_noisekeep${noise_preserve_steps}
 if [ ${stage} -le 2 ]; then
     date
@@ -128,7 +129,7 @@ if [ ${stage} -le 6 ]; then
     rm -rf "$eval_dir/results.txt"
 
     python local/riken_cnn_eval_acc_confmat.py \
-           --info_json data/$data_dir_name/info.json \
+           --info_json data/riken2024/info.json \
 	   --label2id_yaml $label2id_yaml \
            --hypo_files $eval_dir/test_pred_${test_id}.txt \
            --ref_uttids $test_id | tee -a "$eval_dir/results.txt"

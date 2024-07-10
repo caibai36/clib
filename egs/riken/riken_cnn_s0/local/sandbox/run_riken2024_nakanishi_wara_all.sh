@@ -10,12 +10,12 @@ stage=8 # Start from 0 if you need to start from data preparation
 # Data and model options
 run=run0
 dataset_name=riken2024
-data_dir_name=riken2024_jay_family
+data_dir_name=riken2024_nakanishi_wara_all
 model_name=cnn
 exp_dir=exp/sys
 
 # Options for data
-data_div_yaml="conf/data/division_jay_family.yaml"  # YAML file containing data division by IDs for train, dev, and test sets
+data_div_yaml="conf/data/division_nakanishi_wara_all.yaml"  # YAML file containing data division by IDs for train, dev, and test sets
 label2id_yaml="conf/dict/label2id.yaml"  # YAML file containing label-to-labelID mapping
 # When the middle part of a sliding window overlaps with an interval of a label from an given Audacity segment file, assign the label to the window.
 middle_part=0.05  # Proportion of the middle part of the sliding window in seconds for label assignment.
@@ -23,7 +23,7 @@ window_size=0.5  # DO NOT CHANGE; Size of the sliding window in seconds for labe
 window_shift=0.05  # Shift of the sliding window in seconds for label assignment
 noise_preserve_steps=5  # Number of steps to skip between preserved all-noise-no-label chunks # 1 means keeping all noise segments
 
-test_id=230807_001_ch1 # One test id in $data_div_yaml file
+test_id=nakanishi_balanced # One test id in $data_div_yaml file
 
 # Options for training and evaluation
 num_epochs=25

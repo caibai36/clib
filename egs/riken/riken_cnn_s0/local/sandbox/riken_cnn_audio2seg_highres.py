@@ -643,7 +643,7 @@ parser.add_argument("--label2id_yaml", type=str, default="conf/dict/label2id.yam
 # Evaluation arguments
 parser.add_argument("--avg_pred_win", type=int, default=5, help="Collect predicted probabilities by averaging across x consecutive predictions")
 # Other arguments
-parser.add_argument("--pred_resolution", type=float, default=0.05, help="The resolution of the prediction. The final segments are merged from predicted labels of x-seconds middle parts of a sliding window with the window shift x-seconds. The resolution would be safe when less than 0.05 seconds")
+parser.add_argument("--pred_resolution", type=float, default=0.01, help="The resolution of the prediction. The final segments are merged from predicted labels of x-seconds middle parts of a sliding window with the window shift x-seconds. The resolution would be safe when less than 0.05 seconds. Default 0.01")
 parser.add_argument("--complete", action="store_true", help="May have bugs, keep the last potentially incomplete segment (used by fast prediction)")
 parser.add_argument("--fast_pred", action="store_true", help="Fast prediction using 50ms prediction resolution by creating a dataloader from 2500ms segments")
 
@@ -680,7 +680,11 @@ else:
     _, merged_segments = predict_segments_v1(pred_prob, label2id, window_size=0.5, window_shift=args.pred_resolution, middle_part=args.pred_resolution, fixed_factor=fixed_factor)
 
 # Save the segments
-os.makedirs(out_dir, exist_ok=True)
+if args.out_seg_file:
+    os.makedirs(os.path.dirname(args.out_seg_file), exist_ok=True)
+else:
+    os.makedirs(out_dir, exist_ok=True)
+
 file_name, _ = os.path.splitext(os.path.basename(wav_file))
 if args.fast_pred:
     merged_seg_file = args.out_seg_file or os.path.join(out_dir, f"cnn_pred_{file_name}.txt") # When out_file not specified, use out_dir

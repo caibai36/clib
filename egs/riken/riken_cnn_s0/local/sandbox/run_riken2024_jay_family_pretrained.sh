@@ -12,7 +12,8 @@ run=run0
 dataset_name=riken2024
 data_dir_name=riken2024_jay_family
 model_name=cnn
-exp_dir=exp/sys
+exp_dir=exp/pretrained
+pretrained_model=exp/sys/riken2024/division_riken2024_all_winmid0.05size0.5shift0.05_noisekeep5/cnn-run0/bs2048lr0.0003lrdecay1avgpredwin5/train/model.ckpt
 
 # Options for data
 data_div_yaml="conf/data/division_jay_family.yaml"  # YAML file containing data division by IDs for train, dev, and test sets
@@ -73,7 +74,8 @@ mkdir -p $result_dir
 if [ ${stage} -le 3 ]; then
     date
     echo "Train riken cnn..."
-    python local/riken_cnn_train_v1.py \
+    python local/riken_cnn_train_v1_pretrain.py \
+	--pretrained_model $pretrained_model \
         --train_input exp/data/$data_name/train_input.npy \
         --train_target exp/data/$data_name/train_target.npy \
         --dev_input exp/data/$data_name/dev_input.npy \

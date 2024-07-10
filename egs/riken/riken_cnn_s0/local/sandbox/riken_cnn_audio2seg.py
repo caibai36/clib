@@ -452,7 +452,11 @@ pred_prob = predict(model, spec, model_path=eval_model, avg_pred_win=avg_pred_wi
 _, merged_segments = predict_segments(pred_prob, label2id)
 
 # Save the segments
-os.makedirs(out_dir, exist_ok=True)
+if args.out_seg_file:
+    os.makedirs(os.path.dirname(args.out_seg_file), exist_ok=True)
+else:
+    os.makedirs(out_dir, exist_ok=True)
+
 file_name, _ = os.path.splitext(os.path.basename(wav_file))
 merged_seg_file = args.out_seg_file or os.path.join(out_dir, f"cnn_pred_{file_name}.txt") # When out_file not specified, use out_dir
 
