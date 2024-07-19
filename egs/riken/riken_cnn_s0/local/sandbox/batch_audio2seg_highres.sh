@@ -8,7 +8,7 @@ data_dir="/data01/share/bin-wu/data/marmoset/vocalization/riken_long/nas5/family
 . local/scripts/parse_options.sh || exit 1
 
 IFS=$'\n' # Set the Internal Field Separator to newline (This ensures that filenames with spaces are handled correctly)
-for file in $(cd "$data_dir"; find . -type f -name "*.wav"); do
+for file in $(cd "$data_dir"; find . -type f -name "*.wav" | sort); do
     file_base="$(basename "$file" .wav)"
     file_dir="$(dirname "$file")"
     model_base=$(basename "$model" .ckpt)
