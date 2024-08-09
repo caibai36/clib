@@ -1,7 +1,9 @@
 arch="cnn"
 model="conf/model/b0family3010_best_dev.ckpt"
-out_dir="nas5/familybooth_1594F_1449M_3010" # actual out_dir: "exp/out/${arch}_${model_base}/$out_dir/$file_dir/${file_base}_model_${arch}_${model_base}.txt"
-data_dir="/data01/share/bin-wu/data/marmoset/vocalization/riken_long/nas5/familybooth_1594F_1449M_3010"
+# out_dir="nas5/familybooth_1594F_1449M_3010" # actual out_dir: "exp/out/${arch}_${model_base}/$out_dir/$file_dir/${file_base}_model_${arch}_${model_base}.txt"
+# data_dir="/data01/share/bin-wu/data/marmoset/vocalization/riken_long/nas5/familybooth_1594F_1449M_3010"
+out_dir="nas5"  # actual out_dir: "exp/out/${arch}_${model_base}/$out_dir/$file_dir/${file_base}_model_${arch}_${model_base}.txt"
+data_dir="/data01/share/bin-wu/data/marmoset/vocalization/riken_long/nas5"
 
 # Parse the options. (e.g., ./run.sh --stage 1)
 # Note that the options should be defined as shell variables before parsing
