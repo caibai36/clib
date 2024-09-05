@@ -6,6 +6,8 @@ set -euo pipefail
 
 # General configuration
 stage=8 # Start from 0 if you need to start from data preparation
+seed=2020
+gpu=auto
 
 # Data and model options
 run=run0
@@ -22,6 +24,7 @@ middle_part=0.05  # Proportion of the middle part of the sliding window in secon
 window_size=0.5  # DO NOT CHANGE; Size of the sliding window in seconds for label assignment. Be careful to modify window_size due to consistency to 2500ms chunks.
 window_shift=0.05  # Shift of the sliding window in seconds for label assignment
 noise_preserve_steps=5  # Number of steps to skip between preserved all-noise-no-label chunks # 1 means keeping all noise segments
+eval_model="model.ckpt" # Set model to evaluate: "model_e20.ckpt" (epoch 20), "model.ckpt" (latest epoch), and "model_best_dev.ckpt" (epoch with best dev score)
 
 test_id=230807_001_ch1 # One test id in $data_div_yaml file
 
@@ -89,6 +92,8 @@ if [ ${stage} -le 3 ]; then
 	--num_epochs $num_epochs \
 	--save_epoch_interval $save_epoch_interval \
 	--avg_pred_win $avg_pred_win \
+	--seed $seed \
+	--gpu $gpu \
 	--result $result_dir \
 	--overwrite \
 	--exit
@@ -109,7 +114,9 @@ if [ ${stage} -le 4 ]; then
         --lr $lr \
         --epsilon 0.001 \
         --avg_pred_win $avg_pred_win \
-        --eval_model "$result_dir/model.ckpt"
+	--seed $seed \
+	--gpu $gpu \
+        --eval_model "${result_dir}/${eval_model}"
     date
 fi
 
