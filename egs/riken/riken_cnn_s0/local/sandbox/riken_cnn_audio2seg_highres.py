@@ -643,6 +643,7 @@ parser.add_argument("--label2id_yaml", type=str, default="conf/dict/label2id.yam
 # Evaluation arguments
 parser.add_argument("--avg_pred_win", type=int, default=5, help="Collect predicted probabilities by averaging across x consecutive predictions")
 # Other arguments
+parser.add_argument('--gpu', type=str, default="auto", help="e.g., '--gpu 2' for using device of gpu 'cuda:2'; '--gpu auto' for gpu with the least gpu memory; '--gpu cpu' for cpu.")
 parser.add_argument("--pred_resolution", type=float, default=0.01, help="The resolution of the prediction. The final segments are merged from predicted labels of x-seconds middle parts of a sliding window with the window shift x-seconds. The resolution would be safe when less than 0.05 seconds. Default 0.01")
 parser.add_argument("--complete", action="store_true", help="May have bugs, keep the last potentially incomplete segment (used by fast prediction)")
 parser.add_argument("--fast_pred", action="store_true", help="Fast prediction using 50ms prediction resolution by creating a dataloader from 2500ms segments")
@@ -661,7 +662,7 @@ avg_pred_win = args.avg_pred_win
 
 # Set seed and device
 set_seed(2020)
-device = set_device("auto")
+device = set_device(args.gpu)
 logger.info(f"Device: {device}")
 
 # Predict the segments
