@@ -865,9 +865,9 @@ parser.add_argument("--label2id_yaml", type=str, default="conf/dict/label2id_mar
 parser.add_argument("--image_size", type=int, default=256, help="Image size (height, width)")
 parser.add_argument("--patch_size", type=int, default=16, help="Patch size (height, width)")
 parser.add_argument("--dim", type=int, default=384, help="Embedding dimension")
-parser.add_argument("--depth", type=int, default=12, help="Number of transformer layers")
-parser.add_argument("--heads", type=int, default= 6, help="Number of attention heads")
-parser.add_argument("--mlp_dim", type=int, default=3072, help="Dimension of the MLP layer")
+parser.add_argument("--depth", type=int, default=6, help="Number of transformer layers")
+parser.add_argument("--heads", type=int, default=6, help="Number of attention heads")
+parser.add_argument("--mlp_dim", type=int, default=1536, help="Dimension of the MLP layer")
 parser.add_argument("--pool", type=str, default='cls', choices=['cls', 'mean'], help="Pooling type")
 parser.add_argument("--channels", type=int, default=1, help="Number of input channels")
 parser.add_argument("--dim_head", type=int, default=64, help="Dimension of each attention head")
@@ -882,8 +882,8 @@ parser.add_argument('--pretrained_model', default="", help="The path to pretrain
 # parser.add_argument("--epsilon", type=float, default=0.001, help="Epsilon of Adam optimizer for numerical stability")
 parser.add_argument("--weight_decay", type=float, default=0.3, help="Weight decay for AdamW optimizer")
 parser.add_argument("--warmup_epochs", type=int, default=10, help="Number of warmup epochs")
-parser.add_argument("--total_epochs", type=int, default=200, help="Total number of epochs for cosine annealing")
-parser.add_argument("--base_lr", type=float, default=0.003, help="Base learning rate")
+parser.add_argument("--total_epochs", type=int, default=100, help="Total number of epochs for cosine annealing")
+parser.add_argument("--base_lr", type=float, default=0.002, help="Base learning rate")
 
 # Training arguments
 parser.add_argument("--num_epochs", type=int, default=3, help="Number of epochs")

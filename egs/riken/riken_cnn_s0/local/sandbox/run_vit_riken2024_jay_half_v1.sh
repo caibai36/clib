@@ -35,16 +35,16 @@ batch_size=256  # Increased from 25 to 256 for ViT
 base_lr=0.002  # Base learning rate
 weight_decay=0.3  # Weight decay for AdamW optimizer
 warmup_epochs=10  # Number of warmup epochs
-total_epochs=200  # Total number of epochs for cosine annealing (including linear warmup)
+total_epochs=100  # Total number of epochs for cosine annealing (including linear warmup)
 avg_pred_win=5 # collect predicted probabilities by averaging that across x consecutive predictions
 
 # ViT model parameters
 image_size=256        # Image size (height, width)
 patch_size=16         # Patch size (height, width)
 dim=384               # Embedding dimension
-depth=12              # Number of transformer layers
+depth=6               # Number of transformer layers
 heads=6               # Number of attention heads
-mlp_dim=3072          # Dimension of the MLP layer
+mlp_dim=1536          # Dimension of the MLP layer
 pool="cls"            # Pooling type (cls or mean)
 channels=1            # Number of input channels
 dim_head=64           # Dimension of each attention head
