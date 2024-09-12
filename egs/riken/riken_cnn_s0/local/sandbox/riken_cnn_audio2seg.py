@@ -408,13 +408,14 @@ def predict_segments(pred_prob, label2id):
     merged_segments = merge_segments(raw_segments)
     return raw_segments, merged_segments
 
-default_model = "/home/bin-wu/workspace/projects/clib/egs/riken/riken_cnn_s0/exp/sys/riken2024/division_jay_half_winmid0.05size0.5shift0.05_noisekeep5/cnn-run0/bs2048lr0.0003lrdecay1avgpredwin5/train/model.ckpt"
+default_model = "conf/model/b0family3010_best_dev.ckpt"
 default_wav_file = "/home/bin-wu/share/data/riken/sample/1100F_0124_2017_0s_10s_ch1.wav"
 # default_wav_file = "/home/bin-wu/share/data/riken/riken2024/annotation_examples/wav/akiko_variant.wav"
 # default_wav_file = "/home/bin-wu/share/data/riken/riken2024/annotation_examples/wav/jay_balanced.wav"
 # default_wav_file = "/home/bin-wu/share/data/riken/riken2024/annotation_examples/wav/nakanishi_balanced.wav"
 # default_wav_file = "/home/bin-wu/share/data/riken/riken2024/jay_family/wav/230807_001_ch1.wav"
 # default_wav_file = "/data/share/bin-wu/data/marmoset/vocalization/marmoset_mit/data/pair1/pair1_animal1_together.wav"
+# default_model = "/home/bin-wu/workspace/projects/clib/egs/riken/riken_cnn_s0/exp/sys/riken2024/division_jay_half_winmid0.05size0.5shift0.05_noisekeep5/cnn-run0/bs2048lr0.0003lrdecay1avgpredwin5/train/model.ckpt"
 
 parser = argparse.ArgumentParser(description="Convert from a audio to its segment file using riken cnn model (the one-stream implementation of a CNN from [Oikarinen, 2019].  Note that end segments might be discarded in prediction. Consider --complete option if end segments are important.")
 # Main arguments
