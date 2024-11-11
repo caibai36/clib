@@ -29,7 +29,7 @@ eval_model="model.ckpt" # Set model to evaluate: "model_e20.ckpt" (epoch 20), "m
 test_id=230807_001_ch1 # One test id in $data_div_yaml file
 
 # Options for training and evaluation
-num_epochs=200  # Number of epochs to run; num_epochs <= total_epochs (for cosine annealing)
+num_epochs=100  # Number of epochs to run; num_epochs <= total_epochs (for cosine annealing)
 save_epoch_interval=20 # save model every x epochs
 batch_size=256  # Increased from 25 to 256 for ViT
 base_lr=0.002  # Base learning rate
