@@ -32,7 +32,7 @@ eval_model="model_best_dev.ckpt" # Set model to evaluate: model_e20.ckpt (epoch 
 # # Cutoff of 0.8 has proved to be the most accurate at replicating human labels but lower levels can help recognize more calls. If not provided a cutoff of 0.7 will be used
 # # for the big dataset we used "if i%2000==0:" to evaluate accuracies less often
 # Model setup for ViT
-batch_size=128 # Increased batch size for ViT
+batch_size=25 # Increased batch size for ViT
 lr=0.0003
 # dropout=0.4 # for dropout layer
 # eps=0.001 # for adam optimizer
@@ -47,9 +47,9 @@ image_size=256 # Size of input image
 patch_size=16 # Size of patch
 num_classes=9 # Number of classes
 dim=384 # Dimension of ViT
-depth=12 # Depth of ViT
+depth=6 # Depth of ViT
 heads=6 # Number of attention heads
-mlp_dim=3072 # Dimension of MLP layer
+mlp_dim=1536 # Dimension of MLP layer
 pool=cls # Pooling type (cls or mean)
 channels=1 # Number of input channels
 dim_head=64 # Dimension of each attention head

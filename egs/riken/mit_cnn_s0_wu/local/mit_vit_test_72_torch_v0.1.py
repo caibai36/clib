@@ -59,6 +59,7 @@ parser.add_argument("--shared_dim", type=int, default=1024, help="Dimension of t
 
 # ViT specific arguments
 parser.add_argument("--image_size", type=int, default=256, help="Size of input image")
+parser.add_argument("--seq", action='store_true', help="1D sequential ViT with patch size (image_height_int, patch_size_int)")
 parser.add_argument("--patch_size", type=int, default=16, help="Size of patch")
 parser.add_argument("--num_classes", type=int, default=9, help="Number of classes")
 parser.add_argument("--dim", type=int, default=384, help="Dimension of ViT")
@@ -1137,9 +1138,10 @@ def predict(model, pred_data1, pred_data2, predictions_file1, predictions_file2,
     np.save(predictions_file2, predictions2)
 
 if __name__ == '__main__':
+    patch_size = (args.image_size, args.patch_size) if args.seq else args.patch_size
     vit_params = {
         'image_size': args.image_size,
-        'patch_size': args.patch_size,
+        'patch_size': patch_size,
         'num_classes': args.num_classes,
         'dim': args.dim,
         'depth': args.depth,

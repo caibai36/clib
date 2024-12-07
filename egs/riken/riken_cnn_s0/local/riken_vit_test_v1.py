@@ -864,6 +864,7 @@ parser.add_argument("--label2id_yaml", type=str, default="conf/dict/label2id_mar
 # Model arguments
 parser.add_argument("--image_size", type=int, default=256, help="Image size (height, width)")
 parser.add_argument("--patch_size", type=int, default=16, help="Patch size (height, width)")
+parser.add_argument("--seq", action='store_true', help="1D sequential ViT with patch size (image_height_int, patch_size_int)")
 parser.add_argument("--dim", type=int, default=384, help="Embedding dimension")
 parser.add_argument("--depth", type=int, default=6, help="Number of transformer layers")
 parser.add_argument("--heads", type=int, default=6, help="Number of attention heads")
@@ -938,9 +939,10 @@ device = set_device(args.gpu)
 print(f"Device: {device}")
 
 # Create and initialize the ViT model
+patch_size = (args.image_size, args.patch_size) if args.seq else args.patch_size
 model = ViT(
     image_size=args.image_size,
-    patch_size=args.patch_size,
+    patch_size=patch_size,
     num_classes=len(label2id),
     dim=args.dim,
     depth=args.depth,
