@@ -50,6 +50,13 @@ while IFS= read -r contrast_pair; do
     # Create result directory name from the contrast pair
     pair_dir=$(echo "${contrast_pair}" | tr ' ' '_')
 
+    # Check if result directory exists
+    full_result_dir="${result_dir}/${pair_dir}"
+    if [ -d "$full_result_dir" ]; then
+        echo "Warning: Directory ${full_result_dir} already exists. Skipping this contrast pair."
+        continue
+    fi
+
     # Run Python script with parameters
     python local/fl_ce_contrast.py \
         --syllable_fl \
@@ -76,6 +83,5 @@ while IFS= read -r contrast_pair; do
         --save_epoch_interval "${save_epoch_interval}" \
         --connector "${connector}" \
         --merge_type "${merge_type}" \
-	--exit \
-	--overwrite
+	--exit
 done < "${contrast_group_file}"
