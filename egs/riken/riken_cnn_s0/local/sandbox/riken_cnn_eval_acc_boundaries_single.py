@@ -7,6 +7,41 @@ import json
 from omegaconf import OmegaConf
 import numpy as np
 
+# # Wrong version double counts the references
+# def calculate_boundary_accuracy(ref_segments, pred_segments, tolerance=0.1):
+#     """
+#     Calculate the boundary accuracy between predicted and reference segments.
+
+#     This function measures how well the predicted segment boundaries (start and end times)
+#     align with the reference segment boundaries. It calculates precision, recall, and
+#     F1-score based on a defined tolerance level.
+
+#     Args:
+#         ref_segments (list of tuples): Reference segments in the format [(start, end, label), ...].
+#         pred_segments (list of tuples): Predicted segments in the format [(start, end, label), ...].
+#         tolerance (float): Maximum allowed deviation (in seconds) for a boundary to be considered correct.
+
+#     Returns:
+#         precision (float): The proportion of predicted boundaries that are correct within the tolerance.
+#         recall (float): The proportion of reference boundaries that are correctly predicted within the tolerance.
+#         f1_score (float): The harmonic mean of precision and recall.
+#     """
+#     correct_boundaries = 0
+#     # Check each predicted segment against each reference segment
+#     for pred_start, pred_end, _ in pred_segments:
+#         for ref_start, ref_end, _ in ref_segments:
+#             # Check if both start and end times fall within the allowed tolerance
+#             if abs(pred_start - ref_start) <= tolerance and abs(pred_end - ref_end) <= tolerance:
+#                 correct_boundaries += 1
+#                 break  # Avoid counting any more once a match is found
+    
+#     # Calculate precision and recall based on the matches
+#     precision = correct_boundaries / len(pred_segments)
+#     recall = correct_boundaries / len(ref_segments)
+#     # Calculate F1-score to balance precision and recall
+#     f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) != 0 else 0
+#     return precision, recall, f1_score
+
 def calculate_boundary_accuracy(ref_segments, pred_segments, tolerance=0.1):
     """
     Calculate the boundary accuracy between predicted and reference segments.
@@ -21,24 +56,33 @@ def calculate_boundary_accuracy(ref_segments, pred_segments, tolerance=0.1):
         tolerance (float): Maximum allowed deviation (in seconds) for a boundary to be considered correct.
 
     Returns:
-        precision (float): The proportion of predicted boundaries that are correct within the tolerance.
-        recall (float): The proportion of reference boundaries that are correctly predicted within the tolerance.
+        precision (float): The proportion of predicted segments that are correct within the tolerance.
+        recall (float): The proportion of reference segments that are correctly matched within the tolerance.
         f1_score (float): The harmonic mean of precision and recall.
     """
-    correct_boundaries = 0
+    correct_segments = 0
+    matched_refs = set()  # Track which reference segments have been matched
+    
     # Check each predicted segment against each reference segment
-    for pred_start, pred_end, _ in pred_segments:
-        for ref_start, ref_end, _ in ref_segments:
+    for i, (pred_start, pred_end, _) in enumerate(pred_segments):
+        for j, (ref_start, ref_end, _) in enumerate(ref_segments):
+            # Skip already matched reference segments
+            if j in matched_refs:
+                continue
+                
             # Check if both start and end times fall within the allowed tolerance
             if abs(pred_start - ref_start) <= tolerance and abs(pred_end - ref_end) <= tolerance:
-                correct_boundaries += 1
-                break  # Avoid counting any more once a match is found
+                correct_segments += 1
+                matched_refs.add(j)  # Mark this reference segment as matched
+                break  # Move to the next predicted segment
     
-    # Calculate precision and recall based on the matches
-    precision = correct_boundaries / len(pred_segments)
-    recall = correct_boundaries / len(ref_segments)
-    # Calculate F1-score to balance precision and recall
+    # Calculate precision and recall
+    precision = correct_segments / len(pred_segments) if pred_segments else 0
+    recall = correct_segments / len(ref_segments) if ref_segments else 0
+    
+    # Calculate F1-score
     f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) != 0 else 0
+    
     return precision, recall, f1_score
 
 default_hypo_file = "exp/sys/mit_sample/division_sample_winmid0.05size0.5shift0.05_noisekeep5/cnn-run0/bs25lr0.0003lrdecay1avgpredwin5/eval/test_pred_Athos.txt"
