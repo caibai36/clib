@@ -1,0 +1,42 @@
+# Merge all tape files.
+# Split tapes into session files with annotations.
+# Note: Sessions like sa_005 are missing due to lost tape-session maps in the original dataset.
+
+# Loop through each infant (sa, kk, ma, mk, sk)
+for infant in sa kk ma mk sk; do
+    # Set the base data directory
+    data="/a/data/NTT_Infant"
+
+    # Set the directory containing input WAV files and session information for current infant
+    dir="$data/data/session/$infant/"
+
+    # Set output directories for current infant
+    merge_dir="merge/$infant"
+    session_dir="sessions/$infant"
+
+    # Remove existing output directories for current infant if they exist
+    rm -rf "$merge_dir" "$session_dir"
+
+    # Create new output directories for current infant
+    mkdir -p "$merge_dir" "$session_dir"
+
+    # Process each unique ID for the current infant
+    for id in $(
+        # Find all WAV files, extract base names, get unique IDs
+        find "$dir" -name "*.wav" |
+        xargs -n1 basename |
+        cut -d_ -f1 |
+        sort -u
+    ); do
+        # Merge all WAV files for the current ID
+        sox "$dir"/"$id"*.wav "$merge_dir/$id.wav"
+
+        # Split the merged audio file into sessions
+        ./split_audio_session.sh "$dir/${id}.txt" "$merge_dir/$id.wav" "$session_dir/"
+    done
+done | tee run.log  # Redirect output to run.log while also displaying on the console
+
+# others
+for infant in sa kk ma mk sk; do data=/a/data/NTT_Infant;dir=$data/data/session/$infant/;merge_dir=merge/$infant;session_dir=sessions/$infant; rm -rf  $merge_dir $session_dir; mkdir -p $merge_dir $session_dir; for id in $(for file in $(find $dir -name "*.wav"); do echo $(basename $file .wav) | cut -d_ -f1; done | sort -u); do sox $(ls $dir/$id*.wav) $merge_dir/$id.wav; ./split_audio_session.sh $dir/${id}.txt $merge_dir/$id.wav $session_dir/; done; done | tee run.log
+
+data=/a/data/NTT_Infant;dir=$data/data/session/sa/;merge_dir=merge;session_dir=sessions; rm -rf  $merge_dir $session_dir; mkdir -p $merge_dir $session_dir; for id in $(for file in $(find $dir -name "*.wav"); do echo $(basename $file .wav) | cut -d_ -f1; done | sort -u); do sox $(ls $dir/$id*.wav) $merge_dir/$id.wav; ./split_audio_session.sh $dir/${id}.txt $merge_dir/$id.wav $session_dir/; done |& tee run.log
