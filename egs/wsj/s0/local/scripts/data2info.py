@@ -1,3 +1,4 @@
+# Implemented by bin-wu in 2023 for the Yonden project
 import sys
 import os
 import warnings
@@ -20,7 +21,7 @@ def read_segments(path: str = ""):
     with open(path, 'r', encoding='utf8') as f:
         for line in f:
             line = line.strip()
-            uttid, recid, begin_sec, end_sec = re.split('\s+', line)
+            uttid, recid, begin_sec, end_sec = re.split(r'\s+', line)
             segments_dict[uttid] = {"uttid": uttid, "recid": recid, "begin_sec": float(begin_sec), "end_sec": float(end_sec)}
 
     return segments_dict
@@ -36,13 +37,13 @@ def read_scp(path: str = "", value_type: str = ""):
     with open(path, 'r', encoding='utf8') as f:
         for line in f:
             line = line.strip()
-            fields = re.split('\s+', line)
+            fields = re.split(r'\s+', line)
             if (len(fields) == 0 or fields[0] == ""):
                 continue
             elif (len(fields) == 1):
                 scp_dict[fields[0]] = ""
             else:
-                uttid, content = re.split('\s+', line, maxsplit=1)
+                uttid, content = re.split(r'\s+', line, maxsplit=1)
                 if value_type == "int":
                     scp_dict[uttid] = int(content)
                 elif value_type == "float":
@@ -72,8 +73,8 @@ def read_yonden_addinfo(path: str = ""):
                 line = "220620_1330_中讃_増田班_00640_0210700_0210830\t了解|リョーカイ|名詞|サ変接続 。|。|記号|*\t指_作業指揮者_3-3.(TR)送電作業"
 
             uttid = text = speaker_label = speaker = sceneid = scene = "NA"
-            format1 = re.findall("^([^\t]+)\t([^\t]+)\t(.*)_(.*)_(.*)\.(.*)$", line) # 指_作業指揮者_3-3.(TR)送電作業
-            format2 = re.findall("^([^\t]+)\t([^\t]+)\t(\d.*)\.(.*)$", line) # 3-3.(TR)送電作業
+            format1 = re.findall(r"^([^\t]+)\t([^\t]+)\t(.*)_(.*)_(.*)\.(.*)$", line) # 指_作業指揮者_3-3.(TR)送電作業
+            format2 = re.findall(r"^([^\t]+)\t([^\t]+)\t(\d.*)\.(.*)$", line) # 3-3.(TR)送電作業
             assert len(format1) == 1 or len(format2) == 1, "The addinfo line format problem with line:\n{}\n\n".format(line.replace('\t','\\t')) +  r"Addinfo line format should be 発話ID\tPOS付きopenjtalk形態素解析結果\t話者記号_話者名_シーン番号.シーン名." +  "\n" + r"or <uttid>\t<text>\t<speaker_label>_<speaker>_<sceneid>.<scene>"
             if format1: uttid, text, speaker_label, speaker, sceneid, scene = format1[0]
             if format2: uttid, text, sceneid, scene = format2[0]
@@ -95,7 +96,7 @@ def read_yonden_uttid_to_df_uttinfo(uttids: Union[List, Set] = set()) -> pd.Data
     # create other information from uttid information
     for uttid in uttids:
         if len(re.split("_", uttid)) == 7:
-            work_date, work_start_time, group, device, dialog_index, audio_begin_time, audio_end_time =  re.findall('^(\d+)_(\d+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)', uttid)[0]
+            work_date, work_start_time, group, device, dialog_index, audio_begin_time, audio_end_time =  re.findall(r'^(\d+)_(\d+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)_([^_]+)', uttid)[0]
 
             # Extract dataset information from a map from time to data index
             time = work_date + "_" + work_start_time
