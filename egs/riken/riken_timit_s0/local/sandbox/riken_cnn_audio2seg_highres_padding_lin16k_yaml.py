@@ -1,0 +1,936 @@
+# Implemented by bin-wu at 12:25 on 26 April 2024
+# Adapted for 16kHz linear spectrograms with 512-point FFT at 16:45 on 09 May 2025
+# Updated to handle data division YAML and multiple files at 16:00 on 20 May 2025
+
+import os
+import sys
+
+import math
+import random
+import argparse
+
+import GPUtil
+from omegaconf import OmegaConf
+import codecs
+
+import numpy as np
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torchaudio
+from torch.utils.data import Dataset, DataLoader
+
+import logging
+# Configure the logging system
+logging.basicConfig(
+    level=logging.INFO,
+    format="[ %(asctime)s | %(filename)s | %(levelname)s ] %(message)s",
+    datefmt="%d/%m/%Y %H:%M:%S"
+)
+
+# Create a logger object
+logger = logging.getLogger(__name__)
+
+def set_seed(seed):
+    """
+    Set the seed for reproducibility across NumPy and PyTorch.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+def set_device(gpu):
+    """
+    Determine the device (GPU or CPU) based on the specified GPU argument.
+    """
+    if gpu == 'auto':
+        # Get the available GPU with the least memory usage
+        available_gpus = GPUtil.getAvailable(order='memory')
+        if available_gpus:
+            device = torch.device(f"cuda:{available_gpus[0]}")
+        else:
+            device = torch.device("cpu")
+    else:
+        # Use the specified GPU device if available, otherwise use CPU
+        device = torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu")
+
+    return device
+
+def create_spec_data(wav_file, segment_duration=2.5, sample_rate=16000, nfft=512, win_size=0.5, keep_last_incomplete_segment=False, use_padding=False):
+    """
+    Generates linear spectrogram data from an input WAV file with optional padding.
+
+    Args:
+        wav_file (str): Path to the input WAV file.
+        segment_duration (float): Duration of each audio segment in seconds. Default is 2.5 seconds.
+        sample_rate (int): Sampling rate to which the audio should be resampled. Default is 16,000 Hz.
+        nfft (int): Number of data points used in each block for the FFT. Default is 512.
+        win_size(float): The window size in seconds. Default 0.5.
+        keep_last_incomplete_segment (bool): keep the last incomplete segment or not. Default False.
+        use_padding (bool): Whether to add padding to the audio (default: False).
+
+    Returns:
+        np.ndarray: Linear spectrogram data as a NumPy array in 16-bit float format
+        float: Original audio duration in seconds
+        bool: Whether padding was used
+    """
+    logger.info(f"Processing wav audio file: {wav_file}...")
+    waveform, rate = torchaudio.load(wav_file)
+    original_duration = waveform.shape[1] / rate
+    waveform = waveform.to(device)
+
+    if use_padding:
+        # Calculate padding size (half of segment_duration)
+        pad_size = int(rate * segment_duration / 2)
+        # Add padding to both ends
+        waveform = F.pad(waveform, (pad_size, pad_size), mode='reflect')
+        logger.info(f"Added padding of {pad_size} samples ({pad_size/rate:.3f}s) to each side of the audio")
+
+    num_segments = int(len(waveform[0]) / (rate * segment_duration))
+
+    spec_data = []
+    num_segs = num_segments if keep_last_incomplete_segment else num_segments - 1
+    for i in range(num_segs):
+        # Extract the audio segment
+        start = int(rate * segment_duration * i)
+        end = int(rate * segment_duration * (i + 1))
+        signal_piece = waveform[:, start:end]
+
+        # Resample the audio segment to 16kHz
+        if rate != sample_rate:
+            resampler = torchaudio.transforms.Resample(rate, sample_rate).to(device)
+            signal_piece = resampler(signal_piece)
+
+        # Compute the linear spectrogram of the audio segment
+        # A) With nfft = 512 => num_freqs = 512/2 + 1 = 257 (1 for the origin, div by 2 for symmetricity of FFT)
+        # B) To calculate appropriate hop_length for 2500ms segments with a win_size of 500ms
+        # Using same formula as in the 500ms segments for consistency
+        hop_length = int((win_size*sample_rate - nfft) // (256 - 1)) # Calculate hop_length using consistent approach
+
+        # Create the linear spectrogram
+        spectrogram_transform = torchaudio.transforms.Spectrogram(
+            n_fft=nfft,
+            hop_length=hop_length,
+            power=2,
+            center=False
+        ).to(device)
+
+        spec = spectrogram_transform(signal_piece)
+        spec_db = torchaudio.transforms.AmplitudeToDB().to(device)(spec)
+        spectrum = spec_db[0].detach().cpu().numpy()
+
+        # Crop to ensure expected time frames
+        if spectrum.shape[1] > 1299:
+            spectrum = spectrum[:, :1299]
+
+        if spectrum.shape != (257, 1299): # (frequency, time)
+            logger.info(f"Invalid array shape: {spectrum.shape}")
+            continue
+
+        spec_data.append(spectrum.astype(np.float16))
+
+        # Print progress information
+        if (i + 1) % 100 == 0:
+            logger.info(f"Processed {i + 1}/{num_segments} segments")
+
+    # Return the linear spectrogram data as a numpy array
+    return np.array(spec_data, dtype=np.float16), original_duration, use_padding
+
+class OneStreamCNNModel(nn.Module):
+    """
+    A one-stream convolutional neural network model.
+
+    Args:
+    dropout_rate (float, optional): The dropout rate. Defaults to 0.5.
+    num_classes (int): The number of categories for the classification
+    """
+
+    def __init__(self, num_classes, dropout_rate=0.5):
+        super(OneStreamCNNModel, self).__init__()
+        self.dropout_rate = dropout_rate
+        self.num_classes = num_classes
+
+        # Convolutional stream
+        self.conv = nn.Sequential(
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(1, 16, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.Conv2d(16, 16, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(16, 32, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(64, 64, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=5, stride=1, padding=2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+
+        # Fully connected layers
+        self.fc1 = nn.Linear(8 * 8 * 64, 1024)
+        self.dropout = nn.Dropout(p=self.dropout_rate)
+        self.fc2 = nn.Linear(1024, self.num_classes)
+
+    def forward(self, x, y=None, mode='train'):
+        """
+        Forward pass of the model.
+
+        Args:
+            x (torch.Tensor): Input tensor for the one stream, of shape (batch_size, 257, 256).
+            y (torch.Tensor, optional): Ground truth labels for output, of shape (batch_size,). Defaults to None.
+            mode (str, optional): The mode of operation ('train' or 'eval'). Defaults to 'train'.
+
+        Returns:
+            If y is provided:
+                tuple: A tuple containing:
+                    - probs (torch.Tensor): Probabilities for the output, of shape (batch_size, num_classes).
+                    - loss (torch.Tensor): The computed loss.
+                    - accuracy (list): A list of accuracies for each sample in the batch.
+            If y is not provided:
+                    - probs (torch.Tensor): Probabilities for the output, of shape (batch_size, num_classes).
+        """
+        # Pass input x through the convolutional stream
+        x = x.unsqueeze(1)  # Add channel dimension
+        x = self.conv(x)
+        x = x.view(x.size(0), -1)
+
+        # Pass the features through the fully connected layers
+        x = F.relu(self.fc1(x))
+        x = self.dropout(x)
+
+        # Obtain the logits for the output
+        logits = self.fc2(x)
+
+        # Compute the probabilities using softmax
+        probs = F.softmax(logits, dim=1)
+
+        # If ground truth labels are provided, compute loss and accuracy
+        if y is not None:
+            y = y.type(torch.LongTensor).to(y.device)
+            loss = F.cross_entropy(logits, y)
+            classes = logits.argmax(dim=1)
+            accuracy = (classes == y).float()
+            return probs, loss, accuracy.tolist()
+
+        # If ground truth labels are not provided, return only the probabilities
+        return probs
+
+def pred_input_function(xs, i, window_size=256, step_size=26):
+    """
+    Creates a minibatch of 50 500ms-spectrograms from a 2500ms-spectrogram using a sliding window
+    with the window size of 500ms and the window shift of 50ms.
+
+    This function takes a sequence of spectral segments (xs) and an index (i) representing
+    the current position in the sequence. It extracts 50 elements, each of 500ms spectrogram with
+    a shape of (257, 256), for the current position of a 2500ms-spectrogram with a shape of (257, 1299).
+
+    The extraction process is done using a sliding window approach with a window size of 256 and a
+    step size of 26 (the step size or window shift of 26 pixels is from floor(1299/50)).
+    The first num_complete_elements can be extracted entirely from the current 2500ms-segment, while
+    the remaining elements require concatenation with the next segment.
+
+    A window shift of 26 pixels is around 50ms.
+    26 * frame_shift = 26 * (92/48000*1000) = 49.833333ms
+
+    # Got a spectrogram image of size 257x256 (freq, time) for a 500ms segment
+    # A) With nfft = 512 => num_freqs = 512/2 + 1 = 257 (1 for the origin, div by 2 for symmetricity of FFT)
+    # B) To make num_frames close to 256
+    # size = nfft = 512 (samples)
+    # shift = (500/1000*48000 - 512) / (256-1) = 92.1 ~ 92,
+    # where -1 in "(256 - 1)" means that having placed the last frame, calculate the distance between other adjoining frames
+    #
+    # Frame size = 512/48000*1000 = 10.7ms
+    # Frame shift = 92/48000*1000 = 1.916ms
+    # Frame size 10.7ms and shift 1.916ms with 82% ((10.7-1.916)/10.7) overlap
+    # (500-10.7)/1.926 + 1 = 255.0498
+
+    Args:
+        xs (array-like): Input spectral segments, of shape (*, 257, 1299),
+                         where * is number of batches (number of 2500ms-segments)
+        i (int): The index of the current spectral segment.
+        window_size (int): The size of each element (default: 256).
+        step_size (int): The step size for sliding the window (default: 26).
+
+    Returns:
+        numpy.ndarray: A minibatch of input features, of shape (50, 257, 256).
+
+    Note: The window shift of 50ms is used for generating the segment files with a resolution of 50ms
+    for the test set.
+    """
+    num_elements = 50
+    num_complete_elements = math.floor((xs.shape[2] - window_size) / step_size) + 1
+
+    elements = []
+
+    # Extract complete elements from the current spectral segment
+    for j in range(num_complete_elements):
+        start = j * step_size
+        element = xs[i, :, start:start+window_size] # Take i-th batch with the whole frequency bins and a window time.
+        elements.append(element)
+
+    # Extract remaining elements that cross the segment boundary
+    for k in range(num_elements - num_complete_elements):
+        start = (num_complete_elements + k) * step_size
+        init_element = xs[i, :, start:]
+        remaining = window_size - init_element.shape[1]
+        element = np.concatenate([init_element, xs[i+1, :, :remaining]], axis=1)
+        elements.append(element)
+
+    return np.array(elements, dtype=np.float32)
+
+def predict(model, pred_data, model_path, avg_pred_win, batch_size=None):
+    """
+    Function for predicting with the trained network for the testing set.
+
+    Args:
+        model (OneStreamCNNModel): The trained model used for prediction.
+        pred_data (str or numpy.array): Path to the file containing spectrogram arrays for prediction or specgram array itself.
+        model_path (str): Path to the saved model to be used for prediction.
+        avg_pred_win (int): Size of the averaging window for predictions.
+        batch_size (int): Minibatch size for prediction.
+
+    Returns:
+        numpy.ndarray: The predicted probabilities.
+    """
+    logger.info(f"Loading model from {model_path}")
+
+    # Load the input data from path or directly use it
+    if isinstance(pred_data, str):
+        with open(pred_data, 'rb') as f:
+            predict_x = np.load(f)
+    elif isinstance(pred_data, np.ndarray):
+        predict_x = pred_data
+    else:
+        raise ValueError("Invalid input type for pred_data. Expected string or numpy array.")
+
+    # Restore the saved model for prediction
+    model.load_state_dict(torch.load(model_path, map_location=device)["model"])
+    logger.info(f'Model restored from {model_path}')
+
+    # Perform predictions on the input data
+    preds_list = []
+    predictions = []
+    logger.info('Predicting')
+    model.eval()
+
+    length = predict_x.shape[0]
+    num_batches = length
+    for i in range(num_batches-1):
+        # Get the input batch using the pred_input_function
+        inputs = pred_input_function(predict_x, i)
+        # Run the model to get the predictions for the current batch
+        preds = model(torch.from_numpy(inputs).to(device))
+        # Append the predictions to the preds_list
+        preds_list.extend(preds.detach().cpu().numpy())
+        if (i + 1) % 25 == 0:
+            logger.info(f"Processed {i + 1}/{num_batches} batches")
+
+    # Average predictions across consecutive windows
+    for i in range(len(preds_list) - (avg_pred_win - 1)):
+        # Calculate the mean predictions for the current window
+        mean_preds = np.mean(preds_list[i:i + avg_pred_win], axis=0)
+        # Append the mean predictions to the final predictions list
+        predictions.append(mean_preds)
+
+    logger.info(f"Predictions shape: {np.shape(predictions)}")
+    logger.info(f"Used the model: {model_path}")
+
+    return np.array(predictions)
+
+def merge_segments(input_segments):
+    """
+    Merges adjoining segments with the same labels from a given segment file and outputs the results.
+
+    Args:
+        input_segments: A list of unmerged segments, where each segment is a tuple (start_time, end_time, label)
+
+    Returns:
+        list: A list of merged segments, where each segment is a tuple (start_time, end_time, label).
+    """
+    segments = input_segments
+    segments.sort(key=lambda x: x[0])
+
+    # Iterate over the segments and merge adjoining segments with the same label
+    merged_segments = []
+    current_start, current_end, current_label = segments[0]
+
+    for start_time, end_time, label in segments[1:]:
+        # Check if the current segment can be merged with the previous segment
+        if start_time == current_end and label == current_label:
+            # Update the end time of the merged segment
+            current_end = end_time
+        else:
+            # Add the previous merged segment to the list of merged segments
+            merged_segments.append((round(current_start, 6), round(current_end, 6), current_label))
+            # Update the current segment variables
+            current_start, current_end, current_label = start_time, end_time, label
+
+    # Add the last merged segment to the list of merged segments
+    merged_segments.append((round(current_start, 6), round(current_end, 6), current_label))
+
+    return merged_segments
+
+def predict_segments(pred_prob, label2id):
+    """
+    Predict labels from the given prediction probabilities and return the segments
+
+    Args:
+        pred_prob (np.array): Numpy array that contain prediction probabilities.
+        label2id (dict): dict from label to id
+
+    Returns:
+        raw_segments, merged_segments
+        list: A list of raw segments, where each segment is a tuple (start_time, end_time, label).
+        list: A list of merged segments, where each segment is a tuple (start_time, end_time, label).
+    """
+    id2label = {id:label for label, id in label2id.items()}
+    assert len(label2id) == len(id2label), f"label and id in label2id file should be one-to-one correspondence"
+
+    raw_segments = []
+    for i, pred in enumerate(pred_prob):
+        # Get the index of the maximum prediction
+        pred_label_idx = np.argmax(pred)
+
+        current = i
+        window_size = 0.5
+        window_shift = 0.05 # shift of batch elements of 2500ms long segment, not exactly 0.05
+        middle_part = 0.05
+        start_window = current * window_shift
+        end_window = start_window + window_size
+        middle_start = start_window + (window_size - middle_part) / 2
+        middle_end = start_window + (window_size + middle_part) / 2
+
+        if pred_label_idx != label2id['noise']:  # Check if the prediction is not 'noise'
+            start_time = middle_start + 0.1 # fixed factor of 0.1 might considering 1) shift of batch elements of 2500ms long segment that is not exactly 50ms; 2) prob avg window effects
+            end_time = middle_end + 0.1
+            label = id2label[pred_label_idx]
+            raw_segments.append((round(start_time, 6), round(end_time, 6), label))
+
+    if not raw_segments:
+        print("\nWarning: all predictions are noises\n")
+        return [], []
+
+    merged_segments = merge_segments(raw_segments)
+    return raw_segments, merged_segments
+
+# Dataloader for different prediction resolutions
+def extract_spectrogram_segments(audio_file, window_size=0.5, window_shift=0.15, nfft=512, sample_rate=16000):
+    """
+    Extract linear spectrogram segments from an audio file using a sliding window.
+
+    Args:
+        audio_file (str): Path to the audio file (.wav).
+        window_size (float): The size of the sliding window in seconds (default: 0.5).
+        window_shift (float): The shift of the sliding window in seconds (default: 0.15).
+        nfft (int): The number of FFT points (default: 512).
+        sample_rate (int): The desired sample rate of the audio (default: 16000).
+
+    Returns:
+        np.ndarray: Linear spectrogram segments of shape (num_segments, 257, 256).
+
+    Example:
+        audio_file = "/path/to/audio.wav"
+        input_spec = extract_spectrogram_segments(audio_file)
+        print(f"{input_spec.shape=}")  # input_spec.shape=(num_segments, 257, 256)
+    """
+    data, rate = torchaudio.load(audio_file)
+    data = data.to(device)
+
+    # Resample the audio to 16kHz if necessary
+    if rate != sample_rate:
+        resampler = torchaudio.transforms.Resample(rate, sample_rate).to(device)
+        data = resampler(data)
+
+    # Calculate the number of segments based on the audio duration and window parameters
+    audio_duration = data.shape[1] / sample_rate
+    num_segments = int((audio_duration - window_size) / window_shift) + 1
+
+    # Initialize the spectrogram transform
+    hop_length = int((window_size * sample_rate - nfft) // (256 - 1))  # Calculate hop_length for 256 frames
+
+    spectrogram_transform = torchaudio.transforms.Spectrogram(
+        n_fft=nfft,
+        hop_length=hop_length,
+        power=2,
+        center=False
+    ).to(device)
+
+    input_spec = []
+    for i in range(num_segments):
+        # Take a window_size piece out of the data with a step size of window_shift
+        start_index = int(sample_rate * i * window_shift)
+        end_index = int(sample_rate * (i * window_shift + window_size))
+        signal_piece = data[:, start_index:end_index]
+
+        # Create the linear spectrogram and scale it logarithmically
+        spec = spectrogram_transform(signal_piece)
+        spec_db = torchaudio.transforms.AmplitudeToDB().to(device)(spec)
+        result = spec_db[0].detach().cpu().numpy()
+
+        # Crop to ensure exactly 256 time frames
+        if result.shape[1] > 256:
+            result = result[:, :256]
+
+        # Skip this piece if the shape is not as expected
+        if np.shape(result) != (257, 256): # (frequency, time)
+            logger.info(f"Invalid shape: {np.shape(result)}")
+            continue
+
+        input_spec.append(np.array(result, dtype=np.float16))
+
+        if i % 1000 == 0:
+            logger.info(f"Processing the {i}th segment...")
+
+    input_spec = np.array(input_spec, dtype=np.float16)
+    logger.info(f'Number of spectrogram segments: {len(input_spec)}')
+
+    return input_spec
+
+class OneStreamDataset(Dataset):
+    """
+    A PyTorch Dataset class for the one-stream data.
+
+    Args:
+        xs (numpy.ndarray): Input data, of shape (data_length, 257, 256).
+        train (bool): Whether the dataset is used for training or evaluation/development.
+        apply_random_shift (bool): Whether to apply data argumentation of random shifts. Default is True.
+                                    Each sample in the batch applies a new random shift within 5 pixels.
+    """
+
+    def __init__(self, xs, train=True, apply_random_shift=True):
+        self.xs = xs
+        self.train = train
+        self.apply_random_shift = apply_random_shift
+
+    def __len__(self):
+        return len(self.xs)
+
+    def __getitem__(self, idx):
+        x = self.xs[idx]
+
+        if self.train and self.apply_random_shift:
+            ver_shift = random.randint(-5, 5)
+            hor_shift = random.randint(-5, 5)
+            x = np.roll(x, (ver_shift, hor_shift), axis=(0, 1))
+
+        return x.astype(np.float32)
+
+def create_dataloader(input, batch_size, train=True):
+    """
+    Create a data loader for the given input file.
+
+    Args:
+        input (str): Path to the input file.
+        batch_size (int): Batch size for the data loader.
+        train (bool): Whether to create a data loader for training or evaluation.
+
+    Returns:
+        torch.utils.data.DataLoader: The created data loader.
+    """
+    # Load data from the input file
+    if isinstance(input, str):
+        with open(input, 'rb') as f:
+            xs = np.load(f)
+    elif isinstance(input, np.ndarray):
+        xs = input
+    else:
+        raise ValueError("Invalid input type. Expected string or numpy array.")
+
+    # Create OneStreamDataset instance
+    dataset = OneStreamDataset(xs, train=train, apply_random_shift=train)
+
+    # Create DataLoader with the dataset
+    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=train)
+
+    return data_loader
+
+def predict_from_dataloader(model, dataloader, model_path, avg_pred_win, batch_size=None):
+    """
+    Function for predicting with the trained network using a dataloader.
+
+    Args:
+        model (OneStreamCNNModel): The trained model used for prediction.
+        dataloader (torch.utils.data.DataLoader): The dataloader created by create_dataloader.
+        model_path (str): Path to the saved model to be used for prediction.
+        avg_pred_win (int): Size of the averaging window for predictions.
+        batch_size (int): Minibatch size for prediction.
+
+    Returns:
+        numpy.ndarray: The predicted probabilities.
+    """
+    logger.info(f"Loading model from {model_path}")
+
+    # Restore the saved model for prediction
+    model.load_state_dict(torch.load(model_path, map_location=device)["model"])
+    logger.info(f'Model restored from {model_path}')
+
+    # Perform predictions on the input data
+    preds_list = []
+    predictions = []
+    logger.info('Predicting')
+    model.eval()
+    num_batches = len(dataloader)
+
+    with torch.no_grad():
+        for i, inputs in enumerate(dataloader):
+            inputs = inputs.to(device)
+            preds = model(inputs)
+            preds_list.extend(preds.detach().cpu().numpy())
+
+            if (i + 1) % 25 == 0:
+                logger.info(f"Processed {i + 1}/{num_batches} batches")
+
+    # Average predictions across consecutive windows
+    for i in range(len(preds_list) - (avg_pred_win - 1)):
+        # Calculate the mean predictions for the current window
+        mean_preds = np.mean(preds_list[i:i + avg_pred_win], axis=0)
+
+        # Append the mean predictions to the final predictions list
+        predictions.append(mean_preds)
+
+    logger.info(f"Predictions shape: {np.shape(predictions)}")
+    logger.info(f"Used the model: {model_path}")
+
+    return np.array(predictions)
+
+def predict_segments_v1(pred_prob, label2id, original_duration=None, window_size=0.5, window_shift=0.05, middle_part=0.05, fixed_factor=0.1, use_padding=False):
+    """
+    Predict labels from the given prediction probabilities and return the segments.
+
+    Args:
+        pred_prob (np.array): Numpy array that contains prediction probabilities.
+        label2id (dict): dict from label to id
+        original_duration (float): Original duration of the audio file in seconds (needed if use_padding=True).
+        window_size (float): The size of the sliding window in seconds (default: 0.5).
+        window_shift (float): The shift of the sliding window in seconds (default: 0.05).
+        middle_part (float): The proportion of the middle part of the window in seconds for label assignment (default: 0.05).
+        fixed_factor (float): A fixed factor added to the start and end times of segments (default: 0.1).
+        use_padding (bool): Whether padding was used in preprocessing (default: False).
+
+    Returns:
+        raw_segments, merged_segments
+        list: A list of raw segments, where each segment is a tuple (start_time, end_time, label).
+        list: A list of merged segments, where each segment is a tuple (start_time, end_time, label).
+    """
+    id2label = {id: label for label, id in label2id.items()}
+    assert len(label2id) == len(id2label), f"label and id in label2id file should be one-to-one correspondence"
+
+    # Calculate the time offset due to padding (half of window size)
+    time_offset = window_size / 2 if use_padding else 0
+
+    raw_segments = []
+    for i, pred in enumerate(pred_prob):
+        # Get the index of the maximum prediction
+        pred_label_idx = np.argmax(pred)
+
+        current = i
+        # Adjust the start time by subtracting the padding offset if padding was used
+        start_window = (current * window_shift) - time_offset
+        end_window = start_window + window_size
+        middle_start = start_window + (window_size - middle_part) / 2
+        middle_end = start_window + (window_size + middle_part) / 2
+
+        if pred_label_idx != label2id['noise']:  # Check if the prediction is not 'noise'
+            start_time = middle_start + fixed_factor
+            end_time = middle_end + fixed_factor
+
+            # If padding was used, ensure times are within the original audio duration
+            if use_padding and original_duration is not None:
+                start_time = max(0, start_time)
+                end_time = min(original_duration, end_time)
+
+                # Only add segments that are within the original audio duration
+                if start_time >= original_duration or end_time <= 0 or start_time >= end_time:
+                    continue
+
+            label = id2label[pred_label_idx]
+            raw_segments.append((round(start_time, 6), round(end_time, 6), label))
+
+    if not raw_segments:
+        print("\nWarning: all predictions are noises\n")
+        return [], []
+
+    merged_segments = merge_segments(raw_segments)
+    return raw_segments, merged_segments
+
+def extract_spectrogram_segments_with_padding(audio_file, window_size=0.5, window_shift=0.15, nfft=512, sample_rate=16000, use_padding=False):
+    """
+    Extract linear spectrogram segments from an audio file using a sliding window with optional padding.
+
+    Args:
+        audio_file (str): Path to the audio file (.wav).
+        window_size (float): The size of the sliding window in seconds (default: 0.5).
+        window_shift (float): The shift of the sliding window in seconds (default: 0.15).
+        nfft (int): The number of FFT points (default: 512).
+        sample_rate (int): The desired sample rate of the audio (default: 16000).
+        use_padding (bool): Whether to add padding to the audio (default: False).
+
+    Returns:
+        np.ndarray: Linear spectrogram segments of shape (num_segments, 257, 256).
+        float: The original audio duration in seconds.
+        bool: Whether padding was used.
+    """
+    data, rate = torchaudio.load(audio_file)
+    data = data.to(device)
+
+    # Get original audio duration for later time adjustments
+    original_duration = data.shape[1] / rate
+
+    # Resample the audio to 16kHz if necessary
+    if rate != sample_rate:
+        resampler = torchaudio.transforms.Resample(rate, sample_rate).to(device)
+        data = resampler(data)
+
+    if use_padding:
+        # Calculate the padding needed in samples
+        pad_samples = int(window_size * sample_rate / 2)
+        # Add padding to both sides of the audio using reflection padding
+        padded_data = F.pad(data, (pad_samples, pad_samples), mode='reflect')
+        logger.info(f"Added padding of {pad_samples} samples ({pad_samples/sample_rate:.3f}s) to each side of the audio")
+    else:
+        padded_data = data
+
+    # Calculate the number of segments for the audio
+    padded_duration = padded_data.shape[1] / sample_rate
+    num_segments = int((padded_duration - window_size) / window_shift) + 1
+
+    # Initialize the spectrogram transform
+    hop_length = int((window_size * sample_rate - nfft) // (256 - 1))  # Calculate hop_length for 256 frames
+
+    spectrogram_transform = torchaudio.transforms.Spectrogram(
+        n_fft=nfft,
+        hop_length=hop_length,
+        power=2,
+        center=False
+    ).to(device)
+
+    input_spec = []
+    for i in range(num_segments):
+        # Take a window_size piece out of the padded data with a step size of window_shift
+        start_index = int(sample_rate * i * window_shift)
+        end_index = int(sample_rate * (i * window_shift + window_size))
+        signal_piece = padded_data[:, start_index:end_index]
+
+        # Create the linear spectrogram and scale it logarithmically
+        spec = spectrogram_transform(signal_piece)
+        spec_db = torchaudio.transforms.AmplitudeToDB().to(device)(spec)
+        result = spec_db[0].detach().cpu().numpy()
+
+        # Crop to ensure exactly 256 time frames
+        if result.shape[1] > 256:
+            result = result[:, :256]
+
+        # Skip this piece if the shape is not as expected
+        if np.shape(result) != (257, 256):  # (frequency, time)
+            logger.info(f"Invalid shape: {np.shape(result)}")
+            continue
+
+        input_spec.append(np.array(result, dtype=np.float16))
+
+        if i % 1000 == 0:
+            logger.info(f"Processing the {i}th segment...")
+
+    input_spec = np.array(input_spec, dtype=np.float16)
+    logger.info(f'Number of spectrogram segments: {len(input_spec)}')
+
+    return input_spec, original_duration, use_padding
+
+def process_files_from_yaml(info_json, eval_data_division_yaml, eval_dir, ref_key_in_info_json, model, eval_model, label2id, args):
+    """
+    Process all test files from data division YAML and generate predictions and references.
+
+    Args:
+        info_json (dict): Info JSON containing file paths
+        eval_data_division_yaml (str): Path to data division YAML file
+        eval_dir (str): Output evaluation directory
+        ref_key_in_info_json (str): Key in info.json for reference files
+        model: The model for prediction
+        eval_model (str): Path to the saved model
+        label2id (dict): Label to ID mapping
+        args: Arguments containing model parameters
+    """
+    # Load data division YAML
+    data_division = OmegaConf.load(eval_data_division_yaml)
+
+    if 'test' not in data_division:
+        logger.error(f"No 'test' section found in {eval_data_division_yaml}")
+        return
+
+    test_ids = data_division['test']
+    logger.info(f"Found {len(test_ids)} test files: {test_ids}")
+
+    # Create output directories
+    hypo_dir = os.path.join(eval_dir, 'hyp')
+    ref_dir = os.path.join(eval_dir, 'ref')
+    os.makedirs(hypo_dir, exist_ok=True)
+    os.makedirs(ref_dir, exist_ok=True)
+
+    for test_id in test_ids:
+        if test_id not in info_json:
+            logger.warning(f"Test ID {test_id} not found in info.json, skipping...")
+            continue
+
+        wav_file = info_json[test_id]['wav']
+        logger.info(f"Processing {test_id}: {wav_file}")
+
+        # Generate hypothesis (prediction) file
+        hypo_file = os.path.join(hypo_dir, f"{test_id}.txt")
+
+        try:
+            # Predict the segments using CNN model
+            if args.fast_pred:
+                logger.info("Using the fast prediction with the 50ms prediction resolution by creating a dataloader from the 2500ms segments...")
+                spec, original_duration, use_padding = create_spec_data(
+                    wav_file,
+                    keep_last_incomplete_segment=args.complete,
+                    use_padding=args.padding
+                )
+
+                pred_prob = predict(model, spec, model_path=eval_model, avg_pred_win=args.avg_pred_win)
+
+                _, merged_segments = predict_segments_v1(
+                    pred_prob,
+                    label2id,
+                    original_duration=original_duration,
+                    window_size=0.5,
+                    window_shift=0.05,
+                    middle_part=0.05,
+                    fixed_factor=0.1,
+                    use_padding=use_padding
+                )
+            else:
+                spec, original_duration, use_padding = extract_spectrogram_segments_with_padding(
+                    wav_file,
+                    window_size=0.5,
+                    window_shift=args.pred_resolution,
+                    use_padding=args.padding
+                )
+
+                test_loader = create_dataloader(spec, args.batch_size, train=False)
+                pred_prob = predict_from_dataloader(model, test_loader, model_path=eval_model, avg_pred_win=args.avg_pred_win)
+
+                # Determine fixed_factor based on input argument
+                if args.fixed_factor == -1:
+                    # Auto-calculate
+                    fixed_factor = 0.1 * (args.pred_resolution/0.05)
+                else:
+                    # Use the specified value
+                    fixed_factor = args.fixed_factor
+
+                _, merged_segments = predict_segments_v1(
+                    pred_prob,
+                    label2id,
+                    original_duration=original_duration,
+                    window_size=0.5,
+                    window_shift=args.pred_resolution,
+                    middle_part=args.pred_resolution,
+                    fixed_factor=fixed_factor,
+                    use_padding=use_padding
+                )
+
+            # Save hypothesis file
+            with codecs.open(hypo_file, 'w', 'utf-8') as f:
+                for start_time, end_time, label in merged_segments:
+                    f.write(f"{start_time}\t{end_time}\t{label}\n")
+
+            logger.info(f"Saved hypothesis file: {hypo_file}")
+
+            # Copy reference file if ref_key is provided
+            if ref_key_in_info_json and ref_key_in_info_json in info_json[test_id]:
+                ref_source = info_json[test_id][ref_key_in_info_json]
+                ref_file = os.path.join(ref_dir, f"{test_id}.txt")
+
+                if os.path.exists(ref_source):
+                    # Copy reference file
+                    with open(ref_source, 'r') as src, codecs.open(ref_file, 'w', 'utf-8') as dst:
+                        dst.write(src.read())
+                    logger.info(f"Copied reference file: {ref_file}")
+                else:
+                    logger.warning(f"Reference file not found: {ref_source}")
+
+        except Exception as e:
+            logger.error(f"Error processing {test_id}: {str(e)}")
+            continue
+
+# Update default paths for CNN model with linear 16k support
+default_model = "exp/sys/timit/division_timit_winmid0.05size0.5shift0.05_noisekeep1_lin16k/cnn-run0/bs2048lr0.0003lrdecay1avgpredwin5/train/model.ckpt"
+default_dict = "conf/dict/timit_label2id.yaml"
+default_resolution = 0.01
+default_data_division = "conf/data/division_timit.yaml"
+default_info_json = "data/timit/info.json"
+
+parser = argparse.ArgumentParser(description="Convert from audio files to segment files using riken CNN model with 16kHz linear spectrograms and data division YAML support.")
+
+# Main arguments
+parser.add_argument("--eval_model", type=str, default=default_model, help="Model path for prediction or evaluation")
+parser.add_argument("--eval_dir", type=str, default="", help="Output evaluation directory")
+parser.add_argument("--eval_data_division_yaml", type=str, default=default_data_division, help="YAML file containing data division with test IDs")
+parser.add_argument("--info_json", type=str, default=default_info_json, help="JSON file mapping IDs to audio and label file paths")
+parser.add_argument("--ref_key_in_info_json", type=str, default="seg", help="Key in info.json for reference files")
+
+# Data arguments
+parser.add_argument("--batch_size", type=int, default=25, help="Batch size for the dataloader")
+
+# Dictionary arguments
+parser.add_argument("--label2id_yaml", type=str, default=default_dict, help="The YAML file that contains the label-to-labelID mapping.")
+
+# Evaluation arguments
+parser.add_argument("--avg_pred_win", type=int, default=5, help="Collect predicted probabilities by averaging across x consecutive predictions")
+
+# Other arguments
+parser.add_argument('--gpu', type=str, default="auto", help="e.g., '--gpu 2' for using device of gpu 'cuda:2'; '--gpu auto' for gpu with the least gpu memory; '--gpu cpu' for cpu.")
+parser.add_argument("--pred_resolution", type=float, default=default_resolution, help="The resolution of the prediction. Default 0.01.")
+parser.add_argument("--complete", action="store_true", help="Keep the last potentially incomplete segment")
+parser.add_argument("--fast_pred", action="store_true", help="Fast prediction using 50ms prediction resolution by creating a dataloader from 2500ms segments")
+parser.add_argument("--fixed_factor", type=float, default=0, help="Fixed factor added to segment times. Default 0.")
+parser.add_argument("--padding", action="store_true", help="Add padding to the audio to enable prediction at the start and end")
+
+args = parser.parse_args()
+args.padding = True  # always using padding
+
+# Check required arguments
+if not args.eval_dir:
+    logger.error("--eval_dir is required")
+    sys.exit(1)
+
+# Load configuration files
+label2id = OmegaConf.load(args.label2id_yaml)
+info_json = OmegaConf.load(args.info_json)
+
+# Set seed and device
+set_seed(2020)
+device = set_device(args.gpu)
+logger.info(f"Device: {device}")
+
+# Create the CNN model
+model = OneStreamCNNModel(num_classes=len(label2id)).to(device)
+
+# Process all files from YAML
+process_files_from_yaml(
+    info_json=info_json,
+    eval_data_division_yaml=args.eval_data_division_yaml,
+    eval_dir=args.eval_dir,
+    ref_key_in_info_json=args.ref_key_in_info_json,
+    model=model,
+    eval_model=args.eval_model,
+    label2id=label2id,
+    args=args
+)
+
+logger.info(f"Processing complete. Results saved in {args.eval_dir}")
