@@ -5,6 +5,7 @@ model="conf/model/b0family3010_best_dev.ckpt"
 out_dir="nas5"  # actual out_dir: "exp/out/${arch}_${model_base}/$out_dir/$file_dir/${file_base}_model_${arch}_${model_base}.txt"
 data_dir="/data01/share/bin-wu/data/marmoset/vocalization/riken_long/nas5"
 feat_batch_size=20480
+gpu=auto
 
 # Parse the options. (e.g., ./run.sh --stage 1)
 # Note that the options should be defined as shell variables before parsing
@@ -29,5 +30,6 @@ for file in $(cd "$data_dir"; find . -type f -name "*.wav" | sort); do
 	--feat_batch_size "$feat_batch_size" \
         --eval_model "$model" \
         --wav_file "$data_dir/$file" \
+	--gpu "$gpu" \
         --out_seg_file "$out_seg_file"
 done

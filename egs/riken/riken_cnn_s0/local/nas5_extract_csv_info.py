@@ -98,6 +98,13 @@ def get_family_birth_date(pathname):
         'b4_1372F_1169M_3117F': datetime(2024, 1, 30),
         'familybooth_1594F_1449M_3010': datetime(2023, 7, 22),
         'jay_family': datetime(2023, 7, 22),
+        # F2 generation birth dates from your table
+        'b1_906F_1302M_3211F': datetime(2024, 8, 5),   # booth1_f2
+        'b2_1305F_759M_3222M': datetime(2024, 8, 10),  # booth2_f2
+        'b3_762F_763M_3201M': datetime(2024, 7, 6),    # booth3_f2
+        'b4_1372F_1169M_3196M': datetime(2024, 7, 4),  # booth4_f2
+        # mecp2 mutant marmoset wara
+        'mecp2_wara': datetime(2023, 6, 4),
     }
 
     for family, birth_date in family_birth_dates.items():

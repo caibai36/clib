@@ -12,6 +12,7 @@ tolerance=0.1
 hypo1=/work01/home/bin-wu/workspace/projects/clib/egs/riken/mit_cnn_s0/exp/sys/mit_data/mit_data0/mit_cnn_72-run0/bs25lr0.0003evalinterval2000avgpredwin5/eval/test_pred1_p1a1_toget_cutoff0.6.txt
 hypo2=/work01/home/bin-wu/workspace/projects/clib/egs/riken/mit_cnn_s0/exp/sys/mit_data/mit_data0/mit_cnn_72-run0/bs25lr0.0003evalinterval2000avgpredwin5/eval/test_pred2_p1a2_toget_cutoff0.6.txt
 echo -e "\nMIT tensorflow CNN"
+# python local/mit_cnn_eval_acc.py --hypo_files $hypo1 $hypo2 --ref_files $ref1 $ref2
 python local/mit_cnn_eval_acc_spk.py --hypo_files $hypo1 $hypo2 --ref_files $ref1 $ref2
 # python ../riken_cnn_s0/local/sandbox/riken_cnn_eval_acc_boundaries.py --hypo_file $hypo1 --ref_file $ref1
 # python ../riken_cnn_s0/local/sandbox/riken_cnn_eval_acc_boundaries.py --hypo_file $hypo2 --ref_file $ref2
