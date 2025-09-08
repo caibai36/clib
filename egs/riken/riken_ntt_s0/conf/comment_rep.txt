@@ -1,0 +1,12 @@
+笑い声: <laughter>
+バブリング: <babbling>
+＊ バブリング: <babbling>
+泣き声: <crying>
+発声: <vocalization>
+歌声: <singing>
+＊ 歌声: <singing>
+せき: <cough>
+ぐずる声: <fussing>
+くしゃみ: <sneeze>
+せき払い: <throat_clearing>
+叫び声: <screaming>
