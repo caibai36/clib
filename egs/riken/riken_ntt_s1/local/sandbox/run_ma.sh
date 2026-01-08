@@ -31,7 +31,7 @@ mae_model=conf/models/mae_pretrained_model_best_sa.pt
 # Spectrogram extraction options
 batch_size=32
 whole_begin=0      # Start from month 0
-whole_end=-2       # End at 2nd to last month (exclusive)
+whole_end=-2       # The last two months of each family are reserved for development and test
 
 # Age column
 age_col=age_months  # Column name for age
