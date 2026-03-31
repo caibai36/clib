@@ -1,0 +1,2290 @@
+#!/usr/bin/env python
+# coding: utf-8
+#
+# python -u local/sandbox/run_nas5_interaction_analysis.ipynb.py \
+#     --input_csv /work01/home/bin-wu/workspace/projects/clib/egs/riken/riken_cnn_s0/exp/mae_feat_dim_reduction/python_script_nas5/b2_f1_15weeks/info_mae_predicted_speaker.csv \
+#     --output_dir /work01/home/bin-wu/workspace/projects/clib/egs/riken/riken_cnn_s0/exp/sandbox/interaction_analysis/b2_f1_15weeks \
+#     --data_name "b2_f1_mae_vit" |& tee logs/interaction_analysis_b2_f1_15weeks.log
+
+import argparse
+import os
+import sys
+
+# ========================== ARGUMENT PARSER =========================
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description='Marmoset Interaction Analysis - MAE Feature Space',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
+    # Input/Output paths
+    parser.add_argument('--input_csv', type=str, required=True,
+                        help='Path to input CSV file (info_mae_predicted_speaker.csv)')
+    parser.add_argument('--output_dir', type=str, required=True,
+                        help='Output directory for all results')
+
+    # Data identification
+    parser.add_argument('--data_name', type=str, required=True,
+                        help='Data name for identification (e.g., b2_f1_mae_vit)')
+
+    # Analysis parameters
+    parser.add_argument('--age_col', type=str, default='age_weeks',
+                        choices=['age_weeks', 'age_days', 'age_months'],
+                        help='Age column to use for analysis')
+    parser.add_argument('--label_option', type=int, default=2, choices=[1, 2, 3],
+                        help='Label processing: 1=keep all, 2=merge u-X (default), 3=remove u-X')
+    parser.add_argument('--threshold_sec', type=float, default=1.0,
+                        help='Response detection threshold in seconds')
+    parser.add_argument('--top_n_labels', type=int, default=12,
+                        help='Number of top labels for imitation analysis')
+
+    # Plotting parameters
+    parser.add_argument('--font_size', type=int, default=16,
+                        help='Base font size for plots')
+    parser.add_argument('--dpi', type=int, default=150,
+                        help='DPI for saved figures')
+
+    return parser.parse_args()
+
+# ========================== MAIN EXECUTION =========================
+
+args = parse_args()
+
+# Set global variables from args
+age_col = args.age_col
+label_option = args.label_option
+threshold_sec = args.threshold_sec
+csv_path = args.input_csv
+output_dir = args.output_dir
+data_name = args.data_name
+
+# Validate input file exists
+if not os.path.exists(csv_path):
+    print(f"ERROR: Input CSV file not found: {csv_path}")
+    sys.exit(1)
+
+# Create output directory
+os.makedirs(output_dir, exist_ok=True)
+
+print("="*80)
+print("MARMOSET INTERACTION ANALYSIS - MAE FEATURE SPACE")
+print("="*80)
+print(f"\nConfiguration:")
+print(f"  Data name: {data_name}")
+print(f"  Input CSV: {csv_path}")
+print(f"  Output directory: {output_dir}")
+print(f"  Age column: {age_col}")
+print(f"  Label processing option: {label_option}")
+print(f"  Response threshold: {threshold_sec} seconds")
+print(f"  Top N labels for analysis: {args.top_n_labels}")
+print("="*80 + "\n")
+
+# Adapted from https://nipunbatra.github.io/blog/2014/latexify.html
+import os
+os.environ['PATH'] = '/project/nakamura-lab08/Work/bin-wu/.local/texlive/2018/bin/x86_64-linux:' + os.environ['PATH']
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
+
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+
+sns.set_style('white')
+sns.set_context('paper')
+
+import matplotlib
+from math import sqrt
+SPINE_COLOR = 'gray'
+
+def latexify(fig_width=None, fig_height=None, columns=1):
+    """Set up matplotlib's RC params for LaTeX plotting.
+    Call this before plotting a figure.
+
+    Parameters
+    ----------
+    fig_width : float, optional, inches
+    fig_height : float,  optional, inches
+    columns : {1, 2}
+    """
+
+    # code adapted from http://www.scipy.org/Cookbook/Matplotlib/LaTeX_Examples
+
+    # Width and max height in inches for IEEE journals taken from
+    # computer.org/cms/Computer.org/Journal%20templates/transactions_art_guide.pdf
+
+    assert(columns in [1,2])
+
+    if fig_width is None:
+        fig_width = 3.39 if columns==1 else 6.9 # width in inches
+
+    if fig_height is None:
+        golden_mean = (np.sqrt(5)-1.0)/2.0    # Aesthetic ratio
+        fig_height = fig_width*golden_mean # height in inches
+
+    MAX_HEIGHT_INCHES = 8.0
+    if fig_height > MAX_HEIGHT_INCHES:
+        print("WARNING: fig_height too large:" + str(fig_height) +
+              "so will reduce to" + str(MAX_HEIGHT_INCHES) + "inches.")
+        fig_height = MAX_HEIGHT_INCHES
+
+    font_size=16
+    params = {'backend': 'ps',
+              'axes.labelsize': font_size,
+              'axes.titlesize': font_size,
+              'legend.fontsize': font_size,
+              'legend.title_fontsize': font_size,
+              'xtick.labelsize': font_size,
+              'ytick.labelsize': font_size,
+              'figure.figsize': [fig_width,fig_height],
+              'font.family': 'serif',
+              'errorbar.capsize': 4
+    }
+
+    matplotlib.rcParams.update(params)
+
+
+def format_axes(ax):
+
+    for spine in ['top', 'right']:
+        ax.spines[spine].set_visible(False)
+
+    for spine in ['left', 'bottom']:
+        ax.spines[spine].set_color(SPINE_COLOR)
+        ax.spines[spine].set_linewidth(0.5)
+
+    ax.xaxis.set_ticks_position('bottom')
+    ax.yaxis.set_ticks_position('left')
+
+    for axis in [ax.xaxis, ax.yaxis]:
+        axis.set_tick_params(direction='out', color=SPINE_COLOR)
+
+    return ax
+
+font_size=16
+
+latexify()
+
+
+# ### Loading data
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+from sklearn.preprocessing import StandardScaler
+import os
+import argparse
+from tqdm import tqdm
+import umap
+
+# Create output directory if it doesn't exist
+os.makedirs(output_dir, exist_ok=True)
+
+print(f"\nConfiguration:")
+print(f"  Data name: {data_name}")
+print(f"  Age column: {age_col}")
+print(f"  Label processing option: {label_option}")
+print(f"  Response threshold: {threshold_sec} seconds")
+
+print(f"\nInput CSV: {csv_path}")
+print(f"Output directory: {output_dir}")
+print(f"Output directory created: {os.path.exists(output_dir)}")
+
+# ========================== LOAD MARMOSET DATA =========================
+print("\n" + "="*80)
+print("LOADING MARMOSET DATA")
+print("="*80)
+
+# Load the CSV file with all information including t-SNE coordinates
+config_df = pd.read_csv(csv_path)
+
+print(f"\nLoaded marmoset data: {len(config_df)} rows")
+print(f"Columns: {config_df.columns.tolist()}")
+print(f"\nData shape: {config_df.shape}")
+print("\nFirst few rows:")
+print(config_df.head())
+
+# Check if the specified age column exists
+if age_col not in config_df.columns:
+    print(f"\nWARNING: Specified age column '{age_col}' not found in data!")
+    print(f"Available columns: {config_df.columns.tolist()}")
+    # Try to infer the correct age column
+    age_candidates = [col for col in config_df.columns if 'age' in col.lower()]
+    if age_candidates:
+        age_col = age_candidates[0]
+        print(f"Using '{age_col}' instead")
+    else:
+        raise ValueError(f"No age column found in data!")
+
+# Check speaker distribution
+print(f"\nSpeaker distribution:")
+print(config_df['predicted_speaker'].value_counts())
+
+# Check age distribution
+print(f"\nAge distribution ({age_col}):")
+print(config_df[age_col].value_counts().sort_index())
+
+# ========================== DATA PREPROCESSING =========================
+print("\n" + "="*80)
+print("MARMOSET LABEL PREPROCESSING")
+print("="*80)
+
+print("\nLabel Preprocessing Options:")
+print("1. Keep original labels (including u-X labels)")
+print("2. Merge u-X labels with their corresponding X labels (DEFAULT)")
+print("3. Remove samples with u-X labels")
+print(f"\nSelected option: {label_option}")
+
+config_df_original = config_df.copy()
+
+if label_option == 1:
+    print("\nKeeping original labels including uncertain (u-X) labels")
+    config_df_processed = config_df.copy()
+
+elif label_option == 2:
+    print("\nMerging uncertain (u-X) labels with their corresponding certain labels")
+    config_df_processed = config_df.copy()
+
+    # Dictionary to map uncertain labels to certain labels
+    uncertain_label_map = {
+        'u-pp': 'pp',
+        'u-ct': 'ct',
+        'u-cr': 'cr',
+        'u-cp': 'cp',
+        'u-ek': 'ek',
+        'u-ph': 'ph',
+        'u-tr': 'tr',
+        'u-ts': 'ts',
+        'u-se': 'se',
+        'u-ok': 'ok',
+        'u-tw': 'tw'
+    }
+
+    # Replace uncertain labels with their certain counterparts
+    config_df_processed['label'] = config_df_processed['label'].replace(uncertain_label_map)
+
+    print("\nLabel distribution after merging:")
+    print(config_df_processed['label'].value_counts())
+
+elif label_option == 3:
+    print("\nRemoving samples with uncertain (u-X) labels")
+    uncertain_mask = config_df['label'].str.startswith('u-')
+    uncertain_count = uncertain_mask.sum()
+    print(f"Removing {uncertain_count} samples with uncertain labels")
+
+    config_df_processed = config_df[~uncertain_mask].copy()
+
+    print("\nLabel distribution after removing uncertain labels:")
+    print(config_df_processed['label'].value_counts())
+
+# Reset index
+config_df_processed = config_df_processed.reset_index(drop=True)
+
+print(f"\nProcessed data shape: {config_df_processed.shape}")
+print(f"Total samples: {len(config_df_processed)}")
+
+# ========================== RENAME SPEAKER COLUMN =========================
+print("\n" + "="*80)
+print("PREPARING SPEAKER INFORMATION")
+print("="*80)
+
+# Rename predicted_speaker to speaker for consistency with human analysis
+config_df_processed['speaker'] = config_df_processed['predicted_speaker']
+
+print(f"\nSpeaker distribution:")
+print(config_df_processed['speaker'].value_counts())
+
+# ========================== CREATE UTTERANCE IDs =========================
+print("\n" + "="*80)
+print("CREATING UTTERANCE IDENTIFIERS")
+print("="*80)
+
+# For marmosets, each row is already a complete utterance (label = phone = utterance)
+# Create a unique utterance ID for each row
+config_df_processed['utt_id'] = (
+    config_df_processed['audioid'] + '_' +
+    config_df_processed.groupby('audioid').cumcount().astype(str).str.zfill(4)
+)
+
+# Add phone column (same as label for marmoset)
+config_df_processed['phone'] = config_df_processed['label']
+
+print(f"\nCreated {len(config_df_processed['utt_id'].unique())} unique utterance IDs")
+print("\nSample utterance IDs:")
+print(config_df_processed[['audioid', 'utt_id', 'label', 'phone', 'speaker']].head(10))
+
+# Extract t-SNE results from the dataframe
+tsne_result = config_df_processed[['tsne_1', 'tsne_2']].values
+
+print(f"\nt-SNE result shape: {tsne_result.shape}")
+print(f"Config DataFrame shape: {config_df_processed.shape}")
+
+# ========================== UTTERANCE-LEVEL DATA =========================
+print("\n" + "="*80)
+print("CREATING UTTERANCE-LEVEL DATA")
+print("="*80)
+
+# For marmosets, each row is already an utterance
+# So we can directly use the data, but we'll create the same structure as human analysis
+
+# Create utterance-level t-SNE (already at utterance level, but maintain structure)
+utt_tsne_result = pd.DataFrame({
+    'utt_id': config_df_processed['utt_id'],
+    'tsne_1': config_df_processed['tsne_1'],
+    'tsne_2': config_df_processed['tsne_2']
+})
+
+# Create utterance-level configuration dataframe
+# Include the age column dynamically
+utt_config_df_processed = config_df_processed[[
+    'utt_id', 'dataid', 'audioid', age_col, 'begin_sec', 'end_sec',
+    'label', 'phone', 'speaker', 'duration', 'confidence'
+]].copy()
+
+print(f"utt_tsne_result.shape: {utt_tsne_result.shape}")
+print(f"utt_config_df_processed.shape: {utt_config_df_processed.shape}")
+print(f"\nUsing age column: {age_col}")
+print("\nutt_config_df_processed.head():")
+print(utt_config_df_processed.head())
+print("\nutt_tsne_result.head():")
+print(utt_tsne_result.head())
+
+# ========================== RESPONSE DETECTION =========================
+print("\n" + "="*80)
+print("DETECTING CONVERSATIONAL RESPONSES")
+print("="*80)
+print(f"Threshold: {threshold_sec} seconds")
+
+# Assert that utterances are sorted by begin_sec within each audio
+for audioid in utt_config_df_processed['audioid'].unique():
+    audio_data = utt_config_df_processed[utt_config_df_processed['audioid'] == audioid]
+    if not audio_data['begin_sec'].is_monotonic_increasing:
+        # Sort if not sorted
+        utt_config_df_processed.loc[
+            utt_config_df_processed['audioid'] == audioid, :
+        ] = audio_data.sort_values('begin_sec')
+        print(f"Sorted utterances for {audioid}")
+
+print("✓ All audio files have utterances sorted by begin_sec")
+
+# Initialize columns
+utt_config_df_processed['has_response'] = False
+utt_config_df_processed['initiator'] = None
+utt_config_df_processed['responder'] = None
+utt_config_df_processed['responder_utterance_id'] = None
+
+# Reset index to ensure proper indexing
+utt_config_df_processed = utt_config_df_processed.reset_index(drop=True)
+
+# Process each audio file separately
+for audioid in utt_config_df_processed['audioid'].unique():
+    audio_mask = utt_config_df_processed['audioid'] == audioid
+    audio_indices = utt_config_df_processed[audio_mask].index.tolist()
+
+    for i, current_idx in enumerate(audio_indices[:-1]):  # Skip last utterance
+        current_row = utt_config_df_processed.loc[current_idx]
+        current_end = current_row['end_sec']
+        current_speaker = current_row['speaker']
+
+        # Find next utterance with begin_sec > current_end and different speaker
+        for next_idx in audio_indices[i+1:]:
+            next_row = utt_config_df_processed.loc[next_idx]
+            next_begin = next_row['begin_sec']
+            next_speaker = next_row['speaker']
+
+            # Check if next utterance starts after current ends
+            if next_begin > current_end:
+                # Check threshold and different speaker
+                if (next_begin - current_end <= threshold_sec) and (current_speaker != next_speaker):
+                    utt_config_df_processed.at[current_idx, 'has_response'] = True
+                    utt_config_df_processed.at[current_idx, 'initiator'] = current_speaker
+                    utt_config_df_processed.at[current_idx, 'responder'] = next_speaker
+                    utt_config_df_processed.at[current_idx, 'responder_utterance_id'] = next_row['utt_id']
+                break  # Found the next non-overlapping utterance
+
+# Verify shapes and display results
+print(f"\nutt_tsne_result.shape: {utt_tsne_result.shape}")
+print(f"utt_config_df_processed.shape: {utt_config_df_processed.shape}")
+print(f"\nResponse statistics:")
+print(f"Total utterances with response: {utt_config_df_processed['has_response'].sum()}")
+print(f"Percentage: {100 * utt_config_df_processed['has_response'].mean():.2f}%")
+
+# Response breakdown by initiator
+print("\nResponse breakdown by initiator→responder:")
+response_breakdown = utt_config_df_processed[utt_config_df_processed['has_response']].groupby(
+    ['initiator', 'responder']
+).size()
+print(response_breakdown)
+
+print("\nutt_config_df_processed.head(20):")
+print(utt_config_df_processed.head(20))
+
+# Check a sample audio file
+sample_audio = utt_config_df_processed['audioid'].iloc[0]
+print(f"\nSample audio file: {sample_audio}")
+sample_df = utt_config_df_processed[utt_config_df_processed['audioid'] == sample_audio].head(20)
+print(sample_df[['utt_id', age_col, 'begin_sec', 'end_sec', 'label', 'speaker',
+                 'has_response', 'initiator', 'responder']])
+
+# ========================== MERGE WITH t-SNE FOR ANALYSIS =========================
+print("\n" + "="*80)
+print("MERGING DATA FOR ANALYSIS")
+print("="*80)
+
+# Merge t-SNE results with configuration
+utt_data = utt_config_df_processed.merge(utt_tsne_result, on='utt_id')
+
+print(f"utt_data.shape: {utt_data.shape}")
+print("\nColumns in utt_data:")
+print(utt_data.columns.tolist())
+
+# Get unique ages for analysis
+age_values = sorted(utt_data[age_col].unique())
+print(f"\n{age_col} values available: {age_values}")
+print(f"Number of unique {age_col} values: {len(age_values)}")
+
+print("\n" + "="*80)
+print("DATA PREPARATION COMPLETE - READY FOR INTERACTION ANALYSIS")
+print("="*80)
+
+# Summary statistics
+print("\nSummary Statistics:")
+print(f"Total utterances: {len(utt_data)}")
+print(f"Total audio files: {utt_data['audioid'].nunique()}")
+print(f"Age range: {min(age_values)} - {max(age_values)} {age_col.replace('age_', '')}")
+print(f"Total turn-taking pairs: {utt_data['has_response'].sum()}")
+print(f"\nUtterances by speaker:")
+print(utt_data['speaker'].value_counts())
+print(f"\nUtterances by label type:")
+print(utt_data['label'].value_counts().head(15))
+
+# ========================== SAVE PROCESSED DATA =========================
+print("\n" + "="*80)
+print("SAVING PROCESSED DATA TO OUTPUT DIRECTORY")
+print("="*80)
+
+# Save processed data to OUTPUT directory (not original directory)
+output_csv_config = os.path.join(output_dir, "utt_config_processed.csv")
+output_csv_tsne = os.path.join(output_dir, "utt_tsne_result.csv")
+output_csv_merged = os.path.join(output_dir, "utt_data_merged.csv")
+
+# Save files
+utt_config_df_processed.to_csv(output_csv_config, index=False)
+utt_tsne_result.to_csv(output_csv_tsne, index=False)
+utt_data.to_csv(output_csv_merged, index=False)
+
+print(f"✓ Saved utt_config_processed.csv to: {output_csv_config}")
+print(f"✓ Saved utt_tsne_result.csv to: {output_csv_tsne}")
+print(f"✓ Saved utt_data_merged.csv to: {output_csv_merged}")
+
+# Also save as numpy arrays for compatibility with analysis scripts
+output_npy_tsne = os.path.join(output_dir, "tsne_result.npy")
+output_npy_config = os.path.join(output_dir, "config_processed.csv")
+
+np.save(output_npy_tsne, tsne_result)
+config_df_processed.to_csv(output_npy_config, index=False)
+
+print(f"✓ Saved tsne_result.npy to: {output_npy_tsne}")
+print(f"✓ Saved config_processed.csv to: {output_npy_config}")
+
+# Save configuration info
+config_info = {
+    'data_name': data_name,
+    'age_col': age_col,
+    'label_option': label_option,
+    'threshold_sec': threshold_sec,
+    'input_csv': csv_path,
+    'output_dir': output_dir,
+    'n_utterances': len(utt_data),
+    'n_audio_files': utt_data['audioid'].nunique(),
+    'age_range': f"{min(age_values)} - {max(age_values)}",
+    'n_turn_pairs': int(utt_data['has_response'].sum())
+}
+
+import json
+config_json_path = os.path.join(output_dir, "analysis_config.json")
+with open(config_json_path, 'w') as f:
+    json.dump(config_info, f, indent=2)
+print(f"✓ Saved analysis_config.json to: {config_json_path}")
+
+print("\n" + "="*80)
+print("ALL DATA SAVED SUCCESSFULLY")
+print(f"Output directory: {output_dir}")
+print("="*80)
+
+# ========================== VERIFICATION =========================
+print("\n" + "="*80)
+print("VERIFICATION - FILES IN OUTPUT DIRECTORY")
+print("="*80)
+
+output_files = os.listdir(output_dir)
+print(f"\nFiles created in {output_dir}:")
+for f in sorted(output_files):
+    file_path = os.path.join(output_dir, f)
+    file_size = os.path.getsize(file_path)
+    print(f"  {f} ({file_size:,} bytes)")
+
+print("\n✓ Data preparation complete. Ready for downstream analysis.")
+print(f"✓ Original data directory unchanged: {os.path.dirname(csv_path)}")
+print(f"✓ All results saved to: {output_dir}")
+print(f"\nKey variables for downstream analysis:")
+print(f"  - age_col = '{age_col}'")
+print(f"  - utt_data: main dataframe with {len(utt_data)} utterances")
+print(f"  - config_df_processed: processed config with {len(config_df_processed)} samples")
+print(f"  - tsne_result: numpy array of shape {tsne_result.shape}")
+
+
+# ### TRAJECTORY ANALYSIS
+
+# ========================== LOAD PROCESSED DATA =========================
+print("="*80)
+print("LOADING PROCESSED DATA FOR ANALYSIS")
+print("="*80)
+
+# Load the processed data from output directory
+import json
+
+config_json_path = os.path.join(output_dir, "analysis_config.json")
+with open(config_json_path, 'r') as f:
+    config_info = json.load(f)
+
+age_col = config_info['age_col']
+print(f"\nAge column: {age_col}")
+print(f"Loaded configuration: {config_info}")
+
+# Verify we have the required data
+print(f"\nData shapes:")
+print(f"  utt_data: {utt_data.shape}")
+print(f"  config_df_processed: {config_df_processed.shape}")
+print(f"  tsne_result: {tsne_result.shape}")
+
+# Get age values for analysis
+age_values = sorted(utt_data[age_col].unique())
+print(f"\n{age_col} values: {age_values}")
+
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.patheffects import withStroke
+import matplotlib.cm as cm
+
+# ========================== TRAJECTORY ANALYSIS =========================
+print("\n" + "="*80)
+print("VOCAL TRAJECTORY ANALYSIS BY COMMUNICATION STATE")
+print("="*80)
+
+# Calculate mean t-SNE positions for each communication state by age
+trajectory_data = {
+    'no_response': {'ages': [], 'tsne_1': [], 'tsne_2': [], 'counts': []},
+    'resp_adult': {'ages': [], 'tsne_1': [], 'tsne_2': [], 'counts': []},
+    'resp_infant': {'ages': [], 'tsne_1': [], 'tsne_2': [], 'counts': []}
+}
+
+for age in age_values:
+    age_data = utt_data[utt_data[age_col] == age]
+    infant_utts = age_data[age_data['speaker'] == 'infant']
+
+    # No response
+    no_resp = infant_utts[~infant_utts['has_response']]
+    if len(no_resp) > 0:
+        trajectory_data['no_response']['ages'].append(age)
+        trajectory_data['no_response']['tsne_1'].append(no_resp['tsne_1'].mean())
+        trajectory_data['no_response']['tsne_2'].append(no_resp['tsne_2'].mean())
+        trajectory_data['no_response']['counts'].append(len(no_resp))
+
+    # Response by adult
+    resp_adult = infant_utts[infant_utts['responder'] == 'adult']
+    if len(resp_adult) > 0:
+        trajectory_data['resp_adult']['ages'].append(age)
+        trajectory_data['resp_adult']['tsne_1'].append(resp_adult['tsne_1'].mean())
+        trajectory_data['resp_adult']['tsne_2'].append(resp_adult['tsne_2'].mean())
+        trajectory_data['resp_adult']['counts'].append(len(resp_adult))
+
+    # Response by infant (infant initiates, infant responds)
+    resp_infant = infant_utts[infant_utts['responder'] == 'infant']
+    if len(resp_infant) > 0:
+        trajectory_data['resp_infant']['ages'].append(age)
+        trajectory_data['resp_infant']['tsne_1'].append(resp_infant['tsne_1'].mean())
+        trajectory_data['resp_infant']['tsne_2'].append(resp_infant['tsne_2'].mean())
+        trajectory_data['resp_infant']['counts'].append(len(resp_infant))
+
+# Create visualization
+fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+
+# Define styles for each communication state
+state_styles = {
+    'no_response': {
+        'color': 'gray',
+        'marker': 'o',
+        'label': 'No Response',
+        'title': 'No Response'
+    },
+    'resp_adult': {
+        'color': 'green',
+        'marker': 's',
+        'label': 'Responded by Adult',
+        'title': 'Response by Adult'
+    },
+    'resp_infant': {
+        'color': 'blue',
+        'marker': '^',
+        'label': 'Responded by Infant',
+        'title': 'Response by Infant'
+    }
+}
+
+# Age normalization for coloring
+age_min, age_max = min(age_values), max(age_values)
+norm = plt.Normalize(vmin=age_min, vmax=age_max)
+
+# Plot each communication state separately
+for idx, (state, data) in enumerate(trajectory_data.items()):
+    ax = axes[idx]
+    style = state_styles[state]
+
+    if len(data['ages']) == 0:
+        ax.text(0.5, 0.5, 'No data', ha='center', va='center',
+               transform=ax.transAxes, fontsize=14)
+        ax.set_title(f"Infant: {style['title']} (n=0)",
+                    fontsize=14, fontweight='bold')
+        ax.set_xlabel('t-SNE 1', fontsize=12)
+        ax.set_ylabel('t-SNE 2', fontsize=12)
+        ax.grid(True, alpha=0.3)
+        continue
+
+    ages = np.array(data['ages'])
+    tsne_1 = np.array(data['tsne_1'])
+    tsne_2 = np.array(data['tsne_2'])
+    counts = np.array(data['counts'])
+
+    total_count = sum(counts)
+
+    # Plot trajectory line
+    ax.plot(tsne_1, tsne_2, color=style['color'], linewidth=2.5,
+            alpha=0.5, linestyle='-', zorder=1)
+
+    # Add arrows to show direction
+    if len(ages) > 1:
+        for i in range(len(ages) - 1):
+            ax.annotate('', xy=(tsne_1[i+1], tsne_2[i+1]),
+                       xytext=(tsne_1[i], tsne_2[i]),
+                       arrowprops=dict(arrowstyle='->', color=style['color'],
+                                     lw=1.5, alpha=0.6), zorder=2)
+
+    # Scatter plot with age-based colors
+    scatter = ax.scatter(tsne_1, tsne_2, c=ages, cmap='viridis',
+                        s=250, marker=style['marker'],
+                        alpha=0.8, edgecolors='black', linewidth=2,
+                        norm=norm, zorder=3)
+
+    # Add age labels on each dot
+    for i, (age, x, y, count) in enumerate(zip(ages, tsne_1, tsne_2, counts)):
+        text = ax.annotate(f'{int(age)}', (x, y),
+                          fontsize=9, fontweight='bold',
+                          ha='center', va='center',
+                          color='black', zorder=4)
+        # Add white outline for better visibility
+        text.set_path_effects([withStroke(linewidth=2.5, foreground='white')])
+
+    ax.set_xlabel('t-SNE 1', fontsize=12, fontweight='bold')
+    ax.set_ylabel('t-SNE 2', fontsize=12, fontweight='bold')
+    ax.set_title(f"Infant: {style['title']} (n={int(total_count)})",
+                fontsize=14, fontweight='bold')
+    ax.grid(True, alpha=0.3)
+
+# Add colorbar for age
+fig.subplots_adjust(right=0.92)
+cbar_ax = fig.add_axes([0.93, 0.15, 0.01, 0.7])
+sm = cm.ScalarMappable(cmap='viridis', norm=norm)
+sm.set_array([])
+cbar = fig.colorbar(sm, cax=cbar_ax)
+cbar.set_label(f'Age ({age_col.replace("age_", "")})', fontsize=12, fontweight='bold')
+
+plt.suptitle(f'Infant Marmoset Utterance Trajectories by Communication State (Mean t-SNE positions)\n{data_name}',
+            fontsize=16, fontweight='bold', y=0.98)
+plt.tight_layout(rect=[0, 0, 0.92, 0.96])
+plt.savefig(os.path.join(output_dir, 'infant_communication_state_trajectories.png'),
+            dpi=150, bbox_inches='tight')
+plt.close()
+
+# Combined view: All three states on one plot
+fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+
+for state, data in trajectory_data.items():
+    if len(data['ages']) == 0:
+        continue
+
+    style = state_styles[state]
+    ages = np.array(data['ages'])
+    tsne_1 = np.array(data['tsne_1'])
+    tsne_2 = np.array(data['tsne_2'])
+    counts = np.array(data['counts'])
+
+    # Plot trajectory line
+    ax.plot(tsne_1, tsne_2, color=style['color'], linewidth=2.5,
+            alpha=0.5, linestyle='-', zorder=1, label=f"{style['label']} (trajectory)")
+
+    # Add arrows
+    if len(ages) > 1:
+        for i in range(len(ages) - 1):
+            ax.annotate('', xy=(tsne_1[i+1], tsne_2[i+1]),
+                       xytext=(tsne_1[i], tsne_2[i]),
+                       arrowprops=dict(arrowstyle='->', color=style['color'],
+                                     lw=1.5, alpha=0.6), zorder=2)
+
+    # Scatter plot
+    scatter = ax.scatter(tsne_1, tsne_2, c=style['color'],
+                        s=200, marker=style['marker'],
+                        alpha=0.7, edgecolors='black', linewidth=2,
+                        zorder=3, label=f"{style['label']} (points)")
+
+    # Add age labels
+    for age, x, y in zip(ages, tsne_1, tsne_2):
+        text = ax.annotate(f'{int(age)}', (x, y),
+                          fontsize=8, fontweight='bold',
+                          ha='center', va='center',
+                          color='white', zorder=4)
+        text.set_path_effects([withStroke(linewidth=2, foreground='black')])
+
+ax.set_xlabel('t-SNE 1', fontsize=13, fontweight='bold')
+ax.set_ylabel('t-SNE 2', fontsize=13, fontweight='bold')
+ax.set_title(f'Infant Marmoset Utterance Trajectories: All Communication States Combined\n{data_name}',
+            fontsize=15, fontweight='bold')
+ax.legend(fontsize=10, loc='best')
+ax.grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.savefig(os.path.join(output_dir, 'infant_communication_state_trajectories_combined.png'),
+            dpi=150, bbox_inches='tight')
+plt.close()
+
+# Print trajectory statistics
+print("\n" + "="*80)
+print("INFANT MARMOSET UTTERANCE TRAJECTORY STATISTICS")
+print("="*80)
+
+# Collect trajectory statistics for CSV export
+trajectory_stats_rows = []
+
+for state, data in trajectory_data.items():
+    style = state_styles[state]
+    print(f"\n{style['label'].upper()}:")
+    if len(data['ages']) == 0:
+        print("  No data available")
+        continue
+
+    print(f"  Number of {age_col} with data: {len(data['ages'])}")
+    print(f"  Total utterances: {sum(data['counts'])}")
+    print(f"  {age_col.replace('age_', '').capitalize()}-by-{age_col.replace('age_', '')} positions:")
+    for age, t1, t2, count in zip(data['ages'], data['tsne_1'],
+                                   data['tsne_2'], data['counts']):
+        print(f"    {age_col.replace('age_', '').capitalize()} {age:2d}: t-SNE=({t1:7.2f}, {t2:7.2f}), n={count:4d}")
+
+        # Add to CSV data
+        trajectory_stats_rows.append({
+            'data_name': data_name,
+            'communication_state': style['label'],
+            'age': age,
+            'tsne_1': t1,
+            'tsne_2': t2,
+            'n_utterances': count
+        })
+
+    # Calculate trajectory length
+    if len(data['ages']) > 1:
+        total_distance = 0
+        for i in range(len(data['ages']) - 1):
+            dist = np.sqrt((data['tsne_1'][i+1] - data['tsne_1'][i])**2 +
+                          (data['tsne_2'][i+1] - data['tsne_2'][i])**2)
+            total_distance += dist
+        print(f"  Total trajectory distance: {total_distance:.2f}")
+        print(f"  Average distance per {age_col.replace('age_', '')}: {total_distance / (len(data['ages']) - 1):.2f}")
+
+# Save trajectory statistics to CSV
+trajectory_stats_df = pd.DataFrame(trajectory_stats_rows)
+trajectory_stats_csv = os.path.join(output_dir, 'trajectory_statistics.csv')
+trajectory_stats_df.to_csv(trajectory_stats_csv, index=False)
+print(f"\n✓ Saved trajectory statistics to: {trajectory_stats_csv}")
+
+print("\n" + "="*80)
+
+
+# ### RESPONSE RATE ANALYSIS
+
+print("\n" + "="*80)
+print("RESPONSE RATE ANALYSIS")
+print("="*80)
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Calculate response rates by speaker and age
+response_data = []
+
+for speaker in ['infant', 'adult']:
+    speaker_rates = []
+    speaker_counts = []
+    speaker_totals = []
+
+    for age in age_values:
+        age_data = utt_data[utt_data[age_col] == age]
+        speaker_utts = age_data[age_data['speaker'] == speaker]
+
+        total = len(speaker_utts)
+        with_resp = speaker_utts['has_response'].sum()
+        resp_rate = 100 * speaker_utts['has_response'].mean() if total > 0 else 0
+
+        speaker_rates.append(resp_rate)
+        speaker_counts.append(with_resp)
+        speaker_totals.append(total)
+
+    response_data.append({
+        'speaker': speaker,
+        'rates': speaker_rates,
+        'counts': speaker_counts,
+        'totals': speaker_totals
+    })
+
+# Create comprehensive response rate visualization
+fig = plt.figure(figsize=(18, 12))
+gs = fig.add_gridspec(3, 2, hspace=0.3, wspace=0.3,
+                      left=0.08, right=0.95, top=0.95, bottom=0.05)
+
+# Plot 1: Response rate over time by speaker
+ax1 = fig.add_subplot(gs[0, 0])
+colors = {'infant': 'red', 'adult': 'blue'}
+
+for data in response_data:
+    speaker = data['speaker']
+    ax1.plot(age_values, data['rates'], marker='o', linewidth=2, markersize=8,
+            color=colors[speaker], label=speaker.capitalize(), alpha=0.7)
+
+ax1.set_xlabel(f'Age ({age_col.replace("age_", "")})', fontsize=12, fontweight='bold')
+ax1.set_ylabel('Response Rate (%)', fontsize=12, fontweight='bold')
+ax1.set_title(f'Response Rate Development by Speaker\n{data_name}', fontsize=14, fontweight='bold')
+ax1.legend(fontsize=11)
+ax1.grid(True, alpha=0.3)
+ax1.set_ylim(0, max([max(d['rates']) for d in response_data if d['rates']]) * 1.1)
+
+# Plot 2: Total utterances over time by speaker
+ax2 = fig.add_subplot(gs[0, 1])
+
+for data in response_data:
+    speaker = data['speaker']
+    ax2.plot(age_values, data['totals'], marker='s', linewidth=2, markersize=8,
+            color=colors[speaker], label=speaker.capitalize(), alpha=0.7)
+
+ax2.set_xlabel(f'Age ({age_col.replace("age_", "")})', fontsize=12, fontweight='bold')
+ax2.set_ylabel('Total Utterances', fontsize=12, fontweight='bold')
+ax2.set_title(f'Total Utterances by Speaker Over Time\n{data_name}', fontsize=14, fontweight='bold')
+ax2.legend(fontsize=11)
+ax2.grid(True, alpha=0.3)
+
+# Plot 3: Stacked bar chart - utterances with/without response
+ax3 = fig.add_subplot(gs[1, 0])
+
+width = 0.35
+x = np.arange(len(age_values))
+
+for idx, data in enumerate(response_data):
+    speaker = data['speaker']
+    no_resp = np.array(data['totals']) - np.array(data['counts'])
+    with_resp = np.array(data['counts'])
+
+    ax3.bar(x + idx * width, no_resp, width, label=f'{speaker.capitalize()} - No resp',
+           color=colors[speaker], alpha=0.3)
+    ax3.bar(x + idx * width, with_resp, width, bottom=no_resp,
+           label=f'{speaker.capitalize()} - Has resp',
+           color=colors[speaker], alpha=0.8)
+
+ax3.set_xlabel(f'Age ({age_col.replace("age_", "")})', fontsize=12, fontweight='bold')
+ax3.set_ylabel('Number of Utterances', fontsize=12, fontweight='bold')
+ax3.set_title(f'Utterances with/without Response by Speaker\n{data_name}', fontsize=14, fontweight='bold')
+ax3.set_xticks(x + width / 2)
+ax3.set_xticklabels(age_values, rotation=45, ha='right')
+ax3.legend(fontsize=9, ncol=2, loc='upper left')
+ax3.grid(True, alpha=0.3, axis='y')
+
+# Plot 4: Response rate comparison table
+ax4 = fig.add_subplot(gs[1, 1])
+ax4.axis('tight')
+ax4.axis('off')
+
+# Create table data
+display_ages = age_values[::max(1, len(age_values)//10)]  # Show subset if too many
+table_data = [[f'{age_col.replace("age_", "").capitalize()}'] + [str(a) for a in display_ages]]
+
+for data in response_data:
+    speaker = data['speaker']
+    row = [speaker.capitalize()]
+    for i, age in enumerate(age_values):
+        if age in display_ages:
+            rate = data['rates'][i]
+            count = data['counts'][i]
+            total = data['totals'][i]
+            row.append(f'{rate:.1f}%\n({count}/{total})')
+    table_data.append(row)
+
+col_width = min(0.15, 0.9 / len(display_ages))
+table = ax4.table(cellText=table_data, cellLoc='center', loc='center',
+                colWidths=[0.12] + [col_width] * len(display_ages))
+table.auto_set_font_size(False)
+table.set_fontsize(8)
+table.scale(1, 2)
+
+# Color code the header
+for i in range(len(table_data[0])):
+    table[(0, i)].set_facecolor('#40466e')
+    table[(0, i)].set_text_props(weight='bold', color='white')
+
+# Color code speaker rows
+for idx, data in enumerate(response_data):
+    table[(idx+1, 0)].set_facecolor(colors[data['speaker']])
+    table[(idx+1, 0)].set_text_props(weight='bold', color='white')
+
+ax4.set_title(f'Response Rate Summary Table\n{data_name}', fontsize=14, fontweight='bold', pad=20)
+
+# Plot 5: Overall statistics bar chart
+ax5 = fig.add_subplot(gs[2, :])
+
+categories = ['Overall\nResponse Rate (%)', 'Total\nUtterances', 'Utterances\nwith Response']
+x_pos = np.arange(len(categories))
+width = 0.35
+
+for idx, data in enumerate(response_data):
+    speaker = data['speaker']
+    overall_rate = 100 * sum(data['counts']) / sum(data['totals']) if sum(data['totals']) > 0 else 0
+    values = [overall_rate, sum(data['totals']), sum(data['counts'])]
+
+    ax5.bar(x_pos + idx * width, values, width, label=speaker.capitalize(),
+            color=colors[speaker], alpha=0.7)
+
+ax5.set_ylabel('Value', fontsize=12, fontweight='bold')
+ax5.set_title(f'Overall Statistics Across All {age_col.replace("age_", "")}s\n{data_name}', fontsize=14, fontweight='bold')
+ax5.set_xticks(x_pos + width / 2)
+ax5.set_xticklabels(categories, fontsize=11)
+ax5.legend(fontsize=11)
+ax5.grid(True, alpha=0.3, axis='y')
+
+plt.savefig(os.path.join(output_dir, 'response_rate_analysis.png'), dpi=150, bbox_inches='tight')
+plt.close()
+
+# Print summary statistics
+print("\n" + "="*80)
+print("RESPONSE RATE SUMMARY")
+print("="*80)
+
+# Collect response rate data for CSV
+response_rate_rows = []
+
+for data in response_data:
+    speaker = data['speaker']
+    print(f"\n{speaker.upper()}:")
+    print(f"  Average response rate across all {age_col.replace('age_', '')}s: {np.mean(data['rates']):.2f}%")
+    print(f"  Total utterances: {sum(data['totals'])}")
+    print(f"  Total with response: {sum(data['counts'])}")
+    print(f"  Overall response rate: {100 * sum(data['counts']) / sum(data['totals']):.2f}%")
+    print(f"  {age_col.replace('age_', '').capitalize()}-by-{age_col.replace('age_', '')}:")
+    for age, rate, count, total in zip(age_values, data['rates'], data['counts'], data['totals']):
+        print(f"    {age_col.replace('age_', '').capitalize()} {age:2d}: {rate:5.1f}% ({count:4d}/{total:4d})")
+
+        # Add to CSV data
+        response_rate_rows.append({
+            'data_name': data_name,
+            'speaker': speaker,
+            'age': age,
+            'response_rate_pct': rate,
+            'n_with_response': count,
+            'n_total': total
+        })
+
+# Save response rate summary to CSV
+response_rate_df = pd.DataFrame(response_rate_rows)
+response_rate_csv = os.path.join(output_dir, 'response_rate_summary.csv')
+response_rate_df.to_csv(response_rate_csv, index=False)
+print(f"\n✓ Saved response rate summary to: {response_rate_csv}")
+
+print("\n" + "="*80)
+
+# Additional plot: Response breakdown by responder type
+fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+fig.subplots_adjust(left=0.06, right=0.96, top=0.92, bottom=0.12, wspace=0.25)
+
+for speaker_idx, speaker in enumerate(['infant', 'adult']):
+    ax = axes[speaker_idx]
+
+    # Get response breakdown for each age
+    responder_data = {}
+
+    for age in age_values:
+        age_data = utt_data[utt_data[age_col] == age]
+        speaker_utts = age_data[age_data['speaker'] == speaker]
+        has_resp = speaker_utts[speaker_utts['has_response']]
+
+        if len(has_resp) > 0:
+            responder_counts = has_resp['responder'].value_counts()
+            for responder, count in responder_counts.items():
+                if responder not in responder_data:
+                    responder_data[responder] = [0] * len(age_values)
+                responder_data[responder][age_values.index(age)] = count
+
+    # Plot stacked bar chart
+    bottom = np.zeros(len(age_values))
+    responder_colors = {'infant': 'red', 'adult': 'blue'}
+
+    for responder in ['infant', 'adult']:
+        if responder in responder_data:
+            values = responder_data[responder]
+            ax.bar(age_values, values, bottom=bottom, label=f'→ {responder.capitalize()}',
+                   color=responder_colors.get(responder, 'gray'), alpha=0.7)
+            bottom += values
+
+    ax.set_xlabel(f'Age ({age_col.replace("age_", "")})', fontsize=11, fontweight='bold')
+    ax.set_ylabel('Number of Responses Received', fontsize=11, fontweight='bold')
+    ax.set_title(f'{speaker.capitalize()} - Who Responds?\n{data_name}', fontsize=12, fontweight='bold')
+    ax.legend(fontsize=9)
+    ax.grid(True, alpha=0.3, axis='y')
+
+    # Rotate x-axis labels if many ages
+    if len(age_values) > 15:
+        ax.tick_params(axis='x', rotation=45)
+
+plt.savefig(os.path.join(output_dir, 'response_breakdown_by_responder.png'),
+            dpi=150, bbox_inches='tight')
+plt.close()
+
+print("\n" + "="*80)
+print("RESPONSE RATE ANALYSIS COMPLETE")
+print("="*80)
+
+
+# ### IMITATION ANALYSIS
+
+# ========================== IMITATION ANALYSIS SETUP =========================
+print("\n" + "="*80)
+print("PREPARING FOR IMITATION ANALYSIS")
+print("="*80)
+
+from scipy.spatial.distance import euclidean
+from collections import Counter
+
+def get_top_labels(df, top_n=12):
+    """Get the most frequent call labels"""
+    label_counts = df['label'].value_counts()
+    top_labels = label_counts.head(top_n).index.tolist()
+    return top_labels
+
+# Get top labels for analysis
+top_labels = get_top_labels(config_df_processed, top_n=args.top_n_labels)
+print(f"\nAnalyzing top {len(top_labels)} call types: {top_labels}")
+
+# Show distribution
+print("\nLabel distribution:")
+for label in top_labels:
+    count = (config_df_processed['label'] == label).sum()
+    print(f"  {label}: {count}")
+
+print("\n" + "="*80)
+print("READY FOR FORWARD IMITATION ANALYSIS (Adult→Infant)")
+print("="*80)
+
+# ========================== FORWARD IMITATION ANALYSIS =========================
+print("\n" + "="*80)
+print("FORWARD IMITATION ANALYSIS: Adult→Infant Convergence")
+print("="*80)
+
+def analyze_imitation_by_label(utt_data, config_df, tsne_result, label, age, parent='adult'):
+    """
+    Analyze if infant responses are closer to adult initiations than general infant vocalizations
+    For marmosets: parent='adult' (only one adult category)
+
+    OPTIMIZED VERSION: Filters by label early and computes baseline once
+    """
+    age_data = utt_data[utt_data[age_col] == age]
+
+    # OPTIMIZED: Filter by label FIRST, then get adult → infant pairs
+    adult_infant_pairs = age_data[
+        (age_data['speaker'] == parent) &
+        (age_data['responder'] == 'infant') &
+        (age_data['label'] == label)  # Filter by target label immediately
+    ]
+
+    results = {
+        'label': label,
+        'age': age,
+        'parent': parent,
+        'imitation_distances': [],
+        'baseline_distances': [],
+        'pair_count': 0
+    }
+
+    # Pre-compute baseline once (moved outside loop)
+    all_infant_label = config_df[
+        (config_df[age_col] == age) &
+        (config_df['speaker'] == 'infant') &
+        (config_df['label'] == label)
+    ]
+
+    if len(all_infant_label) == 0:
+        return results
+
+    infant_label_indices = all_infant_label.index.tolist()
+    infant_label_tsne_mean = tsne_result[infant_label_indices].mean(axis=0)
+
+    for _, adult_utt in adult_infant_pairs.iterrows():
+        # Get infant response utterance
+        infant_resp_utt_id = adult_utt['responder_utterance_id']
+        infant_resp = utt_data[utt_data['utt_id'] == infant_resp_utt_id]
+
+        if len(infant_resp) == 0:
+            continue
+
+        infant_resp = infant_resp.iloc[0]
+
+        # Check if infant response contains the target label
+        if label != infant_resp['label']:
+            continue
+
+        # Get utterance-level t-SNE features
+        adult_utt_idx = config_df[config_df['utt_id'] == adult_utt['utt_id']].index
+        infant_resp_idx = config_df[config_df['utt_id'] == infant_resp_utt_id].index
+
+        if len(adult_utt_idx) == 0 or len(infant_resp_idx) == 0:
+            continue
+
+        adult_tsne = tsne_result[adult_utt_idx[0]]
+        infant_resp_tsne = tsne_result[infant_resp_idx[0]]
+
+        # Distance: adult to infant response (imitation distance)
+        imitation_dist = euclidean(adult_tsne, infant_resp_tsne)
+
+        # Distance: adult to mean infant (baseline distance - pre-computed)
+        baseline_dist = euclidean(adult_tsne, infant_label_tsne_mean)
+
+        results['imitation_distances'].append(imitation_dist)
+        results['baseline_distances'].append(baseline_dist)
+        results['pair_count'] += 1
+
+    return results
+
+# Run analysis for top labels across all ages
+print(f"\nAnalyzing top {len(top_labels)} labels: {top_labels}")
+
+all_results = []
+
+for label in top_labels:
+    print(f"\nProcessing label: {label}")
+    for age in age_values:
+        result = analyze_imitation_by_label(
+            utt_data, config_df_processed, tsne_result,
+            label, age, parent='adult'
+        )
+        if result['pair_count'] > 0:
+            all_results.append(result)
+            print(f"  {age_col.replace('age_', '').capitalize()} {age}: {result['pair_count']} pairs")
+
+print(f"\nTotal results collected: {len(all_results)}")
+
+# Process results into trajectory data
+label_trajectories = {}
+
+for label in top_labels:
+    label_trajectories[label] = {
+        'adult': {'ages': [], 'imitation': [], 'baseline': [], 'diff': [], 'ratio': [], 'counts': []}
+    }
+
+for result in all_results:
+    label = result['label']
+    parent = result['parent']
+    age = result['age']
+
+    if len(result['imitation_distances']) > 0:
+        imitation_mean = np.mean(result['imitation_distances'])
+        baseline_mean = np.mean(result['baseline_distances'])
+        diff = baseline_mean - imitation_mean  # Positive = imitation effect
+        ratio = imitation_mean / baseline_mean if baseline_mean > 0 else 1.0
+
+        label_trajectories[label][parent]['ages'].append(age)
+        label_trajectories[label][parent]['imitation'].append(imitation_mean)
+        label_trajectories[label][parent]['baseline'].append(baseline_mean)
+
+        label_trajectories[label][parent]['diff'].append(diff)
+        label_trajectories[label][parent]['ratio'].append(ratio)
+        label_trajectories[label][parent]['counts'].append(result['pair_count'])
+
+print("\n" + "="*80)
+print("FORWARD IMITATION DATA COLLECTED")
+print("="*80)
+
+# Save forward imitation trajectories to CSV
+forward_traj_rows = []
+for label in top_labels:
+    data = label_trajectories[label]['adult']
+    if len(data['ages']) == 0:
+        continue
+    for age, imit, base, diff, ratio, count in zip(
+        data['ages'], data['imitation'], data['baseline'],
+        data['diff'], data['ratio'], data['counts']
+    ):
+        forward_traj_rows.append({
+            'data_name': data_name,
+            'label': label,
+            'parent': 'adult',
+            'age': age,
+            'imitation_distance': imit,
+            'baseline_distance': base,
+            'difference': diff,
+            'ratio': ratio,
+            'n_pairs': count
+        })
+
+forward_traj_df = pd.DataFrame(forward_traj_rows)
+forward_traj_csv = os.path.join(output_dir, 'forward_imitation_trajectories.csv')
+forward_traj_df.to_csv(forward_traj_csv, index=False)
+print(f"✓ Saved forward imitation trajectories to: {forward_traj_csv}")
+
+# ========================== VISUALIZATION: ADULT→INFANT IMITATION =========================
+print("\n" + "="*80)
+print("VISUALIZING ADULT→INFANT IMITATION EFFECT")
+print("="*80)
+
+n_labels = len(top_labels)
+n_cols = 4
+n_rows = int(np.ceil(n_labels / n_cols))
+
+# Visualization 1: Absolute distance trajectories - ADULT
+fig, axes = plt.subplots(n_rows, n_cols, figsize=(5*n_cols, 5*n_rows))
+axes = axes.flatten() if n_labels > 1 else [axes]
+
+for idx, label in enumerate(top_labels):
+    ax = axes[idx]
+    data = label_trajectories[label]['adult']
+
+    if len(data['ages']) == 0:
+        ax.text(0.5, 0.5, 'No data', ha='center', va='center',
+               transform=ax.transAxes, fontsize=12)
+        ax.set_title(f'{label} (n=0)', fontsize=12, fontweight='bold')
+        ax.set_xlabel(f'Age ({age_col.replace("age_", "")})', fontsize=10)
+        ax.set_ylabel('t-SNE Distance', fontsize=10)
+        ax.grid(True, alpha=0.3)
+        continue
+
+    ages = data['ages']
+    total_count = sum(data['counts'])
+
+    # Response = GREEN (solid line, circle)
+    ax.plot(ages, data['imitation'],
+            marker='o', linewidth=2.5, markersize=10,
+            color='green', linestyle='-', alpha=0.8,
+            label='Response')
+
+    # Baseline = BLUE (dashed line, square)
+    ax.plot(ages, data['baseline'],
+            marker='s', linewidth=2.5, markersize=10,
+            color='blue', linestyle='--', alpha=0.8,
+            label='Baseline')
+
+    ax.set_xlabel(f'Age ({age_col.replace("age_", "")})', fontsize=10, fontweight='bold')
+    ax.set_ylabel('t-SNE Distance', fontsize=10, fontweight='bold')
+    ax.set_title(f'{label} (n={total_count})', fontsize=12, fontweight='bold')
+    ax.legend(fontsize=9, loc='best')
+    ax.grid(True, alpha=0.3)
+
+# Hide unused subplots
+for idx in range(n_labels, len(axes)):
+    axes[idx].set_visible(False)
+
+plt.suptitle(f'Adult→Infant: Imitation Effect by Call Type\n(Green=Response, Blue=Baseline)\n{data_name}',
+            fontsize=16, fontweight='bold', y=0.995)
+plt.tight_layout()
+plt.savefig(os.path.join(output_dir, 'imitation_distance_adult_by_label.png'),
+            dpi=150, bbox_inches='tight')
+plt.close()
+
+# Visualization 2: Imitation effect (difference) - ADULT
+fig, axes = plt.subplots(n_rows, n_cols, figsize=(5*n_cols, 5*n_rows))
+axes = axes.flatten() if n_labels > 1 else [axes]
+
+for idx, label in enumerate(top_labels):
+    ax = axes[idx]
+    data = label_trajectories[label]['adult']
+
+    if len(data['ages']) == 0:
+        ax.text(0.5, 0.5, 'No data', ha='center', va='center',
+               transform=ax.transAxes, fontsize=12)
+        ax.set_title(f'{label} (n=0)', fontsize=12, fontweight='bold')
+        ax.set_xlabel(f'Age ({age_col.replace("age_", "")})', fontsize=10)
+        ax.set_ylabel('Convergence Effect', fontsize=10)
+        ax.grid(True, alpha=0.3)
+        continue
+
+    ages = data['ages']
+    total_count = sum(data['counts'])
+
+    ax.plot(ages, data['diff'],
+            marker='o', linewidth=2.5, markersize=10,
+            color='black', linestyle='-', alpha=0.7)
+
+    # Color individual points
+    for age, diff in zip(ages, data['diff']):
+        color = 'green' if diff > 0 else 'red'
+        ax.scatter(age, diff, s=100, color=color, alpha=0.7, zorder=3,
+                  edgecolors='black', linewidths=1.5)
+
+    # Shaded regions
+    ax.fill_between(ages, 0, data['diff'],
+                    where=np.array(data['diff']) > 0,
+                    color='green', alpha=0.2, label='Convergence')
+    ax.fill_between(ages, 0, data['diff'],
+                    where=np.array(data['diff']) < 0,
+                    color='red', alpha=0.2, label='Divergence')
+
+    ax.axhline(y=0, color='black', linestyle=':', linewidth=1.5, alpha=0.5)
+
+    ax.set_xlabel(f'Age ({age_col.replace("age_", "")})', fontsize=10, fontweight='bold')
+    ax.set_ylabel('Imitation Effect\n(Baseline - Response)', fontsize=10, fontweight='bold')
+    ax.set_title(f'{label} (n={total_count})', fontsize=12, fontweight='bold')
+    ax.legend(fontsize=8, loc='best')
+    ax.grid(True, alpha=0.3)
+
+# Hide unused subplots
+for idx in range(n_labels, len(axes)):
+    axes[idx].set_visible(False)
+
+plt.suptitle(f'Adult→Infant: Imitation Effect by Call Type\n(Positive=Convergence, Negative=Divergence)\n{data_name}',
+            fontsize=16, fontweight='bold', y=0.995)
+plt.tight_layout()
+plt.savefig(os.path.join(output_dir, 'imitation_effect_adult_by_label.png'),
+            dpi=150, bbox_inches='tight')
+plt.close()
+
+# Print summary statistics
+print("\n" + "="*80)
+print("FORWARD IMITATION EFFECT SUMMARY (ADULT→INFANT)")
+print("="*80)
+
+for label in top_labels:
+    print(f"\n{label}:")
+
+    data = label_trajectories[label]['adult']
+
+    if len(data['ages']) == 0:
+        print("  No data")
+        continue
+
+    print(f"  Adult→Infant:")
+
+    avg_imitation = np.mean(data['imitation'])
+    avg_baseline = np.mean(data['baseline'])
+    avg_diff = np.mean(data['diff'])
+    avg_ratio = np.mean(data['ratio'])
+
+    print(f"    Average imitation distance: {avg_imitation:.2f}")
+    print(f"    Average baseline distance: {avg_baseline:.2f}")
+    print(f"    Average effect (baseline - imitation): {avg_diff:.2f}")
+    print(f"    Average ratio (imitation / baseline): {avg_ratio:.3f}")
+    print(f"    Convergence: {'YES' if avg_ratio < 1.0 else 'NO'}")
+    print(f"    Total pairs analyzed: {sum(data['counts'])}")
+
+    # Count ages with convergence
+    convergence_ages = sum(1 for r in data['ratio'] if r < 1.0)
+    print(f"    {age_col.replace('age_', '').capitalize()}s showing convergence: {convergence_ages}/{len(data['ages'])}")
+
+print("\n" + "="*80)
+
+print("\n✓ Forward imitation analysis complete")
+print(f"✓ Results saved to: {output_dir}")
+
+
+# ### STATISTICAL SIGNIFICANCE TESTING FORWARD IMITATION
+
+# ========================== STATISTICAL SIGNIFICANCE TESTING =========================
+print("\n" + "="*80)
+print("STATISTICAL SIGNIFICANCE TESTING: ADULT→INFANT IMITATION")
+print("="*80)
+
+import numpy as np
+from scipy import stats
+import pandas as pd
+
+def test_imitation_significance_detailed(all_results, top_labels):
+    """
+    Test if imitation distances are significantly different from baseline distances
+    """
+
+    significance_results = []
+
+    for label in top_labels:
+        for parent in ['adult']:  # Only adult for marmoset
+            # Collect all paired distances across all ages
+            imitation_dists = []
+            baseline_dists = []
+
+            for result in all_results:
+                if result['label'] == label and result['parent'] == parent:
+                    if len(result['imitation_distances']) > 0:
+                        imitation_dists.extend(result['imitation_distances'])
+                        baseline_dists.extend(result['baseline_distances'])
+
+            if len(imitation_dists) < 3:  # Need minimum samples
+                continue
+
+            # Convert to arrays
+            imitation_arr = np.array(imitation_dists)
+            baseline_arr = np.array(baseline_dists)
+
+            # Paired t-test
+            t_stat, t_pval = stats.ttest_rel(baseline_arr, imitation_arr)
+
+            # Wilcoxon signed-rank test
+            wilcoxon_stat, wilcoxon_pval = stats.wilcoxon(baseline_arr, imitation_arr)
+
+            # Effect size: Cohen's d
+            diff = baseline_arr - imitation_arr
+            cohens_d = np.mean(diff) / np.std(diff) if np.std(diff) > 0 else 0
+
+            # Mean values
+            mean_imitation = np.mean(imitation_arr)
+            mean_baseline = np.mean(baseline_arr)
+            mean_diff = mean_baseline - mean_imitation
+
+            # Percentage showing convergence
+            convergence_count = np.sum(diff > 0)
+            convergence_pct = 100 * convergence_count / len(diff)
+
+            significance_results.append({
+                'Label': label,
+                'Parent': parent,
+                'N': len(imitation_dists),
+                'Mean_Response': mean_imitation,
+                'Mean_Baseline': mean_baseline,
+                'Mean_Diff': mean_diff,
+                't_stat': t_stat,
+                'p_value': t_pval,
+                'p_value_wilcoxon': wilcoxon_pval,
+                'Cohens_d': cohens_d,
+                'Conv_%': convergence_pct
+            })
+
+    return pd.DataFrame(significance_results)
+
+# Run the analysis
+sig_results_df = test_imitation_significance_detailed(all_results, top_labels)
+
+# Create significance table
+def create_significance_table(df, alpha=0.05):
+    """
+    Create a formatted table with significance highlighting
+    """
+
+    fig, ax = plt.subplots(figsize=(16, len(df) * 0.4 + 1))
+    ax.axis('tight')
+    ax.axis('off')
+
+    # Prepare data for table
+    table_data = []
+
+    # Header
+    headers = ['Label', 'Parent', 'N', 'Mean\nResponse', 'Mean\nBaseline', 'Mean\nDiff',
+               't-stat', 'p-value\n(t-test)', 'p-value\n(Wilcoxon)', "Cohen's\nd", 'Conv.\n%']
+    table_data.append(headers)
+
+    # Data rows
+    for _, row in df.iterrows():
+        table_row = [
+            f"{row['Label']}",
+            row['Parent'].capitalize(),
+            f"{row['N']}",
+            f"{row['Mean_Response']:.2f}",
+            f"{row['Mean_Baseline']:.2f}",
+            f"{row['Mean_Diff']:.2f}",
+            f"{row['t_stat']:.2f}",
+            f"{row['p_value']:.4f}",
+            f"{row['p_value_wilcoxon']:.4f}",
+            f"{row['Cohens_d']:.3f}",
+            f"{row['Conv_%']:.1f}%"
+        ]
+        table_data.append(table_row)
+
+    # Create table
+    table = ax.table(cellText=table_data, cellLoc='center', loc='center',
+                    colWidths=[0.10, 0.08, 0.06, 0.09, 0.09, 0.09, 0.08, 0.10, 0.10, 0.08, 0.08])
+
+    table.auto_set_font_size(False)
+    table.set_fontsize(9)
+    table.scale(1, 2)
+
+    # Style header
+    for i in range(len(headers)):
+        cell = table[(0, i)]
+        cell.set_facecolor('#4472C4')
+        cell.set_text_props(weight='bold', color='white', fontsize=10)
+
+    # Highlight significant rows
+    for idx, (_, row) in enumerate(df.iterrows(), start=1):
+        # Determine if significant
+        sig_t = row['p_value'] < alpha
+        sig_w = row['p_value_wilcoxon'] < alpha
+        positive_effect = row['Mean_Diff'] > 0
+
+        # Color code the row
+        if sig_t and sig_w and positive_effect:
+            row_color = '#C6E0B4'  # Light green - significant convergence
+        elif sig_t and positive_effect:
+            row_color = '#E2EFDA'  # Very light green - t-test significant only
+        elif positive_effect:
+            row_color = '#F2F2F2'  # Light gray - positive but not significant
+        else:
+            row_color = '#FCE4D6'  # Light orange - no convergence
+
+        for col in range(len(headers)):
+            table[(idx, col)].set_facecolor(row_color)
+
+        # Bold significant p-values
+        if sig_t:
+            table[(idx, 7)].set_text_props(weight='bold')
+        if sig_w:
+            table[(idx, 8)].set_text_props(weight='bold')
+
+    # Add legend
+    legend_text = (
+        "Highlighting Key:\n"
+        "▪ Dark Green: Both tests significant (p < 0.05) with positive convergence\n"
+        "▪ Light Green: t-test significant with positive convergence\n"
+        "▪ Gray: Positive effect but not significant\n"
+        "▪ Orange: No convergence effect\n"
+        "Bold p-values: Significant (p < 0.05)"
+    )
+
+    ax.text(0.5, -0.05, legend_text, transform=ax.transAxes,
+           fontsize=9, verticalalignment='top', horizontalalignment='center',
+           bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
+
+    plt.suptitle(f'Statistical Significance of Acoustic Convergence (Adult→Infant Imitation)\n{data_name}',
+                fontsize=14, fontweight='bold', y=0.98)
+
+    plt.savefig(os.path.join(output_dir, 'imitation_significance_table.png'),
+                dpi=300, bbox_inches='tight')
+    plt.close()
+
+# Create the table
+create_significance_table(sig_results_df, alpha=0.05)
+
+# Print summary statistics
+print("\n" + "="*80)
+print("SUMMARY OF STATISTICAL TESTS - ADULT→INFANT IMITATION")
+print("="*80)
+
+for _, row in sig_results_df.iterrows():
+    print(f"\n{row['Label']} - {row['Parent'].capitalize()} Imitation:")
+    print(f"  N pairs: {row['N']}")
+    print(f"  Mean response distance: {row['Mean_Response']:.2f}")
+    print(f"  Mean baseline distance: {row['Mean_Baseline']:.2f}")
+    print(f"  Mean convergence effect: {row['Mean_Diff']:.2f}")
+    print(f"  Cohen's d (effect size): {row['Cohens_d']:.3f}")
+    print(f"  Convergence prevalence: {row['Conv_%']:.1f}%")
+    print(f"  Paired t-test: t={row['t_stat']:.3f}, p={row['p_value']:.4f} {'***' if row['p_value'] < 0.001 else '**' if row['p_value'] < 0.01 else '*' if row['p_value'] < 0.05 else 'ns'}")
+    print(f"  Wilcoxon test: p={row['p_value_wilcoxon']:.4f} {'***' if row['p_value_wilcoxon'] < 0.001 else '**' if row['p_value_wilcoxon'] < 0.01 else '*' if row['p_value_wilcoxon'] < 0.05 else 'ns'}")
+
+# Summary statistics
+print("\n" + "="*80)
+print("OVERALL SUMMARY")
+print("="*80)
+
+print(f"\nTotal label types tested: {len(sig_results_df)}")
+print(f"Significant by t-test (p < 0.05): {sig_results_df['p_value'].lt(0.05).sum()} ({100*sig_results_df['p_value'].lt(0.05).mean():.1f}%)")
+print(f"Significant by Wilcoxon (p < 0.05): {sig_results_df['p_value_wilcoxon'].lt(0.05).sum()} ({100*sig_results_df['p_value_wilcoxon'].lt(0.05).mean():.1f}%)")
+print(f"Mean Cohen's d across all labels: {sig_results_df['Cohens_d'].mean():.3f}")
+print(f"Mean convergence effect: {sig_results_df['Mean_Diff'].mean():.2f}")
+
+# Save results
+sig_results_df.to_csv(os.path.join(output_dir, 'imitation_detailed_results.csv'), index=False)
+print(f"\n✓ Saved detailed results to: {os.path.join(output_dir, 'imitation_detailed_results.csv')}")
+
+print("\n" + "="*80)
+
+
+# ### REVERSE IMITATION ANALYSIS
+
+# ========================== REVERSE IMITATION ANALYSIS =========================
+print("\n" + "="*80)
+print("REVERSE IMITATION ANALYSIS: Infant→Adult Convergence")
+print("="*80)
+
+def analyze_reverse_imitation_by_label(utt_data, config_df, tsne_result, label, age, parent='adult'):
+    """
+    Analyze if ADULT responses are closer to INFANT initiations than general adult vocalizations
+
+    This tests whether adults acoustically converge toward infants during responses.
+    OPTIMIZED VERSION
+    """
+    age_data = utt_data[utt_data[age_col] == age]
+
+    # OPTIMIZED: Filter by label FIRST
+    infant_adult_pairs = age_data[
+        (age_data['speaker'] == 'infant') &
+        (age_data['responder'] == parent) &
+        (age_data['label'] == label)
+    ]
+
+    results = {
+        'label': label,
+        'age': age,
+        'parent': parent,
+        'imitation_distances': [],  # Now: infant to adult response
+        'baseline_distances': [],   # Now: infant to adult general
+        'pair_count': 0
+    }
+
+    # Pre-compute baseline once
+    all_adult_label = config_df[
+        (config_df[age_col] == age) &
+        (config_df['speaker'] == parent) &
+        (config_df['label'] == label)
+    ]
+
+    if len(all_adult_label) == 0:
+        return results
+
+    adult_label_indices = all_adult_label.index.tolist()
+    adult_label_tsne_mean = tsne_result[adult_label_indices].mean(axis=0)
+
+    for _, infant_utt in infant_adult_pairs.iterrows():
+        # Get adult response utterance
+        adult_resp_utt_id = infant_utt['responder_utterance_id']
+        adult_resp = utt_data[utt_data['utt_id'] == adult_resp_utt_id]
+
+        if len(adult_resp) == 0:
+            continue
+
+        adult_resp = adult_resp.iloc[0]
+
+        # Check if adult response contains the target label
+        if label != adult_resp['label']:
+            continue
+
+        # Get utterance-level t-SNE features
+        infant_utt_idx = config_df[config_df['utt_id'] == infant_utt['utt_id']].index
+        adult_resp_idx = config_df[config_df['utt_id'] == adult_resp_utt_id].index
+
+        if len(infant_utt_idx) == 0 or len(adult_resp_idx) == 0:
+            continue
+
+        infant_tsne = tsne_result[infant_utt_idx[0]]
+        adult_resp_tsne = tsne_result[adult_resp_idx[0]]
+
+        # Distance: infant to adult response (imitation distance)
+        imitation_dist = euclidean(infant_tsne, adult_resp_tsne)
+
+        # Distance: infant to mean adult (baseline distance - pre-computed)
+        baseline_dist = euclidean(infant_tsne, adult_label_tsne_mean)
+
+        results['imitation_distances'].append(imitation_dist)
+        results['baseline_distances'].append(baseline_dist)
+        results['pair_count'] += 1
+
+    return results
+
+# Run reverse analysis for top labels across all ages
+print(f"\nAnalyzing top {len(top_labels)} labels: {top_labels}")
+
+reverse_all_results = []
+
+for label in top_labels:
+    print(f"\nProcessing label: {label}")
+    for age in age_values:
+        result = analyze_reverse_imitation_by_label(
+            utt_data, config_df_processed, tsne_result,
+            label, age, parent='adult'
+        )
+        if result['pair_count'] > 0:
+            reverse_all_results.append(result)
+            print(f"  {age_col.replace('age_', '').capitalize()} {age}: {result['pair_count']} pairs")
+
+print(f"\nTotal results collected: {len(reverse_all_results)}")
+
+# Process results into trajectory data
+reverse_label_trajectories = {}
+
+for label in top_labels:
+    reverse_label_trajectories[label] = {
+        'adult': {'ages': [], 'imitation': [], 'baseline': [], 'diff': [], 'ratio': [], 'counts': []}
+    }
+
+for result in reverse_all_results:
+    label = result['label']
+    parent = result['parent']
+    age = result['age']
+
+    if len(result['imitation_distances']) > 0:
+        imitation_mean = np.mean(result['imitation_distances'])
+        baseline_mean = np.mean(result['baseline_distances'])
+        diff = baseline_mean - imitation_mean  # Positive = adult convergence to infant
+        ratio = imitation_mean / baseline_mean if baseline_mean > 0 else 1.0
+
+        reverse_label_trajectories[label][parent]['ages'].append(age)
+        reverse_label_trajectories[label][parent]['imitation'].append(imitation_mean)
+        reverse_label_trajectories[label][parent]['baseline'].append(baseline_mean)
+        reverse_label_trajectories[label][parent]['diff'].append(diff)
+        reverse_label_trajectories[label][parent]['ratio'].append(ratio)
+        reverse_label_trajectories[label][parent]['counts'].append(result['pair_count'])
+
+print("\n" + "="*80)
+print("REVERSE IMITATION DATA COLLECTED")
+print("="*80)
+
+# Save data - pickle version
+import pickle
+reverse_traj_path = os.path.join(output_dir, 'reverse_imitation_trajectories.pkl')
+with open(reverse_traj_path, 'wb') as f:
+    pickle.dump(reverse_label_trajectories, f)
+print(f"✓ Saved reverse imitation trajectories (pickle) to: {reverse_traj_path}")
+
+# Also save as CSV
+reverse_traj_rows = []
+for label in top_labels:
+    data = reverse_label_trajectories[label]['adult']
+    if len(data['ages']) == 0:
+        continue
+    for age, imit, base, diff, ratio, count in zip(
+        data['ages'], data['imitation'], data['baseline'],
+        data['diff'], data['ratio'], data['counts']
+    ):
+        reverse_traj_rows.append({
+            'data_name': data_name,
+            'label': label,
+            'parent': 'adult',
+            'age': age,
+            'imitation_distance': imit,
+            'baseline_distance': base,
+            'difference': diff,
+            'ratio': ratio,
+            'n_pairs': count
+        })
+
+reverse_traj_df = pd.DataFrame(reverse_traj_rows)
+reverse_traj_csv = os.path.join(output_dir, 'reverse_imitation_trajectories.csv')
+reverse_traj_df.to_csv(reverse_traj_csv, index=False)
+print(f"✓ Saved reverse imitation trajectories (CSV) to: {reverse_traj_csv}")
+
+# ========================== VISUALIZATION: INFANT→ADULT ADAPTATION =========================
+print("\n" + "="*80)
+print("VISUALIZING INFANT→ADULT ADAPTATION EFFECT")
+print("="*80)
+
+n_labels = len(top_labels)
+n_cols = 4
+n_rows = int(np.ceil(n_labels / n_cols))
+
+# Visualization 1: Absolute distance trajectories - ADULT ADAPTATION
+fig, axes = plt.subplots(n_rows, n_cols, figsize=(5*n_cols, 5*n_rows))
+axes = axes.flatten() if n_labels > 1 else [axes]
+
+for idx, label in enumerate(top_labels):
+    ax = axes[idx]
+    data = reverse_label_trajectories[label]['adult']
+
+    if len(data['ages']) == 0:
+        ax.text(0.5, 0.5, 'No data', ha='center', va='center',
+               transform=ax.transAxes, fontsize=12)
+        ax.set_title(f'{label} (n=0)', fontsize=12, fontweight='bold')
+        ax.set_xlabel(f'Age ({age_col.replace("age_", "")})', fontsize=10)
+        ax.set_ylabel('t-SNE Distance', fontsize=10)
+        ax.grid(True, alpha=0.3)
+        continue
+
+    ages = data['ages']
+    total_count = sum(data['counts'])
+
+    # Response = GREEN (solid line, circle)
+    ax.plot(ages, data['imitation'],
+            marker='o', linewidth=2.5, markersize=10,
+            color='green', linestyle='-', alpha=0.8,
+            label='Adult Response')
+
+    # Baseline = BLUE (dashed line, square)
+    ax.plot(ages, data['baseline'],
+            marker='s', linewidth=2.5, markersize=10,
+            color='blue', linestyle='--', alpha=0.8,
+            label='Adult Baseline')
+
+    ax.set_xlabel(f'Age ({age_col.replace("age_", "")})', fontsize=10, fontweight='bold')
+    ax.set_ylabel('t-SNE Distance (from Infant)', fontsize=10, fontweight='bold')
+    ax.set_title(f'{label} (n={total_count})', fontsize=12, fontweight='bold')
+    ax.legend(fontsize=9, loc='best')
+    ax.grid(True, alpha=0.3)
+
+# Hide unused subplots
+for idx in range(n_labels, len(axes)):
+    axes[idx].set_visible(False)
+
+plt.suptitle(f'Infant→Adult: Reverse Imitation Effect by Call Type\n(Does Adult converge to Infant? Green=Response, Blue=Baseline)\n{data_name}',
+            fontsize=16, fontweight='bold', y=0.995)
+plt.tight_layout()
+plt.savefig(os.path.join(output_dir, 'reverse_imitation_distance_adult_by_label.png'),
+            dpi=150, bbox_inches='tight')
+plt.close()
+
+# Visualization 2: Adaptation effect (difference) - ADULT
+fig, axes = plt.subplots(n_rows, n_cols, figsize=(5*n_cols, 5*n_rows))
+axes = axes.flatten() if n_labels > 1 else [axes]
+
+for idx, label in enumerate(top_labels):
+    ax = axes[idx]
+    data = reverse_label_trajectories[label]['adult']
+
+    if len(data['ages']) == 0:
+        ax.text(0.5, 0.5, 'No data', ha='center', va='center',
+               transform=ax.transAxes, fontsize=12)
+        ax.set_title(f'{label} (n=0)', fontsize=12, fontweight='bold')
+        ax.set_xlabel(f'Age ({age_col.replace("age_", "")})', fontsize=10)
+        ax.set_ylabel('Convergence Effect', fontsize=10)
+        ax.grid(True, alpha=0.3)
+        continue
+
+    ages = data['ages']
+    total_count = sum(data['counts'])
+
+    ax.plot(ages, data['diff'],
+            marker='o', linewidth=2.5, markersize=10,
+            color='black', linestyle='-', alpha=0.7)
+
+    # Color individual points
+    for age, diff in zip(ages, data['diff']):
+        color = 'green' if diff > 0 else 'red'
+        ax.scatter(age, diff, s=100, color=color, alpha=0.7, zorder=3,
+                  edgecolors='black', linewidths=1.5)
+
+    # Shaded regions
+    ax.fill_between(ages, 0, data['diff'],
+                    where=np.array(data['diff']) > 0,
+                    color='green', alpha=0.2, label='Convergence')
+    ax.fill_between(ages, 0, data['diff'],
+                    where=np.array(data['diff']) < 0,
+                    color='red', alpha=0.2, label='Divergence')
+
+    ax.axhline(y=0, color='black', linestyle=':', linewidth=1.5, alpha=0.5)
+
+    ax.set_xlabel(f'Age ({age_col.replace("age_", "")})', fontsize=10, fontweight='bold')
+    ax.set_ylabel('Adult Convergence Effect\n(Baseline - Response)', fontsize=10, fontweight='bold')
+    ax.set_title(f'{label} (n={total_count})', fontsize=12, fontweight='bold')
+    ax.legend(fontsize=8, loc='best')
+    ax.grid(True, alpha=0.3)
+
+# Hide unused subplots
+for idx in range(n_labels, len(axes)):
+    axes[idx].set_visible(False)
+
+plt.suptitle(f'Infant→Adult: Adult Convergence Effect by Call Type\n(Positive=Adult converges toward Infant)\n{data_name}',
+            fontsize=16, fontweight='bold', y=0.995)
+plt.tight_layout()
+plt.savefig(os.path.join(output_dir, 'reverse_imitation_effect_adult_by_label.png'),
+            dpi=150, bbox_inches='tight')
+plt.close()
+
+# Print summary statistics
+print("\n" + "="*80)
+print("REVERSE IMITATION EFFECT SUMMARY (INFANT→ADULT)")
+print("="*80)
+
+for label in top_labels:
+    print(f"\n{label}:")
+
+    data = reverse_label_trajectories[label]['adult']
+
+    if len(data['ages']) == 0:
+        print("  No data")
+        continue
+
+    print(f"  Adult Adaptation:")
+
+    avg_imitation = np.mean(data['imitation'])
+    avg_baseline = np.mean(data['baseline'])
+    avg_diff = np.mean(data['diff'])
+    avg_ratio = np.mean(data['ratio'])
+
+    print(f"    Average response distance: {avg_imitation:.2f}")
+    print(f"    Average baseline distance: {avg_baseline:.2f}")
+    print(f"    Average convergence effect: {avg_diff:.2f}")
+    print(f"    Average ratio (response/baseline): {avg_ratio:.3f}")
+    print(f"    Convergence to infant: {'YES' if avg_ratio < 1.0 else 'NO'}")
+    print(f"    Total pairs analyzed: {sum(data['counts'])}")
+
+    # Count ages with convergence
+    convergence_ages = sum(1 for r in data['ratio'] if r < 1.0)
+    print(f"    {age_col.replace('age_', '').capitalize()}s showing convergence: {convergence_ages}/{len(data['ages'])}")
+
+print("\n" + "="*80)
+
+
+# ========================== STATISTICAL TESTING: REVERSE IMITATION =========================
+print("\n" + "="*80)
+print("STATISTICAL TESTING: ADULT ADAPTATION TO INFANT")
+print("="*80)
+
+def test_reverse_imitation_significance(reverse_all_results, top_labels):
+    """
+    Test if adult response distances are significantly different from baseline distances
+    This tests whether adults acoustically converge toward infants
+    """
+
+    significance_results = []
+
+    for label in top_labels:
+        for parent in ['adult']:
+            # Collect all paired distances across all ages
+            response_dists = []  # Adult response to infant initiation
+            baseline_dists = []  # General adult production to infant initiation
+
+            for result in reverse_all_results:
+                if result['label'] == label and result['parent'] == parent:
+                    if len(result['imitation_distances']) > 0:
+                        response_dists.extend(result['imitation_distances'])
+                        baseline_dists.extend(result['baseline_distances'])
+
+            if len(response_dists) < 3:  # Need minimum samples
+                continue
+
+            # Convert to arrays
+            response_arr = np.array(response_dists)
+            baseline_arr = np.array(baseline_dists)
+
+            # Paired t-test
+            t_stat, t_pval = stats.ttest_rel(baseline_arr, response_arr)
+
+            # Wilcoxon signed-rank test
+            wilcoxon_stat, wilcoxon_pval = stats.wilcoxon(baseline_arr, response_arr)
+
+            # Effect size: Cohen's d
+            diff = baseline_arr - response_arr  # Positive = adult converges to infant
+            cohens_d = np.mean(diff) / np.std(diff) if np.std(diff) > 0 else 0
+
+            # Mean differences
+            mean_response = np.mean(response_arr)
+            mean_baseline = np.mean(baseline_arr)
+            mean_diff = mean_baseline - mean_response
+
+            # Percentage showing convergence
+            convergence_count = np.sum(diff > 0)
+            convergence_pct = 100 * convergence_count / len(diff)
+
+            significance_results.append({
+                'Label': label,
+                'Parent': parent,
+                'N': len(response_dists),
+                'Mean_Response': mean_response,
+                'Mean_Baseline': mean_baseline,
+                'Mean_Diff': mean_diff,
+                't_stat': t_stat,
+                'p_value': t_pval,
+                'p_value_wilcoxon': wilcoxon_pval,
+                'Cohens_d': cohens_d,
+                'Conv_%': convergence_pct
+            })
+
+    return pd.DataFrame(significance_results)
+
+# Run statistical tests
+reverse_sig_results = test_reverse_imitation_significance(reverse_all_results, top_labels)
+
+# Create table
+def create_reverse_significance_table(df, alpha=0.05):
+    """
+    Create a formatted table with significance highlighting for adult adaptation
+    """
+
+    fig, ax = plt.subplots(figsize=(16, len(df) * 0.4 + 1))
+    ax.axis('tight')
+    ax.axis('off')
+
+    # Prepare data for table
+    table_data = []
+
+    # Header
+    headers = ['Label', 'Parent', 'N', 'Mean\nResponse', 'Mean\nBaseline', 'Mean\nDiff',
+               't-stat', 'p-value\n(t-test)', 'p-value\n(Wilcoxon)', "Cohen's\nd", 'Conv.\n%']
+    table_data.append(headers)
+
+    # Data rows
+    for _, row in df.iterrows():
+        table_row = [
+            f"{row['Label']}",
+            row['Parent'].capitalize(),
+            f"{row['N']}",
+            f"{row['Mean_Response']:.2f}",
+            f"{row['Mean_Baseline']:.2f}",
+            f"{row['Mean_Diff']:.2f}",
+            f"{row['t_stat']:.2f}",
+            f"{row['p_value']:.4f}",
+            f"{row['p_value_wilcoxon']:.4f}",
+            f"{row['Cohens_d']:.3f}",
+            f"{row['Conv_%']:.1f}%"
+        ]
+        table_data.append(table_row)
+
+    # Create table
+    table = ax.table(cellText=table_data, cellLoc='center', loc='center',
+                    colWidths=[0.10, 0.08, 0.06, 0.09, 0.09, 0.09, 0.08, 0.10, 0.10, 0.08, 0.08])
+
+    table.auto_set_font_size(False)
+    table.set_fontsize(9)
+    table.scale(1, 2)
+
+    # Style header
+    for i in range(len(headers)):
+        cell = table[(0, i)]
+        cell.set_facecolor('#4472C4')
+        cell.set_text_props(weight='bold', color='white', fontsize=10)
+
+    # Highlight significant rows
+    for idx, (_, row) in enumerate(df.iterrows(), start=1):
+        sig_t = row['p_value'] < alpha
+        sig_w = row['p_value_wilcoxon'] < alpha
+        positive_effect = row['Mean_Diff'] > 0
+
+        if sig_t and sig_w and positive_effect:
+            row_color = '#C6E0B4'
+        elif sig_t and positive_effect:
+            row_color = '#E2EFDA'
+        elif positive_effect:
+            row_color = '#F2F2F2'
+        else:
+            row_color = '#FCE4D6'
+
+        for col in range(len(headers)):
+            table[(idx, col)].set_facecolor(row_color)
+
+        if sig_t:
+            table[(idx, 7)].set_text_props(weight='bold')
+        if sig_w:
+            table[(idx, 8)].set_text_props(weight='bold')
+
+    # Add legend
+    legend_text = (
+        "Highlighting Key:\n"
+        "▪ Dark Green: Both tests significant (p < 0.05) with positive convergence (adult adapts to infant)\n"
+        "▪ Light Green: t-test significant with positive convergence\n"
+        "▪ Gray: Positive effect but not significant\n"
+        "▪ Orange: No convergence effect\n"
+        "Bold p-values: Significant (p < 0.05)"
+    )
+
+    ax.text(0.5, -0.05, legend_text, transform=ax.transAxes,
+           fontsize=9, verticalalignment='top', horizontalalignment='center',
+           bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
+
+    plt.suptitle(f'Statistical Significance of Adult Adaptation to Infant\n{data_name}',
+                fontsize=14, fontweight='bold', y=0.98)
+
+    plt.savefig(os.path.join(output_dir, 'reverse_imitation_significance_table.png'),
+                dpi=300, bbox_inches='tight')
+    plt.close()
+
+# Create the table
+create_reverse_significance_table(reverse_sig_results, alpha=0.05)
+
+# Print detailed results
+print("\n" + "="*80)
+print("SUMMARY OF STATISTICAL TESTS - ADULT ADAPTATION")
+print("="*80)
+
+for _, row in reverse_sig_results.iterrows():
+    print(f"\n{row['Label']} - {row['Parent'].capitalize()} Adaptation:")
+    print(f"  N pairs: {row['N']}")
+    print(f"  Mean response distance: {row['Mean_Response']:.2f}")
+    print(f"  Mean baseline distance: {row['Mean_Baseline']:.2f}")
+    print(f"  Mean convergence effect: {row['Mean_Diff']:.2f}")
+    print(f"  Cohen's d (effect size): {row['Cohens_d']:.3f}")
+    print(f"  Convergence prevalence: {row['Conv_%']:.1f}%")
+    print(f"  Paired t-test: t={row['t_stat']:.3f}, p={row['p_value']:.4f} {'***' if row['p_value'] < 0.001 else '**' if row['p_value'] < 0.01 else '*' if row['p_value'] < 0.05 else 'ns'}")
+    print(f"  Wilcoxon test: p={row['p_value_wilcoxon']:.4f} {'***' if row['p_value_wilcoxon'] < 0.001 else '**' if row['p_value_wilcoxon'] < 0.01 else '*' if row['p_value_wilcoxon'] < 0.05 else 'ns'}")
+
+# Summary statistics
+print("\n" + "="*80)
+print("OVERALL SUMMARY - ADULT ADAPTATION")
+print("="*80)
+
+print(f"\nTotal label types tested: {len(reverse_sig_results)}")
+print(f"Significant by t-test (p < 0.05): {reverse_sig_results['p_value'].lt(0.05).sum()} ({100*reverse_sig_results['p_value'].lt(0.05).mean():.1f}%)")
+print(f"Significant by Wilcoxon (p < 0.05): {reverse_sig_results['p_value_wilcoxon'].lt(0.05).sum()} ({100*reverse_sig_results['p_value_wilcoxon'].lt(0.05).mean():.1f}%)")
+print(f"Mean Cohen's d: {reverse_sig_results['Cohens_d'].mean():.3f}")
+print(f"Mean convergence effect: {reverse_sig_results['Mean_Diff'].mean():.2f}")
+
+# Save results
+reverse_sig_results.to_csv(os.path.join(output_dir, 'reverse_imitation_significance_results.csv'), index=False)
+print(f"\n✓ Saved results to: {os.path.join(output_dir, 'reverse_imitation_significance_results.csv')}")
+
+print("\n" + "="*80)
+
+# ========================== COMPARISON: INFANT VS ADULT ADAPTATION =========================
+print("\n" + "="*80)
+print("COMPARISON: INFANT IMITATION VS ADULT ADAPTATION")
+print("="*80)
+
+import seaborn as sns
+
+# Compare infant imitation (forward) vs adult adaptation (reverse)
+comparison_data = []
+
+for label in top_labels:
+    # Get infant imitation data
+    infant_imit = sig_results_df[sig_results_df['Label'] == label]
+
+    # Get adult adaptation data
+    adult_adapt = reverse_sig_results[reverse_sig_results['Label'] == label]
+
+    if len(infant_imit) > 0 and len(adult_adapt) > 0:
+        comparison_data.append({
+            'Label': label,
+            'Infant_Imitation_d': infant_imit['Cohens_d'].values[0],
+            'Adult_Adaptation_d': adult_adapt['Cohens_d'].values[0],
+            'Infant_Imitation_p': infant_imit['p_value'].values[0],
+            'Adult_Adaptation_p': adult_adapt['p_value'].values[0]
+        })
+
+comparison_df = pd.DataFrame(comparison_data)
+
+# Visualization: Scatter plot comparing effect sizes
+fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+
+if len(comparison_df) > 0:
+    # Color by significance
+    colors = []
+    for _, row in comparison_df.iterrows():
+        infant_sig = row['Infant_Imitation_p'] < 0.05
+        adult_sig = row['Adult_Adaptation_p'] < 0.05
+
+        if infant_sig and adult_sig:
+            colors.append('green')  # Both significant
+        elif infant_sig:
+            colors.append('blue')   # Only infant imitation
+        elif adult_sig:
+            colors.append('red')    # Only adult adaptation
+        else:
+            colors.append('gray')   # Neither significant
+
+    ax.scatter(comparison_df['Infant_Imitation_d'],
+              comparison_df['Adult_Adaptation_d'],
+              c=colors, s=200, alpha=0.7, edgecolors='black', linewidths=2)
+
+    # Add label annotations
+    for _, row in comparison_df.iterrows():
+        ax.annotate(f"{row['Label']}",
+                   (row['Infant_Imitation_d'], row['Adult_Adaptation_d']),
+                   fontsize=10, ha='center', va='bottom', fontweight='bold')
+
+    # Add reference lines
+    ax.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5)
+    ax.axvline(x=0, color='black', linestyle='--', linewidth=1, alpha=0.5)
+    ax.plot([-1, 2], [-1, 2], 'k:', alpha=0.3, label='Equal effect')
+
+    ax.set_xlabel("Infant Imitation Effect Size (Cohen's d)", fontsize=13, fontweight='bold')
+    ax.set_ylabel("Adult Adaptation Effect Size (Cohen's d)", fontsize=13, fontweight='bold')
+    ax.set_title(f'Infant Imitation vs Adult Adaptation\n(Marmoset Vocal Convergence)\n{data_name}',
+                fontsize=14, fontweight='bold')
+    ax.grid(True, alpha=0.3)
+
+    # Custom legend
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor='green', edgecolor='black', label='Both significant'),
+        Patch(facecolor='blue', edgecolor='black', label='Infant only'),
+        Patch(facecolor='red', edgecolor='black', label='Adult only'),
+        Patch(facecolor='gray', edgecolor='black', label='Neither')
+    ]
+    ax.legend(handles=legend_elements, fontsize=11, loc='upper left')
+
+    # Add quadrant labels
+    ax.text(0.95, 0.95, 'Mutual\nConvergence', transform=ax.transAxes,
+           ha='right', va='top', fontsize=11, style='italic',
+           bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.3))
+
+plt.tight_layout()
+plt.savefig(os.path.join(output_dir, 'infant_vs_adult_adaptation_comparison.png'),
+            dpi=150, bbox_inches='tight')
+plt.close()
+
+# Heatmap comparison
+fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+
+# Infant imitation p-values
+if len(sig_results_df) > 0:
+    ax = axes[0, 0]
+    sig_results_for_heatmap = sig_results_df.set_index('Label')[['p_value']]
+    sns.heatmap(-np.log10(sig_results_for_heatmap), annot=sig_results_for_heatmap.applymap(lambda x: f'{x:.3f}'),
+                fmt='', cmap='RdYlGn', center=1.301, ax=ax, cbar_kws={'label': '-log10(p-value)'})
+    ax.set_title(f'Infant Imitation: Significance\n(darker green = more significant)\n{data_name}',
+                 fontsize=12, fontweight='bold')
+    ax.set_xlabel('')
+
+# Infant imitation effect sizes
+if len(sig_results_df) > 0:
+    ax = axes[0, 1]
+    sig_results_for_heatmap = sig_results_df.set_index('Label')[['Cohens_d']]
+    sns.heatmap(sig_results_for_heatmap, annot=True, fmt='.2f', cmap='RdYlGn', center=0, ax=ax,
+                cbar_kws={'label': "Cohen's d"})
+    ax.set_title(f"Infant Imitation: Effect Size\n(positive = infant converges to adult)\n{data_name}",
+                 fontsize=12, fontweight='bold')
+    ax.set_xlabel('')
+
+# Adult adaptation p-values
+if len(reverse_sig_results) > 0:
+    ax = axes[1, 0]
+    reverse_sig_for_heatmap = reverse_sig_results.set_index('Label')[['p_value']]
+    sns.heatmap(-np.log10(reverse_sig_for_heatmap), annot=reverse_sig_for_heatmap.applymap(lambda x: f'{x:.3f}'),
+                fmt='', cmap='RdYlGn', center=1.301, ax=ax, cbar_kws={'label': '-log10(p-value)'})
+    ax.set_title(f'Adult Adaptation: Significance\n(darker green = more significant)\n{data_name}',
+                 fontsize=12, fontweight='bold')
+
+# Adult adaptation effect sizes
+if len(reverse_sig_results) > 0:
+    ax = axes[1, 1]
+    reverse_sig_for_heatmap = reverse_sig_results.set_index('Label')[['Cohens_d']]
+    sns.heatmap(reverse_sig_for_heatmap, annot=True, fmt='.2f', cmap='RdYlGn', center=0, ax=ax,
+                cbar_kws={'label': "Cohen's d"})
+    ax.set_title(f"Adult Adaptation: Effect Size\n(positive = adult converges to infant)\n{data_name}",
+                 fontsize=12, fontweight='bold')
+
+plt.tight_layout()
+plt.savefig(os.path.join(output_dir, 'infant_adult_adaptation_heatmaps.png'),
+            dpi=150, bbox_inches='tight')
+plt.close()
+
+# Save comparison
+comparison_df.to_csv(os.path.join(output_dir, 'infant_adult_adaptation_comparison.csv'), index=False)
+print(f"\n✓ Saved comparison to: {os.path.join(output_dir, 'infant_adult_adaptation_comparison.csv')}")
+
+print("\n" + "="*80)
+print("COMPARISON ANALYSIS COMPLETE")
+print("="*80)
+
+# ========================== FINAL SUMMARY =========================
+print("\n" + "="*80)
+print("MARMOSET INTERACTION ANALYSIS - FINAL SUMMARY")
+print("="*80)
+
+print(f"\nAnalysis Configuration:")
+print(f"  Data name: {data_name}")
+print(f"  Age column: {age_col}")
+print(f"  Age range: {min(age_values)} - {max(age_values)} {age_col.replace('age_', '')}")
+print(f"  Total utterances: {len(utt_data)}")
+print(f"  Total turn-taking pairs: {utt_data['has_response'].sum()}")
+
+print(f"\nForward Imitation (Adult→Infant):")
+print(f"  Labels analyzed: {len(sig_results_df)}")
+print(f"  Significant convergence: {sig_results_df['p_value'].lt(0.05).sum()}")
+print(f"  Mean effect size (Cohen's d): {sig_results_df['Cohens_d'].mean():.3f}")
+
+print(f"\nReverse Imitation (Infant→Adult):")
+print(f"  Labels analyzed: {len(reverse_sig_results)}")
+print(f"  Significant convergence: {reverse_sig_results['p_value'].lt(0.05).sum()}")
+print(f"  Mean effect size (Cohen's d): {reverse_sig_results['Cohens_d'].mean():.3f}")
+
+print(f"\nAll results saved to: {output_dir}")
+
+print("\n" + "="*80)
+print("✓ ANALYSIS COMPLETE")
+print("="*80)
